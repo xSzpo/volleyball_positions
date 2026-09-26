@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KSV 5-1 rotation trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF2F6; --panel:#FFFFFF; --ink:#16283D; --muted:#5B6B7C; --line:#D5DDE6;
+  --floor:#F7E9D2; --floor-line:#C9A878; --net:#16283D; --orange:#F08A1C; --good:#1E9E5A; --bad:#D8412F;
+  --s:#F2B53A; --op:#222222; --mb:#8E2436; --oh:#27598C; --l:#D63A78;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1A27; --panel:#172536; --ink:#E8EEF5; --muted:#9AAABB; --line:#2A3B50;
+    --floor:#3A3226; --floor-line:#8C7552; --net:#E8EEF5; --op:#050505;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1A27; --panel:#172536; --ink:#E8EEF5; --muted:#9AAABB; --line:#2A3B50;
+  --floor:#3A3226; --floor-line:#8C7552; --net:#E8EEF5; --op:#050505;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.45}
+.wrap{max-width:720px;margin:0 auto;padding:18px 16px 40px}
+h1{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:800;font-size:clamp(30px,7vw,44px);line-height:1;margin:6px 0 4px;letter-spacing:-.01em}
+h1 span{display:block;font-size:.5em;font-weight:600;color:var(--muted);letter-spacing:0;margin-top:6px}
+.bar{height:5px;width:72px;background:var(--orange);margin:12px 0 18px;border-radius:2px}
+.q{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700}
+.roles{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.role{border:2px solid var(--line);background:var(--panel);color:var(--ink);font:600 15px Barlow,sans-serif;padding:8px 12px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.role i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.role[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--panel)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:16px}
+.tab{border:0;background:transparent;color:var(--muted);font:700 18px "Barlow Condensed",sans-serif;padding:10px;border-radius:9px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--orange);color:#fff}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.rots{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:10px}
+.rot{border:1.5px solid var(--line);background:transparent;color:var(--ink);border-radius:9px;padding:6px 0;cursor:pointer;font:700 17px "Barlow Condensed",sans-serif;line-height:1.1}
+.rot small{display:block;font:500 11px Barlow,sans-serif;color:var(--muted)}
+.rot[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--panel)}
+.rot[aria-pressed="true"] small{color:inherit;opacity:.75}
+.phases{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.ph{border:0;background:var(--bg);color:var(--ink);border-radius:8px;padding:8px 4px;font:600 13px Barlow,sans-serif;cursor:pointer;line-height:1.15}
+.ph[aria-pressed="true"]{background:var(--orange);color:#fff}
+svg.court{width:100%;height:auto;display:block;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.cue{margin-top:12px;padding:12px 14px;border-left:5px solid var(--orange);background:var(--bg);border-radius:0 10px 10px 0}
+.cue b{font-family:"Barlow Condensed",sans-serif;font-size:20px;display:block;line-height:1.15;margin-bottom:2px}
+.cue p{margin:0;color:var(--muted)}
+.sheet{margin-top:16px}
+.sheet h2{font:800 24px "Barlow Condensed",sans-serif;margin:0 0 8px}
+.sheet ul{margin:0;padding-left:20px}
+.sheet li{margin:6px 0}
+.table{overflow-x:auto;margin-top:12px}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:460px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font:700 15px "Barlow Condensed",sans-serif;color:var(--muted)}
+td.r{font:700 16px "Barlow Condensed",sans-serif;white-space:nowrap}
+.prompt{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:10px}
+.prompt .big{font:800 clamp(24px,6vw,32px) "Barlow Condensed",sans-serif;line-height:1.05}
+.prompt .sub{color:var(--muted);font-size:14px}
+.score{text-align:right;font:700 15px "Barlow Condensed",sans-serif;color:var(--muted);white-space:nowrap}
+.score strong{display:block;font-size:26px;color:var(--ink)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.btn{border:2px solid var(--ink);background:transparent;color:var(--ink);border-radius:10px;padding:10px 14px;font:700 16px "Barlow Condensed",sans-serif;cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--panel)}
+.btn[hidden]{display:none}
+.toggle{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;cursor:pointer}
+.fb{margin-top:10px;padding:12px 14px;border-radius:10px;background:var(--bg);min-height:48px}
+.fb.good{border-left:5px solid var(--good)} .fb.bad{border-left:5px solid var(--bad)} .fb.close{border-left:5px solid var(--orange)}
+.fb b{font:800 20px "Barlow Condensed",sans-serif}
+.weak{margin-top:12px;font-size:14px;color:var(--muted)}
+button:focus-visible,label:focus-within{outline:3px solid var(--orange);outline-offset:2px}
+.hint{color:var(--muted);font-size:14px;margin:0}
+@media (prefers-reduced-motion: no-preference){ .pulse{animation:pulse 1.4s ease-out 2} @keyframes pulse{0%{opacity:.95;r:14}100%{opacity:0;r:34}} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Where do I stand?<span>KSV 5-1 system · learn your spot in every rotation</span></h1>
+  <div class="bar"></div>
+
+  <p class="hint" style="margin-bottom:8px">I'm playing today as</p>
+  <div class="roles" id="roles"></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tabLearn" aria-selected="true">Learn</button>
+    <button class="tab" role="tab" id="tabDrill" aria-selected="false">Drill</button>
+  </div>
+
+  <section id="learn">
+    <div class="card">
+      <div class="rots" id="rots"></div>
+      <div class="phases" id="phases"></div>
+      <svg class="court" id="courtL" viewBox="-26 -34 352 262" aria-label="Court diagram"></svg>
+      <div class="cue" id="cue"></div>
+    </div>
+    <div class="card sheet" id="sheet"></div>
+  </section>
+
+  <section id="drill" hidden>
+    <div class="card">
+      <div class="prompt">
+        <div><div class="big" id="dq"></div><div class="sub" id="dsub"></div></div>
+        <div class="score"><strong id="dscore">0/0</strong>streak <span id="dstreak">0</span></div>
+      </div>
+      <svg class="court" id="courtD" viewBox="-26 -34 352 262" aria-label="Tap where you stand"></svg>
+      <div class="row">
+        <button class="btn" id="offBtn">I'm off court</button>
+        <button class="btn primary" id="nextBtn" hidden>Next</button>
+        <label class="toggle"><input type="checkbox" id="showMates" checked> Show teammates</label>
+      </div>
+      <div class="fb" id="fb"><p class="hint">Tap the court where you stand. If the libero is in for you, press “I'm off court”.</p></div>
+      <div class="weak" id="weak"></div>
+      <div class="row"><button class="btn" id="resetBtn">Reset my progress</button></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+const COLORS={S:'var(--s)',OP:'var(--op)',MB1:'var(--mb)',MB2:'var(--mb)',OH1:'var(--oh)',OH2:'var(--oh)',L:'var(--l)'};
+const NAMES={S:'Setter',OP:'Opposite',MB1:'Middle 1',MB2:'Middle 2',OH1:'Outside 1',OH2:'Outside 2'};
+const ROLES=['MB1','MB2','OH1','OH2','OP','S'];
+const PHASES=[['start','Rotation'],['rec','Reception'],['ar','After rec.'],['serve','Serve']];
+const FULL={start:'Rotation',rec:'Reception',ar:'After reception',serve:'Serve'};
+const ZONES={4:[0,0],3:[1,0],2:[2,0],5:[0,1],6:[1,1],1:[2,1]};
+const ORDER=[4,3,2,5,6,1];
+
+// rotation data (x: 0 left → 1 right, y: 0 net → 1 end line)
+const R=[
+ {name:'R1',set:1,front:['OP','MB1','OH1'],back:['OH2','L','S'],
+  rec:[['MB1',.52,.16],['OP',0,.38],['OH2',.18,.68],['L',.47,.68],['OH1',.8,.62],['S',.92,.84]],
+  ar:{front:['OP','MB1','OH1'],s:.68,back:['L','OH2']}, serve:[['OH1','MB1','OP'],['L','OH2','S']]},
+ {name:'R2',set:6,front:['OH2','OP','MB1'],back:['L','S','OH1'],
+  rec:[['OP',.5,.12],['S',.5,.32],['MB1',.74,.22],['OH2',.17,.72],['L',.5,.72],['OH1',.83,.72]],
+  ar:{front:['OH2','MB1','OP'],s:.7,back:['L','OH1']}, serve:[['OH2','MB1','OP'],['L','OH1','S']]},
+ {name:'R3',set:5,front:['MB2','OH2','OP'],back:['S','OH1','L'],
+  rec:[['MB2',.12,.13],['S',.28,.36],['OP',1,.36],['OH2',.17,.74],['OH1',.45,.74],['L',.75,.74]],
+  ar:{front:['OH2','MB2','OP'],s:.68,back:['L','OH1']}, serve:[['OH2','MB2','OP'],['OH1','MB1','S']]},
+ {name:'R4',set:4,front:['S','MB2','OH2'],back:['OH1','L','OP'],
+  rec:[['S',.1,.12],['MB2',.14,.34],['OH2',.15,.7],['OH1',.39,.7],['L',.63,.7],['OP',.88,.85]],
+  ar:{front:['OH2','MB2','OP'],s:.68,back:['L','OH1']}, serve:[['OH2','MB2','S'],['L','OH1','OP']]},
+ {name:'R5',set:3,front:['OH1','S','MB2'],back:['L','OP','OH2'],
+  rec:[['S',.6,.14],['MB2',.84,.2],['OH1',.15,.68],['L',.42,.68],['OH2',.85,.64],['OP',.63,.87]],
+  ar:{front:['OH1','MB2','OP'],s:.68,back:['L','OH2']}, serve:[['OH1','MB2','S'],['L','OH2','OP']]},
+ {name:'R6',set:2,front:['MB1','OH1','S'],back:['OP','OH2','L'],
+  rec:[['MB1',.12,.13],['S',.6,.14],['OH1',.15,.68],['OH2',.42,.68],['L',.72,.68],['OP',.43,.88]],
+  ar:{front:['OH1','MB1','OP'],s:.68,back:['L','OH2']}, serve:[['OH1','MB1','S'],['OH2','MB2','OP']]},
+];
+const XS=[.17,.5,.83];
+
+function players(ri,phase){
+  const r=R[ri];
+  if(phase==='start') return [...r.front.map((p,i)=>({p,x:XS[i],y:.3})),...r.back.map((p,i)=>({p,x:XS[i],y:.74}))];
+  if(phase==='rec') return r.rec.map(([p,x,y])=>({p,x,y}));
+  if(phase==='serve') return [...r.serve[0].map((p,i)=>({p,x:XS[i],y:.3})),...r.serve[1].map((p,i)=>({p,x:XS[i],y:.74}))];
+  const out=[];
+  r.ar.front.forEach((p,i)=>{
+    if(p==='OP' && !r.front.includes('OP')) out.push({p,x:.85,y:.62,atk:true,backrow:true});
+    else out.push({p,x:[.15,.5,.85][i],y:.34,atk:true});
+  });
+  out.push({p:r.ar.back[0],x:.2,y:.8},{p:r.ar.back[1],x:.5,y:.8},{p:'S',x:r.ar.s,y:.13,setter:true});
+  return out;
+}
+function zoneOf(ri,role){const r=R[ri];const all=[...r.front,...r.back];const i=all.indexOf(role);return i<0?null:ORDER[i];}
+function liberoZone(ri){return zoneOf(ri,'L');}
+function isFront(ri,role){return R[ri].front.includes(role);}
+
+function describe(ri,phase,role){
+  const pl=players(ri,phase); const me=pl.find(o=>o.p===role);
+  const r=R[ri]; const z=zoneOf(ri,role);
+  if(!me){
+    if(phase==='serve') return {t:'Off court',d:'The libero is in for you while your team serves.'};
+    return {t:'Off court (libero in)',d:`You're back row in ${r.name}. The libero takes your zone ${liberoZone(ri)}. You come back on when you rotate to the front.`};
+  }
+  const side=me.x<=.03?'on the left sideline':me.x>=.97?'on the right sideline':me.x<.34?'left':me.x<.67?'middle':'right';
+  const depth=me.y<.2?'close to the net':me.y<.45?'front court':me.y<.62?'just behind the 3 m line':me.y<.8?'on the receiving line':'deep, near the end line';
+  let near=null,dmin=9; pl.forEach(o=>{if(o===me)return;const d=Math.hypot(o.x-me.x,(o.y-me.y)*.67);if(d<dmin){dmin=d;near=o.p}});
+  const base=`${cap(side)}, ${depth}`;
+  let t=base,d='';
+  if(phase==='start'){t=`Zone ${z} · ${isFront(ri,role)?'front row':'back row'}`;d=`Your rotational spot. Everyone moves one zone clockwise each time you win back the serve.`}
+  else if(phase==='rec'){
+    const recv=['OH1','OH2'].includes(role);
+    const nb=dmin<.26?` next to ${near}`:'';
+    d=recv?`You receive${nb}.`:role==='S'?`Hide from the serve${nb} and be ready to run to the target.`:`Stay out of the receivers' way${nb}. Keep your zone ${z} order for overlap.`;
+    if(role==='OP'&&me.x<=.03) d='Stand on the left sideline at the net — out of the passing lanes.';
+    if(role==='OP'&&me.x>=.97) d='Stand on the right sideline at the net — out of the passing lanes.';
+  }
+  else if(phase==='ar'){
+    if(me.setter){t='Setting target';d='Run to the target spot, right of the middle, close to the net.'}
+    else if(me.backrow){t='Right side, behind the 3 m line';d='You are back row: back-row attack from zone 1. Take off behind the 3 m line.'}
+    else if(me.atk){const lane=me.x<.34?'left (zone 4)':me.x<.67?'middle (quick)':'right (zone 2)';t=`Attack ${lane}`;d='Open up to the setter and be ready for your approach.'}
+    else {t=`Cover ${me.x<.34?'left back (zone 5)':'middle back (zone 6)'}`;d='Cover the attack, then defend from here.'}
+  }
+  else if(phase==='serve'){
+    const zz={0:{0:4,1:3,2:2},1:{0:5,1:6,2:1}}[me.y<.5?0:1][XS.indexOf(me.x)];
+    t=`Switch to zone ${zz}`;
+    d=(zz===1&&zoneOf(ri,role)===1)?'You serve, then defend in zone 1.':zoneOf(ri,role)===1?`You serve from zone 1, then run to zone ${zz}.`:'Switch to your specialist spot right after the serve.';
+    if((role==='MB1'&&ri===2)||(role==='MB2'&&ri===5)) d='You serve! Stay on and defend zone 6 until the rally ends — then the libero comes in.';
+  }
+  return {t,d};
+}
+function cap(s){return s[0].toUpperCase()+s.slice(1)}
+
+// ---------- drawing ----------
+const W=300,H=200;
+function courtBase(){
+  let s=`<rect x="0" y="0" width="${W}" height="${H}" rx="3" fill="var(--floor)" stroke="var(--floor-line)" stroke-width="2"/>`;
+  s+=`<line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="var(--floor-line)" stroke-width="1.5" stroke-dasharray="6 5"/>`;
+  s+=`<line x1="-14" y1="0" x2="${W+14}" y2="0" stroke="var(--net)" stroke-width="6" stroke-linecap="round"/>`;
+  s+=`<text x="${W/2}" y="-12" text-anchor="middle" font-size="12" font-weight="600" fill="var(--muted)" font-family="Barlow,sans-serif">net</text>`;
+  for(const z in ZONES){const [c,r]=ZONES[z];s+=`<text x="${(c+1)*W/3-7}" y="${(r+1)*H/2-7}" text-anchor="end" font-size="20" font-weight="800" fill="var(--ink)" opacity=".13" font-family="Barlow Condensed,sans-serif">${z}</text>`}
+  return s;
+}
+function chip(o,{me=false,dim=false}={}){
+  const X=o.x*W,Y=o.y*H,w=o.p.length>1?42:30,h=24;
+  const fg=o.p==='S'?'#16283D':'#fff';
+  let s=`<g opacity="${dim?.38:1}">`;
+  if(me) s+=`<circle cx="${X}" cy="${Y}" r="26" fill="none" stroke="var(--orange)" stroke-width="4"/><circle class="pulse" cx="${X}" cy="${Y}" r="14" fill="none" stroke="var(--orange)" stroke-width="3" opacity="0"/>`;
+  if(o.setter&&!me) s+=`<circle cx="${X}" cy="${Y}" r="20" fill="none" stroke="var(--good)" stroke-width="2.5"/>`;
+  s+=`<rect x="${X-w/2}" y="${Y-h/2}" width="${w}" height="${h}" rx="6" fill="${COLORS[o.p]}" stroke="#fff" stroke-width="1.5"/>`;
+  s+=`<text x="${X}" y="${Y+4.5}" text-anchor="middle" font-size="13" font-weight="700" fill="${fg}" font-family="Barlow,sans-serif">${o.p}</text></g>`;
+  return s;
+}
+function arrows(pl,role,dimOthers){
+  let s='';
+  pl.forEach(o=>{ if(!o.atk) return; const X=o.x*W,Y=o.y*H; const d=dimOthers&&o.p!==role;
+    s+=`<line x1="${X}" y1="${Y-15}" x2="${X}" y2="${o.backrow?H/2+6:8}" stroke="var(--bad)" stroke-width="2.4" stroke-dasharray="5 4" opacity="${d?.3:.9}" marker-end="url(#ah)"/>`;});
+  return s;
+}
+function rotArrows(){
+  const seg=[[[.27,.3],[.39,.3]],[[.61,.3],[.73,.3]],[[.83,.41],[.83,.63]],[[.73,.74],[.61,.74]],[[.39,.74],[.27,.74]],[[.17,.63],[.17,.41]]];
+  return seg.map(([[a,b],[c,d]])=>`<line x1="${a*W}" y1="${b*H}" x2="${c*W}" y2="${d*H}" stroke="var(--muted)" stroke-width="2" opacity=".45" marker-end="url(#ag)"/>`).join('');
+}
+const DEFS=`<defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="var(--bad)"/></marker><marker id="ag" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="var(--muted)"/></marker></defs>`;
+
+// ---------- state ----------
+const store={get(k,d){try{const v=localStorage.getItem('ksv51:'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('ksv51:'+k,JSON.stringify(v))}catch(e){}}};
+let role=store.get('role','MB1'), ri=0, phase='rec';
+let stats=store.get('stats',{});
+
+// ---------- UI: roles & tabs ----------
+const $=id=>document.getElementById(id);
+function renderRoles(){
+  $('roles').innerHTML=ROLES.map(r=>`<button class="role" aria-pressed="${r===role}" data-r="${r}"><i style="background:${COLORS[r]}"></i>${NAMES[r]}</button>`).join('');
+  $('roles').querySelectorAll('.role').forEach(b=>b.onclick=()=>{role=b.dataset.r;store.set('role',role);renderRoles();renderLearn();newQuestion();});
+}
+function setTab(t){
+  $('tabLearn').setAttribute('aria-selected',t==='learn');$('tabDrill').setAttribute('aria-selected',t==='drill');
+  $('learn').hidden=t!=='learn';$('drill').hidden=t!=='drill';
+  if(t==='drill'&&!cur) newQuestion();
+}
+$('tabLearn').onclick=()=>setTab('learn');$('tabDrill').onclick=()=>setTab('drill');
+
+// ---------- Learn ----------
+function renderLearn(){
+  $('rots').innerHTML=R.map((r,i)=>`<button class="rot" aria-pressed="${i===ri}" data-i="${i}">${r.name}<small>setter ${r.set}</small></button>`).join('');
+  $('rots').querySelectorAll('.rot').forEach(b=>b.onclick=()=>{ri=+b.dataset.i;renderLearn()});
+  $('phases').innerHTML=PHASES.map(([k,l])=>`<button class="ph" aria-pressed="${k===phase}" data-k="${k}">${l}</button>`).join('');
+  $('phases').querySelectorAll('.ph').forEach(b=>b.onclick=()=>{phase=b.dataset.k;renderLearn()});
+  const pl=players(ri,phase);
+  let s=DEFS+courtBase();
+  if(phase==='start') s+=rotArrows();
+  if(phase==='ar') s+=arrows(pl,role,true);
+  pl.filter(o=>o.p!==role).forEach(o=>s+=chip(o,{dim:true}));
+  const me=pl.find(o=>o.p===role);
+  if(me) s+=chip(me,{me:true});
+  else s+=`<text x="${W/2}" y="${H+22}" text-anchor="middle" font-size="14" font-weight="700" fill="var(--bad)" font-family="Barlow,sans-serif">${NAMES[role]} is off court here</text>`;
+  $('courtL').innerHTML=s;
+  const d=describe(ri,phase,role);
+  $('cue').innerHTML=`<b>${R[ri].name} · ${FULL[phase]}: ${d.t}</b><p>${d.d}</p>`;
+  renderSheet();
+}
+document.addEventListener('keydown',e=>{
+  if($('learn').hidden) return;
+  if(e.key==='ArrowRight'){ri=(ri+1)%6;renderLearn()} if(e.key==='ArrowLeft'){ri=(ri+5)%6;renderLearn()}
+});
+
+const RULES={
+ S:['Rotations R1, R2, R3 (setter in 1, 6, 5) you are back row: hide behind or beside the receivers, then run to the net.',
+    'Rotations R4, R5, R6 (setter in 4, 3, 2) you are front row: start at the net.',
+    'After every reception: the same target spot, right of the middle, close to the net.',
+    'Serving: back row → zone 1, front row → zone 2.'],
+ OP:['Front row in R1, R2, R3: start at the net, out of the passing lanes (R1 left sideline, R2 middle, R3 right sideline).',
+     'Back row in R4, R5, R6: stand deep on the right behind the receivers, then go straight to zone 1 for the back-row attack.',
+     'You always attack from the right side.',
+     'Serving: front row → zone 2, back row → zone 1.'],
+ MB1:['Front row in R1, R2, R6: at the net, attack quick in the middle after reception.',
+      'R3, R4, R5 you are off — the libero is in for you.',
+      'Exception: in R3 you serve from zone 1. Stay on in zone 6 until the rally ends.',
+      'Serving while front row: always zone 3 — you block the middle.'],
+ MB2:['Front row in R3, R4, R5: at the net, attack quick in the middle after reception.',
+      'R6, R1, R2 you are off — the libero is in for you.',
+      'Exception: in R6 you serve from zone 1. Stay on in zone 6 until the rally ends.',
+      'Serving while front row: always zone 3 — you block the middle.'],
+ OH1:['You receive in every rotation, on the line with the libero and the other outside.',
+      'Front row in R1, R5, R6. After reception attack from the left (zone 4) — except R1, where the setter is in 1 and you attack from the right.',
+      'Back row in R2, R3, R4: after reception cover middle back (zone 6).',
+      'Serving: front → zone 4; back → zone 6 (zone 5 when a middle serves).'],
+ OH2:['You receive in every rotation, on the line with the libero and the other outside.',
+      'Front row in R2, R3, R4: after reception attack from the left (zone 4).',
+      'Back row in R1, R5, R6: after reception cover middle back (zone 6).',
+      'Serving: front → zone 4; back → zone 6 (zone 5 when a middle serves).'],
+};
+function renderSheet(){
+  const rows=R.map((r,i)=>{
+    const cells=['rec','ar','serve'].map(ph=>describe(i,ph,role).t);
+    return `<tr><td class="r">${r.name}</td><td>${zoneOf(i,role)?'Zone '+zoneOf(i,role):'Off (libero in zone '+liberoZone(i)+')'}</td>${cells.map(c=>`<td>${c}</td>`).join('')}</tr>`;
+  }).join('');
+  $('sheet').innerHTML=`<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role].map(x=>`<li>${x}</li>`).join('')}</ul>
+  <div class="table"><table><thead><tr><th></th><th>Rotation</th><th>Reception</th><th>After reception</th><th>Serve</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// ---------- Drill ----------
+let cur=null, answered=false, score=store.get('score',{ok:0,n:0}), streak=0;
+function key(q){return `${q.role}|${q.ri}|${q.phase}`}
+function newQuestion(){
+  const pool=[];
+  for(let i=0;i<6;i++) for(const [ph] of PHASES){
+    const k=`${role}|${i}|${ph}`; const st=stats[k]||{ok:0,miss:0};
+    const w=Math.max(1,1+st.miss*3-st.ok)*(ph==='start'?0.6:1);
+    pool.push({ri:i,phase:ph,role,w});
+  }
+  if(cur){const f=pool.filter(p=>!(p.ri===cur.ri&&p.phase===cur.phase));pool.length=0;pool.push(...f)}
+  let t=Math.random()*pool.reduce((a,b)=>a+b.w,0);
+  cur=pool.find(p=>(t-=p.w)<=0)||pool[0];
+  answered=false;
+  $('nextBtn').hidden=true;$('offBtn').disabled=false;
+  const phl=FULL[cur.phase];
+  $('dq').textContent=`${R[cur.ri].name} · ${phl}`;
+  $('dsub').textContent=`Setter in ${R[cur.ri].set}. ${cur.phase==='start'?'Which zone are you in?':'Where do you stand?'}`;
+  $('fb').className='fb';$('fb').innerHTML='<p class="hint">Tap the court where you stand. If the libero is in for you, press “I\'m off court”.</p>';
+  drawDrill();updateScore();
+}
+function drawDrill(tap){
+  const pl=players(cur.ri,cur.phase);
+  let s=DEFS+courtBase();
+  const mates=$('showMates').checked;
+  if(mates||answered){
+    if(cur.phase==='start'&&answered) s+=rotArrows();
+    if(cur.phase==='ar'&&answered) s+=arrows(pl,cur.role,true);
+    pl.filter(o=>o.p!==cur.role).forEach(o=>s+=chip(o,{dim:true}));
+  }
+  if(answered){
+    const me=pl.find(o=>o.p===cur.role);
+    if(tap&&me) s+=`<line x1="${tap.x*W}" y1="${tap.y*H}" x2="${me.x*W}" y2="${me.y*H}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="3 3" opacity=".6"/>`;
+    if(tap) s+=`<circle cx="${tap.x*W}" cy="${tap.y*H}" r="7" fill="var(--ink)" opacity=".7"/>`;
+    if(me) s+=chip(me,{me:true});
+  }
+  $('courtD').innerHTML=s;
+}
+$('showMates').onchange=()=>drawDrill();
+function record(ok){
+  const k=key(cur);const st=stats[k]||{ok:0,miss:0};ok?st.ok++:st.miss++;stats[k]=st;store.set('stats',stats);
+  score.n++;if(ok){score.ok++;streak++}else streak=0;store.set('score',score);updateScore();
+  answered=true;$('nextBtn').hidden=false;$('offBtn').disabled=true;$('nextBtn').focus({preventScroll:true});
+}
+function feedback(cls,title){
+  const d=describe(cur.ri,cur.phase,cur.role);
+  $('fb').className='fb '+cls;$('fb').innerHTML=`<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
+}
+$('courtD').addEventListener('pointerup',e=>{
+  if(answered||!cur) return;
+  const svg=$('courtD');const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
+  const p=pt.matrixTransform(svg.getScreenCTM().inverse());
+  const tap={x:p.x/W,y:p.y/H};
+  const me=players(cur.ri,cur.phase).find(o=>o.p===cur.role);
+  if(!me){record(false);drawDrill(tap);feedback('bad','Not this time — you are off court');return}
+  let dist=Math.hypot(tap.x-me.x,(tap.y-me.y)*.67);
+  if(cur.phase==='start'){const zx=Math.min(2,Math.max(0,Math.floor(tap.x*3))),zy=tap.y<.5?0:1;const [c,r]=ZONES[zoneOf(cur.ri,cur.role)];dist=(zx===c&&zy===r)?0:1}
+  if(dist<.14){record(true);drawDrill(tap);feedback('good','Spot on')}
+  else if(dist<.24){record(true);drawDrill(tap);feedback('close','Close enough — fine-tune it')}
+  else{record(false);drawDrill(tap);feedback('bad','Not there')}
+});
+$('offBtn').onclick=()=>{
+  if(answered) return;
+  const me=players(cur.ri,cur.phase).find(o=>o.p===cur.role);
+  if(!me){record(true);drawDrill();feedback('good','Right — you are off')}
+  else{record(false);drawDrill();feedback('bad','No — you are on court')}
+};
+$('nextBtn').onclick=newQuestion;
+$('resetBtn').onclick=()=>{stats={};score={ok:0,n:0};streak=0;store.set('stats',stats);store.set('score',score);newQuestion()};
+function updateScore(){
+  $('dscore').textContent=`${score.ok}/${score.n}`;$('dstreak').textContent=streak;
+  const weak=[];for(const k in stats){const [r,i,ph]=k.split('|');if(r!==role)continue;const st=stats[k];if(st.miss>st.ok)weak.push(`${R[i].name} ${FULL[ph].toLowerCase()}`)}
+  $('weak').textContent=weak.length?`Needs practice (${NAMES[role]}): ${weak.join(', ')}. These come up more often.`:'';
+}
+
+renderRoles();renderLearn();
+})();
+</script>
+</body>
+</html>
