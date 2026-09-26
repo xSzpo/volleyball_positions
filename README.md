@@ -20,5 +20,6 @@ Live site: https://xszpo.github.io/volleyball_positions/
 
 ## Notes
 
+- Rules switch at the top: Official (FIVB, the libero may not serve) or Drill (the libero stays on court and also serves).
 - Progress (drill stats, best scores, settings) is saved in each player's browser.
 - Positions follow the KSV guide "Receiving positions and movements". The serve column is the team's base defence after switching and is not covered by the guide.
