@@ -264,7 +264,7 @@ button:focus-visible,label:focus-within{outline:3px solid var(--orange);outline-
       </div>
         <small id="gVisSub"></small>
       </div>
-      <label class="check"><input type="checkbox" id="nbGame"> Neighbour check after reception (+30 points)</label>
+      <label class="check"><input type="checkbox" id="nbGame"> Neighbour check after reception (optional, +30 points)</label>
       <p class="tip">Tip: start in order with the setter shown. When you score 80% or more, switch to mixed order and show nobody.</p>
       <div class="row"><button class="btn primary" id="gStart">Start match</button></div>
       <p class="hint" id="gBest" style="margin-top:10px"></p>
@@ -585,12 +585,12 @@ function neighbourQ(ri,r){
   const pick=qs[Math.floor(Math.random()*qs.length)];
   return {...pick,opts:all.filter(p=>p!==r)};
 }
-function nbLock(id,on){const b=$(id); b.hidden=false; b.disabled=on; if(on){b.dataset.label=b.dataset.label||b.textContent;b.textContent='Answer the neighbour check';} else if(b.dataset.label){b.textContent=b.dataset.label;delete b.dataset.label;}}
+function nbLock(id,on){const b=$(id); b.hidden=false; b.disabled=false;}
 function nbLayer(pl,me,partner){
   const a=pl.find(o=>o.p===me), b=pl.find(o=>o.p===partner); if(!a||!b) return '';
   return `<line x1="${a.x*W}" y1="${a.y*H}" x2="${b.x*W}" y2="${b.y*H}" stroke="var(--orange)" stroke-width="4" stroke-dasharray="2 6" stroke-linecap="round"/>`;
 }
-function nbHtml(nq,id){return `<div class="nbq" id="${id}"><b>Neighbour check</b> <span class="hint">answer to continue</span><p style="margin:2px 0 0">${nq.q}</p><div class="opts">${nq.opts.map(p=>`<button type="button" data-p="${p}">${p}</button>`).join('')}<button type="button" class="skip" data-skip="1">Skip</button></div></div>`;}
+function nbHtml(nq,id){return `<div class="nbq" id="${id}"><b>Neighbour check</b> <span class="hint">optional bonus: answer, or just press Continue</span><p style="margin:2px 0 0">${nq.q}</p><div class="opts">${nq.opts.map(p=>`<button type="button" data-p="${p}">${p}</button>`).join('')}</div></div>`;}
 function nbMark(id,nq,choice){const box=$(id);box.querySelectorAll('button').forEach(b=>{b.disabled=true;if(b.dataset.skip)b.remove();else if(b.dataset.p===nq.a)b.classList.add('right');else if(b.dataset.p===choice)b.classList.add('wrong');});
   box.insertAdjacentHTML('beforeend',`<p class="hint" style="margin-top:6px">${choice===nq.a?'Correct.':(choice?'':'Skipped. ')+'It is '+nq.a+'.'} Keep that order until the serve is made, then move.</p>`);}
 
