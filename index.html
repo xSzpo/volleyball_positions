@@ -155,7 +155,8 @@ td.r{font:700 16px "Barlow Condensed",sans-serif;white-space:nowrap}
 .tip{margin:10px 0 0;font-size:14px;color:var(--muted);border-left:3px solid var(--orange);padding-left:10px}
 .check4,.learnsteps{margin:0;padding-left:22px}
 .check4 li,.learnsteps li{margin:8px 0}
-.nbq{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.nbq{margin:10px 0 0;padding:10px 12px;border:2px solid var(--orange);border-radius:10px;background:color-mix(in srgb,var(--orange) 9%,var(--panel))}
+.nbq .opts button.skip{border-color:transparent;color:var(--muted);background:transparent}
 .nbq .opts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .nbq .opts button{border:2px solid var(--ink);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 12px;font:700 15px Barlow,sans-serif;cursor:pointer}
 .nbq .opts button.right{background:var(--good);border-color:var(--good);color:#fff}
@@ -228,6 +229,7 @@ button:focus-visible,label:focus-within{outline:3px solid var(--orange);outline-
       </div>
       <label class="check"><input type="checkbox" id="nbDrill"> Neighbour check after reception</label>
       <svg class="court" id="courtD" viewBox="-26 -34 352 262" aria-label="Tap where you stand"></svg>
+      <div id="dNbBox"></div>
       <div class="row">
         <button class="btn" id="offBtn">I'm off court</button>
         <button class="btn primary" id="nextBtn" hidden>Next</button>
@@ -290,6 +292,7 @@ button:focus-visible,label:focus-within{outline:3px solid var(--orange);outline-
       </div>
       <p class="story" id="gStory"></p>
       <svg class="court" id="courtG" viewBox="-26 -34 352 262" aria-label="Tap where you stand"></svg>
+      <div id="gNbBox"></div>
       <div class="row">
         <button class="btn" id="gOff">I'm off court</button>
         <button class="btn" id="gHelp">Help</button>
@@ -582,13 +585,14 @@ function neighbourQ(ri,r){
   const pick=qs[Math.floor(Math.random()*qs.length)];
   return {...pick,opts:all.filter(p=>p!==r)};
 }
+function nbLock(id,on){const b=$(id); b.hidden=false; b.disabled=on; if(on){b.dataset.label=b.dataset.label||b.textContent;b.textContent='Answer the neighbour check';} else if(b.dataset.label){b.textContent=b.dataset.label;delete b.dataset.label;}}
 function nbLayer(pl,me,partner){
   const a=pl.find(o=>o.p===me), b=pl.find(o=>o.p===partner); if(!a||!b) return '';
   return `<line x1="${a.x*W}" y1="${a.y*H}" x2="${b.x*W}" y2="${b.y*H}" stroke="var(--orange)" stroke-width="4" stroke-dasharray="2 6" stroke-linecap="round"/>`;
 }
-function nbHtml(nq,id){return `<div class="nbq" id="${id}"><b>Neighbour check</b><p style="margin:2px 0 0">${nq.q}</p><div class="opts">${nq.opts.map(p=>`<button type="button" data-p="${p}">${p}</button>`).join('')}</div></div>`;}
-function nbMark(id,nq,choice){const box=$(id);box.querySelectorAll('button').forEach(b=>{b.disabled=true;if(b.dataset.p===nq.a)b.classList.add('right');else if(b.dataset.p===choice)b.classList.add('wrong');});
-  box.insertAdjacentHTML('beforeend',`<p class="hint" style="margin-top:6px">${choice===nq.a?'Correct.':'It is '+nq.a+'.'} Keep that order until the serve is made, then move.</p>`);}
+function nbHtml(nq,id){return `<div class="nbq" id="${id}"><b>Neighbour check</b> <span class="hint">answer to continue</span><p style="margin:2px 0 0">${nq.q}</p><div class="opts">${nq.opts.map(p=>`<button type="button" data-p="${p}">${p}</button>`).join('')}<button type="button" class="skip" data-skip="1">Skip</button></div></div>`;}
+function nbMark(id,nq,choice){const box=$(id);box.querySelectorAll('button').forEach(b=>{b.disabled=true;if(b.dataset.skip)b.remove();else if(b.dataset.p===nq.a)b.classList.add('right');else if(b.dataset.p===choice)b.classList.add('wrong');});
+  box.insertAdjacentHTML('beforeend',`<p class="hint" style="margin-top:6px">${choice===nq.a?'Correct.':(choice?'':'Skipped. ')+'It is '+nq.a+'.'} Keep that order until the serve is made, then move.</p>`);}
 
 // ---------- Drill ----------
 let cur=null, answered=false, score=store.get('score2',{ok:0,n:0}), streak=0, lastTap=null, review=null, dNb=null;
@@ -601,7 +605,7 @@ function startReview(){
   cur=null; newQuestion();
 }
 function newQuestion(){
-  lastTap=null; dNb=null;
+  lastTap=null; dNb=null; $('dNbBox').innerHTML=''; $('nextBtn').disabled=false; delete $('nextBtn').dataset.label;
   if(review){
     review.i++;
     if(review.i>=review.queue.length){
@@ -651,9 +655,9 @@ function record(ok){
   answered=true;$('nextBtn').hidden=false;$('offBtn').disabled=true;$('nextBtn').focus({preventScroll:true});updateScore();
 }
 function feedback(cls,title){const d=describe(cur.ri,cur.phase,cur.role);$('fb').className='fb '+cls;$('fb').innerHTML=`<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
-  if(cur.phase==='rec'&&$('nbDrill').checked){const nq=neighbourQ(cur.ri,cur.role); if(nq){dNb=nq; $('nextBtn').hidden=true;
-    $('fb').insertAdjacentHTML('beforeend',nbHtml(nq,'dnb'));
-    $('dnb').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(dNb.done)return;dNb.done=true;nbMark('dnb',nq,b.dataset.p);drawDrill(lastTap);$('nextBtn').hidden=false;$('nextBtn').focus({preventScroll:true});});}}}
+  if(cur.phase==='rec'&&$('nbDrill').checked){const nq=neighbourQ(cur.ri,cur.role); if(nq){dNb=nq; nbLock('nextBtn',true);
+    $('dNbBox').innerHTML=nbHtml(nq,'dnb'); $('dnb').scrollIntoView({block:'nearest',behavior:'smooth'});
+    $('dnb').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(dNb.done)return;dNb.done=true;nbMark('dnb',nq,b.dataset.skip?null:b.dataset.p);drawDrill(lastTap);nbLock('nextBtn',false);$('nextBtn').focus({preventScroll:true});});}}}
 function svgPoint(svg,e){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;return pt.matrixTransform(svg.getScreenCTM().inverse());}
 $('courtD').addEventListener('pointerup',e=>{
   if(answered||!cur) return;
@@ -779,7 +783,7 @@ function gStory(st,prev){
   return pre+`We win the point and serve in ${R}. Where do you switch to after the serve?`;
 }
 function gShow(){
-  const st=G.queue[G.i]; G.help=0; G.answered=false; G.tap=null; G.nb=null;
+  const st=G.queue[G.i]; G.help=0; G.answered=false; G.tap=null; G.nb=null; $('gNbBox').innerHTML=''; $('gNext').disabled=false; delete $('gNext').dataset.label;
   const r=ROWS[st.ri];
   $('gTitle').textContent=r.name;
   $('gStepName').textContent=`${FULL[st.phase]} · moment ${G.i+1} of ${G.queue.length}`;
@@ -866,11 +870,11 @@ function gAnswer(q){
   $('gOff').disabled=true; $('gHelp').disabled=true; $('gNext').hidden=false;
   $('gNext').textContent=G.i===G.queue.length-1?'See results':'Continue';
   $('gNext').focus({preventScroll:true});
-  if(st.phase==='rec'&&$('nbGame').checked){const nq=neighbourQ(st.ri,G.role); if(nq){G.nb=nq; $('gNext').hidden=true;
-    $('gFb').insertAdjacentHTML('beforeend',nbHtml(nq,'gnb'));
-    $('gnb').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(G.nb.done)return;G.nb.done=true;G.nbN++;const ok=b.dataset.p===nq.a;
+  if(st.phase==='rec'&&$('nbGame').checked){const nq=neighbourQ(st.ri,G.role); if(nq){G.nb=nq; nbLock('gNext',true);
+    $('gNbBox').innerHTML=nbHtml(nq,'gnb'); $('gnb').scrollIntoView({block:'nearest',behavior:'smooth'});
+    $('gnb').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(G.nb.done)return;G.nb.done=true;G.nbN++;const ok=!b.dataset.skip&&b.dataset.p===nq.a;
       if(ok){G.nbOk++;G.score+=30;G.results[G.i].pts+=30;$('gScore').textContent=G.score;$('gFb').querySelector('.pts').textContent='+'+G.results[G.i].pts;}
-      nbMark('gnb',nq,b.dataset.p);gDraw();$('gNext').hidden=false;$('gNext').focus({preventScroll:true});});}}
+      nbMark('gnb',nq,b.dataset.skip?null:b.dataset.p);gDraw();nbLock('gNext',false);$('gNext').focus({preventScroll:true});});}}
   gDraw();
 }
 $('courtG').addEventListener('pointerup',e=>{
