@@ -162,6 +162,39 @@ td.r{font:700 16px "Barlow Condensed",sans-serif;white-space:nowrap}
 .nbq .opts button.right{background:var(--good);border-color:var(--good);color:#fff}
 .nbq .opts button.wrong{background:var(--bad);border-color:var(--bad);color:#fff}
 .stats div.wide{grid-column:1/-1}
+.mprow{display:grid;grid-template-columns:14px 1fr auto auto;gap:8px;align-items:center;margin:6px 0}
+.mprow i{width:14px;height:14px;border-radius:50%}
+.mprow input,.mprow select{font:500 16px Barlow,sans-serif;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);min-width:0}
+.mprow button{border:0;background:transparent;color:var(--muted);font-size:18px;cursor:pointer;padding:6px}
+.mprow button:disabled{opacity:.3;cursor:default}
+.pass{text-align:center}
+.passname{font:800 clamp(34px,9vw,48px) "Barlow Condensed",sans-serif;line-height:1}
+.bigbtn{font-size:22px;padding:14px 28px}
+.who{display:inline-flex;align-items:center;gap:6px;font:700 15px Barlow,sans-serif;margin-bottom:2px}
+.who i{width:12px;height:12px;border-radius:50%}
+.board{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:16px}
+.pchip{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border-radius:999px;padding:5px 12px;font:600 14px Barlow,sans-serif}
+.pchip i{width:10px;height:10px;border-radius:50%}
+.pchip b{font:800 17px "Barlow Condensed",sans-serif}
+.rlist{list-style:none;margin:10px 0 0;padding:0}
+.rlist li{display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:start;padding:9px 0;border-bottom:1px solid var(--line)}
+.rlist li i{width:14px;height:14px;border-radius:50%;margin-top:4px}
+.rlist .rp{font:800 20px "Barlow Condensed",sans-serif}
+.rlist small{display:block;color:var(--muted)}
+.rank{list-style:none;padding:0;margin:8px 0 14px}
+.rank li{display:grid;grid-template-columns:34px 14px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.rank .pos{font:800 26px "Barlow Condensed",sans-serif;color:var(--muted)}
+.rank li:first-child .pos{color:var(--orange)}
+.rank li i{width:14px;height:14px;border-radius:50%}
+.rank .sc{font:800 26px "Barlow Condensed",sans-serif}
+.rank small{display:block;color:var(--muted)}
+.stats .rank div{background:none;padding:0;border-radius:0}
+.stats .rank .sc{color:var(--ink);font-size:26px}
+.stats .rank .pos{color:var(--muted)}
+.stats .rank li:first-child .pos{color:var(--orange)}
+.stats .rank small{color:var(--muted)}
+details.pm{margin:6px 0}
+details.pm summary{cursor:pointer;font-weight:600}
 button:focus-visible,label:focus-within{outline:3px solid var(--orange);outline-offset:2px}
 @media (prefers-reduced-motion: no-preference){ .pulse{animation:pulse 1.4s ease-out 2} @keyframes pulse{0%{opacity:.95;r:14}100%{opacity:0;r:34}} }
 </style>
@@ -243,7 +276,17 @@ button:focus-visible,label:focus-within{outline:3px solid var(--orange);outline-
   <section id="game" hidden>
     <div class="card" id="gSetup">
       <h2>Match mode</h2>
-      <p class="hint" style="margin-bottom:10px">Play all six rotations as <b id="gRole"></b>. Each rotation runs in real match order: rotate, receive, move after the pass, then serve. Your mistakes show you where you should have been.</p>
+      <fieldset class="steps one" style="margin-bottom:10px">
+        <legend>Who is playing?</legend>
+        <label><input type="radio" name="gPlayers" value="solo"> Just me</label>
+        <label><input type="radio" name="gPlayers" value="mp"> With friends, on this device</label>
+      </fieldset>
+      <div id="mpBox" hidden>
+        <div id="mpList"></div>
+        <div class="row" style="margin-top:6px"><button type="button" class="btn" id="mpAdd">+ Add player</button></div>
+        <p class="tip">Pass the device around. In every moment the turn order is random, and each player answers in secret. When everyone has answered, all answers are shown together.</p>
+      </div>
+      <p class="hint" style="margin:10px 0">Play all six rotations as <b id="gRole"></b>. Each rotation runs in real match order: rotate, receive, move after the pass, then serve. Your mistakes show you where you should have been.</p>
       <fieldset class="steps">
         <legend>Steps to play in each rotation</legend>
         <label><input type="checkbox" id="gs-start" checked> Rotation</label>
@@ -279,9 +322,29 @@ button:focus-visible,label:focus-within{outline:3px solid var(--orange);outline-
       </details>
     </div>
 
+    <div class="card pass" id="gPass" hidden>
+      <div class="sub" id="pMoment"></div>
+      <p class="hint" style="margin:14px 0 4px">Pass the device to</p>
+      <div class="passname" id="pName"></div>
+      <p class="hint" id="pRole" style="margin:4px 0 14px"></p>
+      <p style="margin:0 0 14px">Everyone else: look away until it's your turn.</p>
+      <button type="button" class="btn primary bigbtn" id="pReady">I'm ready</button>
+      <div class="board" id="pBoard"></div>
+      <div class="row"><button type="button" class="btn quiet" id="pQuit">Quit match</button></div>
+    </div>
+
+    <div class="card" id="gReveal" hidden>
+      <div class="prompt"><div><div class="big" id="rTitle"></div><div class="sub" id="rSub"></div></div></div>
+      <p class="hint" style="margin:0 0 6px">Everyone's answers. Big chip = where you should be, dot = where you tapped.</p>
+      <svg class="court" id="courtR" viewBox="-26 -34 352 262" aria-label="Everyone's answers"></svg>
+      <ul class="rlist" id="rList"></ul>
+      <div class="board" id="rBoard"></div>
+      <div class="row"><button type="button" class="btn primary" id="rNext">Next moment</button><button type="button" class="btn quiet" id="rQuit">Quit</button></div>
+    </div>
+
     <div class="card" id="gPlay" hidden>
       <div class="prompt">
-        <div><div class="big" id="gTitle"></div><div class="sub" id="gStepName"></div></div>
+        <div><div class="who" id="gWho" hidden></div><div class="big" id="gTitle"></div><div class="sub" id="gStepName"></div></div>
         <div class="score"><strong id="gScore">0</strong>streak <span id="gStreak">0</span></div>
       </div>
       <div class="progress" aria-hidden="true"><i id="gBar"></i></div>
@@ -456,7 +519,7 @@ let ri=0, phase='rec', stats=store.get('stats2',{});
 
 function renderRoles(){
   $('roles').innerHTML=ROLES.map(r=>`<button class="role" aria-pressed="${r===role}" data-r="${r}"><i style="background:${COLORS[r]}"></i>${NAMES[r]}</button>`).join('');
-  $('roles').querySelectorAll('.role').forEach(b=>b.onclick=()=>{role=b.dataset.r;store.set('role',role);renderRoles();renderRefLabels();review=null;renderLearn();if(!$('drill').hidden)newQuestion();else cur=null;if(typeof gRenderSetup==='function'){if(G){G=null;gView('gSetup');}gRenderSetup();}});
+  $('roles').querySelectorAll('.role').forEach(b=>b.onclick=()=>{role=b.dataset.r;store.set('role',role);renderRoles();renderRefLabels();review=null;renderLearn();if(!$('drill').hidden)newQuestion();else cur=null;if(typeof gRenderSetup==='function'){if(G&&!G.mp){G=null;gView('gSetup');}if(!G)gRenderSetup();}});
 }
 function setTab(t){
   ['Learn','Drill','Game','Sets'].forEach(n=>{const k=n.toLowerCase();$('tab'+n).setAttribute('aria-selected',t===k);$(k).hidden=t!==k;});
@@ -761,17 +824,20 @@ function gCheckSteps(){
   gRenderSetup();
 }
 function gRenderSetup(){
-  $('gRole').textContent=NAMES[role];
-  const best=store.get('gameBest',{})[gKey()];
+  const mp=gPlayersMode()==='mp';
+  $('gRole').textContent=mp?'the role each player picks':NAMES[role];
+  $('mpBox').hidden=!mp; if(mp) renderMp();
+  const best=mp?null:store.get('gameBest',{})[gKey()];
   $('gBest').textContent=best?`Your best with these settings: ${best} points.`:'';
 }
-function gView(v){['gSetup','gPlay','gEnd'].forEach(id=>$(id).hidden=id!==v);}
-function gStart(queue,replay=false){
-  G={queue,i:0,score:0,streak:0,perfect:0,close:0,helps:0,misses:[],results:[],replay,role,help:0,answered:false,t0:0,key:gKey(),mixed:gOrder()==='mixed',nbOk:0,nbN:0,nb:null};
+function gView(v){['gSetup','gPass','gReveal','gPlay','gEnd'].forEach(id=>$(id).hidden=id!==v);}
+function gStart(queue,replay=false,mp=null){
+  G={queue,i:0,score:0,streak:0,perfect:0,close:0,helps:0,misses:[],results:[],replay,role,help:0,answered:false,t0:0,key:gKey(),mixed:gOrder()==='mixed',nbOk:0,nbN:0,nb:null,mp:null};
+  if(mp){G.mp={players:mp.map((p,k)=>({name:(p.name||'').trim()||`Player ${k+1}`,role:p.role,color:PCOL[k],score:0,streak:0,perfect:0,close:0,helps:0,misses:[],results:[],nbOk:0,nbN:0,taps:[]})),order:[],turn:0}; mpMomentStart(); return;}
   gView('gPlay'); gShow();
 }
 function gNewMatch(){const q=[];let order=[0,1,2,3,4,5];if(gOrder()==='mixed'){for(let i=5;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}}
-  order.forEach(i=>gSteps().forEach(k=>q.push({ri:i,phase:k})));gStart(q);}
+  order.forEach(i=>gSteps().forEach(k=>q.push({ri:i,phase:k})));gStart(q,false,gPlayersMode()==='mp'?mpPlayers:null);}
 function gStory(st,prev){
   const R=ROWS[st.ri].name, newRot=!prev||prev.ri!==st.ri;
   const call=`Coach calls ${R}: setter in ${ROWS[st.ri].setter}.`;
@@ -786,6 +852,7 @@ function gShow(){
   const st=G.queue[G.i]; G.help=0; G.answered=false; G.tap=null; G.nb=null; $('gNbBox').innerHTML=''; $('gNext').disabled=false; delete $('gNext').dataset.label;
   const r=ROWS[st.ri];
   $('gTitle').textContent=r.name;
+  if(G.mp){const p=mpCur();$('gWho').hidden=false;$('gWho').innerHTML=`<i style="background:${p.color}"></i>${esc(p.name)} · ${NAMES[p.role]}`;} else $('gWho').hidden=true;
   $('gStepName').textContent=`${FULL[st.phase]} · moment ${G.i+1} of ${G.queue.length}`;
   $('gBar').style.width=(G.i/G.queue.length*100)+'%';
   const inRot=G.queue.map((q,j)=>({...q,j})).filter(q=>q.ri===st.ri);
@@ -868,7 +935,7 @@ function gAnswer(q){
   $('gFb').innerHTML=`<span class="pts">+${pts}</span><b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>${parts.length?`<p class="hint" style="margin-top:4px">${parts.join(' · ')}</p>`:''}`;
   $('gScore').textContent=G.score; $('gStreak').textContent=G.streak;
   $('gOff').disabled=true; $('gHelp').disabled=true; $('gNext').hidden=false;
-  $('gNext').textContent=G.i===G.queue.length-1?'See results':'Continue';
+  $('gNext').textContent=G.mp?(G.mp.turn<G.mp.players.length-1?'Next player':'Show everyone\'s answers'):(G.i===G.queue.length-1?'See results':'Continue');
   $('gNext').focus({preventScroll:true});
   if(st.phase==='rec'&&$('nbGame').checked){const nq=neighbourQ(st.ri,G.role); if(nq){G.nb=nq; nbLock('gNext',true);
     $('gNbBox').innerHTML=nbHtml(nq,'gnb'); $('gnb').scrollIntoView({block:'nearest',behavior:'smooth'});
@@ -891,9 +958,10 @@ $('gOff').onclick=()=>{
   const st=G.queue[G.i]; const me=players(st.ri,st.phase).find(o=>o.p===G.role);
   gAnswer(me?'miss':'perfect');
 };
-$('gNext').onclick=()=>{ if(G.i<G.queue.length-1){G.i++;gShow();} else gFinish(); };
+$('gNext').onclick=()=>{ if(G.mp) return mpAfterTurn(); if(G.i<G.queue.length-1){G.i++;gShow();} else gFinish(); };
 $('gQuit').onclick=()=>{G=null;gRenderSetup();gView('gSetup');};
 function gFinish(){
+  if(G.mp) return mpFinish();
   const n=G.queue.length, acc=Math.round((G.perfect+G.close)/n*100);
   let best=false;
   if(!G.replay){const all=store.get('gameBest',{});const k=G.key;if(!all[k]||G.score>all[k]){best=true;all[k]=G.score;store.set('gameBest',all);}}
@@ -901,7 +969,7 @@ function gFinish(){
   $('gEndTitle').textContent=G.replay?'Mistakes replayed':(acc===100?'Perfect match!':'Match finished');
   $('gStats').innerHTML=`<div><strong>${G.score}</strong><span>points${best&&!G.replay?' · new best':''}</span></div><div><strong>${acc}%</strong><span>right or close</span></div><div><strong>${G.perfect}/${n}</strong><span>spot on</span></div><div><strong>${G.helps}</strong><span>help used</span></div>${G.nbN?`<div class="wide"><strong>${G.nbOk}/${G.nbN}</strong><span>neighbour checks right</span></div>`:''}`;
   $('gMist').innerHTML=G.misses.length?`<h2 style="font-size:20px;margin-top:4px">Where you should have been</h2><ul class="mist">${G.misses.map(m=>{const d=describe(m.ri,m.phase,G.role);return `<li><b>${ROWS[m.ri].name} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`}).join('')}</ul>`:'<p>No mistakes. '+(visGame!=='none'||!G.mixed?'Next step: mixed order and show nobody.':'You know your spots. Keep it fresh with a short match every few days.')+'</p>';
-  $('gReplay').hidden=!G.misses.length;
+  $('gReplay').hidden=!G.misses.length; $('gAgain').textContent='Play again';
   $('gBar').style.width='100%';
   gView('gEnd');
 }
@@ -910,6 +978,84 @@ $('gAgain').onclick=()=>{ if(!gSteps().length) return gView('gSetup'); gNewMatch
 $('gSettings').onclick=()=>{G=null;gRenderSetup();gView('gSetup');};
 $('gStart').onclick=gNewMatch;
 gCheckSteps();
+
+// ---------- Multiplayer (same device) ----------
+const PCOL=['#F08A1C','#14A3A3','#8E5BD6','#1E9E5A','#D63A78','#3B7DD8'];
+function esc(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+let mpPlayers=store.get('mpPlayers',[{name:'Player 1',role:'MB1'},{name:'Player 2',role:'OP'}]);
+if(!Array.isArray(mpPlayers)||mpPlayers.length<2) mpPlayers=[{name:'Player 1',role:'MB1'},{name:'Player 2',role:'OP'}];
+function gPlayersMode(){const r=document.querySelector('input[name="gPlayers"]:checked');return r?r.value:'solo';}
+document.querySelector(`input[name="gPlayers"][value="${store.get('gPlayers','solo')==='mp'?'mp':'solo'}"]`).checked=true;
+document.querySelectorAll('input[name="gPlayers"]').forEach(r=>r.onchange=()=>{store.set('gPlayers',gPlayersMode());gRenderSetup();});
+function saveMp(){store.set('mpPlayers',mpPlayers);}
+function renderMp(){
+  $('mpList').innerHTML=mpPlayers.map((p,k)=>`<div class="mprow"><i style="background:${PCOL[k]}"></i>
+    <input type="text" maxlength="16" value="${esc(p.name)}" data-k="${k}" aria-label="Player ${k+1} name">
+    <select data-k="${k}" aria-label="Player ${k+1} role">${ROLES.map(r=>`<option value="${r}"${r===p.role?' selected':''}>${NAMES[r]}</option>`).join('')}</select>
+    <button type="button" data-rm="${k}" aria-label="Remove player ${k+1}" ${mpPlayers.length<=2?'disabled':''}>✕</button></div>`).join('');
+  $('mpList').querySelectorAll('input').forEach(el=>el.oninput=()=>{mpPlayers[+el.dataset.k].name=el.value;saveMp();});
+  $('mpList').querySelectorAll('select').forEach(el=>el.onchange=()=>{mpPlayers[+el.dataset.k].role=el.value;saveMp();});
+  $('mpList').querySelectorAll('button[data-rm]').forEach(el=>el.onclick=()=>{if(mpPlayers.length<=2)return;mpPlayers.splice(+el.dataset.rm,1);saveMp();renderMp();});
+  $('mpAdd').disabled=mpPlayers.length>=6;
+}
+$('mpAdd').onclick=()=>{if(mpPlayers.length>=6)return;const used=mpPlayers.map(p=>p.role);mpPlayers.push({name:`Player ${mpPlayers.length+1}`,role:ROLES.find(r=>!used.includes(r))||'OH1'});saveMp();renderMp();};
+const MP_KEYS=['score','streak','perfect','close','helps','misses','results','nbOk','nbN'];
+function mpCur(){return G.mp.players[G.mp.order[G.mp.turn]];}
+function swapIn(p){MP_KEYS.forEach(k=>G[k]=p[k]);G.role=p.role;}
+function swapOut(p){MP_KEYS.forEach(k=>p[k]=G[k]);p.taps[G.i]={tap:G.tap,res:G.results[G.i]};}
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function mpBoard(){return [...G.mp.players].sort((a,b)=>b.score-a.score).map(p=>`<span class="pchip"><i style="background:${p.color}"></i>${esc(p.name)} <b>${p.score}</b></span>`).join('');}
+function mpMomentStart(){G.mp.order=shuffle(G.mp.players.map((_,k)=>k));G.mp.turn=0;mpPass();}
+function mpPass(){
+  const p=mpCur(); swapIn(p);
+  const st=G.queue[G.i];
+  $('pMoment').textContent=`Moment ${G.i+1} of ${G.queue.length} · ${ROWS[st.ri].name} · ${FULL[st.phase]} · turn ${G.mp.turn+1} of ${G.mp.players.length}`;
+  $('pName').textContent=p.name; $('pName').style.color=p.color;
+  $('pRole').textContent=`plays ${NAMES[p.role]}`;
+  $('pBoard').innerHTML=mpBoard();
+  gView('gPass'); window.scrollTo({top:$('game').offsetTop-10});
+}
+$('pReady').onclick=()=>{gView('gPlay');gShow();};
+function mpAfterTurn(){const p=mpCur();swapOut(p);G.mp.turn++;if(G.mp.turn<G.mp.players.length)mpPass();else mpReveal();}
+function mpReveal(){
+  const st=G.queue[G.i], pl=players(st.ri,st.phase);
+  let s=DEFS+courtBase();
+  if(st.phase==='start') s+=rotArrows();
+  const roles=[...new Set(G.mp.players.map(p=>p.role))];
+  pl.filter(o=>!roles.includes(o.p)).forEach(o=>s+=chip(o,{dim:true}));
+  G.mp.players.forEach(p=>{const t=p.taps[G.i]; const me=pl.find(o=>o.p===p.role);
+    if(t&&t.tap&&me) s+=`<line x1="${t.tap.x*W}" y1="${t.tap.y*H}" x2="${me.x*W}" y2="${me.y*H}" stroke="${p.color}" stroke-width="2" stroke-dasharray="3 3"/>`;});
+  roles.forEach(r=>{const me=pl.find(o=>o.p===r); if(!me) return; const owners=G.mp.players.filter(p=>p.role===r);
+    s+=`<circle cx="${me.x*W}" cy="${me.y*H}" r="24" fill="none" stroke="${owners[0].color}" stroke-width="4"/>`; s+=chip(me);});
+  G.mp.players.forEach(p=>{const t=p.taps[G.i]; if(!t||!t.tap) return;
+    s+=`<circle cx="${t.tap.x*W}" cy="${t.tap.y*H}" r="9" fill="${p.color}" stroke="#fff" stroke-width="1.5"/><text x="${t.tap.x*W}" y="${t.tap.y*H+4}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="Barlow,sans-serif">${esc(p.name.trim()[0]||'?').toUpperCase()}</text>`;});
+  $('courtR').innerHTML=s;
+  $('rTitle').textContent=`${ROWS[st.ri].name} · ${FULL[st.phase]}`;
+  $('rSub').textContent=`Moment ${G.i+1} of ${G.queue.length}`;
+  const lab={perfect:'Spot on',close:'Close',miss:'Not there'};
+  $('rList').innerHTML=G.mp.players.map(p=>{const t=p.taps[G.i]||{},r=t.res||{q:'miss',pts:0};const d=describe(st.ri,st.phase,p.role);
+    return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${lab[r.q]}${t.res&&!t.tap?' (said off court)':''}<small>Correct: ${d.t}</small></div><span class="rp">+${r.pts}</span></li>`;}).join('');
+  $('rBoard').innerHTML=mpBoard();
+  $('rNext').textContent=G.i<G.queue.length-1?'Next moment':'See final results';
+  gView('gReveal');
+}
+$('rNext').onclick=()=>{if(G.i<G.queue.length-1){G.i++;mpMomentStart();}else gFinish();};
+$('rQuit').onclick=$('pQuit').onclick=()=>{G=null;gRenderSetup();gView('gSetup');};
+function mpFinish(){
+  const n=G.queue.length, ps=[...G.mp.players].sort((a,b)=>b.score-a.score);
+  const tie=ps.length>1&&ps[0].score===ps[1].score;
+  $('gEndTitle').textContent=tie?'It\'s a tie!':`${ps[0].name} wins!`;
+  let pos=0,last=null;
+  $('gStats').innerHTML=`<ol class="rank" style="grid-column:1/-1">${ps.map((p,k)=>{if(p.score!==last){pos=k+1;last=p.score;}
+    const acc=Math.round((p.perfect+p.close)/n*100);
+    return `<li><span class="pos">${pos}</span><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}<small>${acc}% right or close · ${p.perfect} spot on · ${p.helps} help${p.nbN?` · neighbours ${p.nbOk}/${p.nbN}`:''}</small></div><span class="sc">${p.score}</span></li>`;}).join('')}</ol>`;
+  $('gMist').innerHTML=G.mp.players.map(p=>p.misses.length?`<details class="pm"><summary><span style="color:${p.color}">●</span> ${esc(p.name)}: where you should have been (${p.misses.length})</summary><ul class="mist">${p.misses.map(m=>{const d=describe(m.ri,m.phase,p.role);return `<li><b>${ROWS[m.ri].name} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`}).join('')}</ul></details>`:`<p><span style="color:${p.color}">●</span> ${esc(p.name)}: no mistakes.</p>`).join('');
+  $('gReplay').hidden=true; $('gAgain').textContent='Rematch';
+  $('gBar').style.width='100%';
+  gView('gEnd');
+}
+
+gRenderSetup();
 
 // ---------- Rules mode ----------
 function renderRulesMode(){
