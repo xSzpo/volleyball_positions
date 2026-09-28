@@ -38,9 +38,15 @@ PROJECT = "ksv-volleyball-xszpo"
 NAMESPACE = f"{PROJECT}-default-rtdb"
 PORTS = (9000, 9099)
 NB_GRACE_MS = 5000
-LIVE, STALE = "111111", "000042"
+LIVE, STALE, FRESH = "111111", "000042", "000043"
 EVIL_UID = "EvilEvilEvilEvilEvilEvil0000"
 LABELS = {"perfect": "Spot on", "close": "Close enough", "miss": "Not there", "none": "No answer"}
+
+
+def press_next(page: Page) -> None:
+    """Presses Check or Continue and waits out the short lock that stops a double tap skipping the feedback."""
+    page.click("#gNext")
+    page.wait_for_selector("#gNext:not([aria-disabled])", state="attached")
 
 
 def run_under_emulators() -> None:
@@ -164,10 +170,16 @@ def uid_of(page: Page) -> str:
     return str(page.evaluate("firebase.auth().currentUser.uid"))
 
 
-def tap_spot(page: Page, role: str, ri: int, phase: str = "rec") -> None:
-    """Taps the role's correct spot for ``phase`` in rotation ``ri``."""
+def tap_spot(page: Page, role: str, ri: int, phase: str = "rec", check: bool = True) -> None:
+    """Taps the role's correct spot for ``phase`` in rotation ``ri``, then presses Check."""
     spots = [(s[0], s[1], s[2]) for s in (ROWS[ri]["ar"] if phase == "ar" else ROWS[ri]["rec"])]
-    x, y = next((x, y) for p, x, y in spots if p == role)
+    tap_at(page, *next((x, y) for p, x, y in spots if p == role))
+    if check:
+        press_next(page)
+
+
+def tap_at(page: Page, x: float, y: float) -> None:
+    """Taps the match court at normalised court coordinates."""
     page.locator("#courtG").scroll_into_view_if_needed()
     cx, cy = page.evaluate(
         """([x, y]) => {
@@ -184,6 +196,7 @@ def answer(page: Page, role: str, ri: int, off: bool = False, neighbour: bool = 
     page.wait_for_selector("#gOff:enabled")
     if off:
         page.click("#gOff")
+        press_next(page)
     else:
         tap_spot(page, role, ri)
     feedback = page.inner_text("#gFb")
@@ -207,15 +220,43 @@ def check_reveal(page: Page, expected: dict[str, str]) -> dict[str, int]:
         row = next((r for r in rows if name in r), None)
         assert row, f"reveal row for {name} missing: {rows}"
         assert LABELS[verdict] in row, f"{name} should be {LABELS[verdict]!r}: {row!r}"
-        found = re.search(r"(?m)^\+(\d+)\s*$", row)
+        found = re.search(r"\+(\d+)\s*$", row)
         assert found, f"reveal row has no points: {row!r}"
         points[name] = int(found.group(1))
+        if verdict != "none":
+            parts, total = breakdown_total(row)
+            assert parts == total == points[name], f"breakdown does not add up to the points: {row!r}"
         if verdict == "perfect":
             assert points[name] >= 100, f"spot on scored {points[name]}: {row!r}"
         if verdict in ("miss", "none"):
             assert points[name] in (0, 30), f"{verdict} scored {points[name]}: {row!r}"
     assert page.locator("#rWhy li").count() >= 1, "reveal has no explanation"
     return points
+
+
+def breakdown_total(line: str) -> tuple[int, int]:
+    """Adds up the parts of a points breakdown and returns (sum of the parts, the stated total)."""
+
+    def part(pattern: str) -> int:
+        found = re.search(pattern, line)
+        return int(found.group(1)) if found else 0
+
+    position = re.search(r"Position: \w+ (\d+)", line)
+    total = re.search(r"Total (\d+)", line)
+    assert position and total, f"breakdown without position or total: {line!r}"
+    subtotal = int(position.group(1)) + part(r"speed \+(\d+)") + part(r"streak \+(\d+)")
+    scaled = re.search(r"(\d+)% → (\d+)", line)
+    if scaled:
+        subtotal = int(scaled.group(2))
+    return subtotal + part(r"Set call: [^+]*\+(\d+)") + part(r"Neighbour: [^+]*\+(\d+)"), int(total.group(1))
+
+
+def strip(page: Page) -> dict[str, tuple[int, bool]]:
+    """Reads the scoreboard strip in play: name to (score, answered)."""
+    chips = page.locator("#gStrip .pchip").all_inner_texts()
+    found = [re.fullmatch(r"\s*(.*?)\s+(\d+)\s*(✓ answered)?\s*", c, re.S) for c in chips]
+    assert all(found), f"unreadable strip chips: {chips}"
+    return {m.group(1): (int(m.group(2)), bool(m.group(3))) for m in found if m}
 
 
 def board(page: Page) -> dict[str, int]:
@@ -268,6 +309,13 @@ def check_permissions(browser: Browser, url: str, host: Page, code: str, errors:
         "write another player's answer": f'await db.ref("{room}/answers/0/{anna}").set({fake})',
         "write a huge answer index": f'await db.ref("{room}/answers/4294967294/{ben}").set({fake})',
         "give itself a script colour": f'await db.ref("{room}/players/{ben}/color").set("red;<b>")',
+        "reset another player's score": f'await db.ref("{room}/players/{anna}/score").remove()',
+        "reset another player's results": f'await db.ref("{room}/players/{anna}/results").remove()',
+        "clear the answers": f'await db.ref("{room}/answers").remove()',
+        "store a breakdown that is not a number": f'await db.ref("{room}/answers/0/{ben}").set('
+        '{q: "miss", pts: 0, done: true, bd: {base: "<b>"}})',
+        "store an unknown breakdown field": f'await db.ref("{room}/answers/0/{ben}").set('
+        '{q: "miss", pts: 0, done: true, bd: {bonus: 1}})',
         "delete the whole room": f'await db.ref("{room}").remove()',
         "create a room with letters in the code": 'await db.ref("rooms/ABC123/meta").set({host: "x", '
         'createdAt: firebase.database.ServerValue.TIMESTAMP, state: "lobby", i: 0})',
@@ -361,6 +409,13 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
             page.wait_for_selector("#gPlay", state="visible")
             page.wait_for_function(f"document.getElementById('gStepName').textContent.includes('moment {i + 1} of')")
         expected = {"Anna": "perfect", "Ben": "perfect"}
+        guest.wait_for_selector("#gOff:enabled")
+        seen = strip(guest)
+        assert {k: seen[k] for k in totals} == {k: (v, False) for k, v in totals.items()}, (
+            f"moment {i + 1}: guest strip {seen}, expected {totals} and nobody answered"
+        )
+        assert guest.locator("#gStrip .pchip.me").count() == 1, "own strip entry not highlighted"
+        assert guest.evaluate("document.documentElement.scrollWidth <= innerWidth"), "strip scrolls sideways"
         if i == 1:
             answer(host, "OH1", i)
             host.wait_for_selector("#wReveal", state="visible")
@@ -368,7 +423,15 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
             double_click(host, "wReveal")
             expected["Ben"] = "none"
         elif i == 2:
+            host.wait_for_selector("#gOff:enabled")
+            tap_at(host, 0.5, 0.03)
+            tap_spot(host, "OH1", i, check=False)
+            host.wait_for_timeout(1000)
+            assert admin(emulator_db, "GET", f"rooms/{code}/answers/{i}") is None, "a tap without Check was saved"
+            assert not strip(guest)["Anna"][1], "answered shown before Check"
             answer(host, "OH1", i)
+            guest.wait_for_function("document.getElementById('gStrip').textContent.includes('✓ answered')")
+            assert strip(guest)["Anna"] == (totals["Anna"], True), f"strip after the host's Check: {strip(guest)}"
             answer(guest, "L", i, off=True)
             expected["Ben"] = "miss"
         elif i == 3:
@@ -422,23 +485,153 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
     host.locator("#gEnd").screenshot(path=str(SHOTS / "online2.png"))
     print("final ranking matches the reveals:", totals)
 
-    host.click("#gSettings")
-    assert host.is_visible("#gSetup"), "leaving the room does not return to setup"
-    guest.click("#gSettings")
-    guest.fill("#onCode", code)
-    guest.click("#onJoin")
-    guest.wait_for_function("document.getElementById('onErr').textContent.length > 0", timeout=20000)
-    assert "finished" in guest.inner_text("#onErr"), "joining a finished room is not refused"
-    print("finished room refused")
+    persistent_room(host, guest, emulator_db, code)
 
     host.check('input[name="gPlayers"][value="solo"]')
     host.click("#gStart")
     host.wait_for_selector("#gPlay", state="visible")
     host.click("#gOff")
+    press_next(host)
     assert host.is_hidden("#gWait"), "the online wait box shows in a solo match"
+    assert host.is_hidden("#gStrip"), "solo match shows the scoreboard strip"
     host.click("#gQuit")
     print("solo match after online play has no wait box")
     return host, guest
+
+
+def board_of(page: Page, selector: str) -> dict[str, int]:
+    """Reads name and the last number from each element, like a ranking row or a score chip."""
+    rows = page.locator(selector).all_inner_texts()
+    found = [re.search(r"(Anna|Ben)\b.*?(\d+)\s*$", r, re.S) for r in rows]
+    return {m.group(1): int(m.group(2)) for m in found if m}
+
+
+def in_lobby(page: Page, players: int) -> None:
+    """Waits until the page shows the room's lobby with ``players`` players listed."""
+    page.wait_for_selector("#gLobby", state="visible", timeout=20000)
+    page.wait_for_function(f"document.querySelectorAll('#lList li').length === {players}")
+
+
+def moment_one(page: Page) -> None:
+    """Waits for the first moment of a match."""
+    page.wait_for_selector("#gPlay", state="visible", timeout=20000)
+    page.wait_for_function("document.getElementById('gStepName').textContent.includes('moment 1 of')")
+
+
+def persistent_room(host: Page, guest: Page, emulator_db: str, code: str) -> None:
+    """After a match the room goes back to the lobby and can be played again, left and rejoined."""
+    admin(emulator_db, "DELETE", f"rooms/{code}/players/{EVIL_UID}")
+    for page, primary in ((host, "NEW MATCH"), (guest, "BACK TO LOBBY")):
+        for button in ("#gToLobby", "#gSettings"):
+            box = page.locator(button).bounding_box()
+            assert page.is_visible(button) and box and box["y"] + box["height"] <= 844, f"{button} not in view"
+        assert page.inner_text("#gToLobby") == primary, f"end screen primary reads {page.inner_text('#gToLobby')!r}"
+        assert page.inner_text("#gSettings") == "LEAVE ROOM", "end screen has no Leave room"
+        assert page.is_hidden("#gAgain") and page.is_hidden("#gReplay"), "online end screen offers solo actions"
+    final = board_of(guest, "#gStats .rank li")
+    guest.click("#gToLobby")
+    in_lobby(guest, 2)
+    assert guest.is_hidden("#lLive") and "host starts" in guest.inner_text("#lWait"), "guest lobby after the match"
+    assert board_of(guest, "#lLastList .pchip") == final, "lobby does not show the last match's scores"
+    assert host.is_visible("#gEnd"), "the guest going to the lobby moved the host"
+    assert admin(emulator_db, "GET", f"rooms/{code}/meta/state") == "done", "a guest reset the room"
+    before = admin(emulator_db, "GET", f"rooms/{code}/meta")
+    assert before["activeAt"] > before["createdAt"], f"moving on does not refresh activeAt: {before}"
+    admin(emulator_db, "PUT", f"rooms/{code}/meta/hostLeft", True)
+    host.click("#gToLobby")
+    for page in (host, guest):
+        in_lobby(page, 2)
+        page.wait_for_selector("#lList .lroles")
+        assert board_of(page, "#lLastList .pchip") == final, "lobby after New match lost the last scores"
+    room = admin(emulator_db, "GET", f"rooms/{code}")
+    assert room["meta"]["state"] == "lobby" and "queue" not in room["meta"], f"room not reset: {room['meta']}"
+    assert "hostLeft" not in room["meta"], "reset keeps an old room's hostLeft"
+    assert room["meta"]["activeAt"] > before["activeAt"], "reset does not refresh activeAt"
+    assert "answers" not in room, "answers kept after the reset"
+    for player in room["players"].values():
+        kept = {k for k in player if k not in ("name", "role", "color", "joinedAt", "online")}
+        assert not kept, f"per-match fields kept after the reset: {kept}"
+    ben = uid_of(guest)
+    denied = db_call(host, f'await db.ref("rooms/{code}/players/{ben}/score").set(999)')
+    assert "PERMISSION_DENIED" in denied.upper(), f"the host could set a guest's score: {denied}"
+    print("Back to lobby resets the room for both")
+
+    guest.click('#lList .lroles button[data-r="OH2"]')
+    host.wait_for_function("document.getElementById('lList').textContent.includes('Outside 2')")
+    assert guest.evaluate("JSON.parse(localStorage.getItem('ksv51:role'))") == "OH2", "lobby role not stored"
+    assert guest.get_attribute('#roles .role[data-r="OH2"]', "aria-pressed") == "true", "setup bar not in sync"
+    late = db_call(
+        guest,
+        f'await db.ref("rooms/{code}").update({{"answers/0/{ben}": {{q: "perfect", pts: 150, done: true}}, '
+        f'"players/{ben}/score": 999, "players/{ben}/perfect": 5}})',
+    )
+    assert late == "ok", f"could not simulate a late answer write: {late}"
+    host.click("#lStart")
+    for page in (host, guest):
+        moment_one(page)
+    assert guest.is_disabled('#roles .role[data-r="MB1"]'), "roles can change during an online match"
+    guest.wait_for_function("!document.getElementById('gStrip').textContent.includes('999')")
+    assert strip(guest) == {"Anna": (0, False), "Ben": (0, False)}, f"new match strip: {strip(guest)}"
+    assert admin(emulator_db, "GET", f"rooms/{code}/answers") is None, "a late answer survived the new Start"
+    answer(host, "OH1", 0)
+    answer(guest, "OH2", 0)
+    points = check_reveal(host, {"Anna": "perfect", "Ben": "perfect"})
+    assert board(host) == points, f"second match did not start from zero: {board(host)}"
+    assert "Outside 2" in next(r for r in host.locator("#rList li").all_inner_texts() if "Ben" in r)
+    print("second match in the same room uses the new role, scores start from zero")
+
+    host.click("#rNext")
+    host.wait_for_function("document.getElementById('gStepName').textContent.includes('moment 2 of')")
+    host.click("#gQuit")
+    for page in (host, guest):
+        in_lobby(page, 2)
+    assert host.is_visible("#lStart") and guest.is_hidden("#lLive"), "lobby after the host quit is wrong"
+    assert guest.is_hidden("#lLast"), "last match scores still shown after a new match started"
+    assert admin(emulator_db, "GET", f"rooms/{code}/meta/state") == "lobby", "host Quit did not reset the room"
+    print("host Quit brings everyone to the lobby")
+
+    host.click("#lStart")
+    for page in (host, guest):
+        moment_one(page)
+    guest.click("#gQuit")
+    guest.wait_for_selector("#lLive", state="visible")
+    assert "in progress" in guest.inner_text("#gLobby").lower(), "lobby does not say a match is running"
+    answer(host, "OH1", 0)
+    host.wait_for_selector("#gReveal", state="visible", timeout=10000)
+    guest.click("#lJoinIn")
+    check_reveal(guest, {"Anna": "perfect", "Ben": "none"})
+    host.click("#rNext")
+    guest.wait_for_function("document.getElementById('gStepName').textContent.includes('moment 2 of')")
+    answer(guest, "OH2", 1)
+    print("a guest can quit to the lobby and join in again")
+
+    host.click("#gQuit")
+    for page in (host, guest):
+        in_lobby(page, 2)
+    guest.reload()
+    guest.wait_for_timeout(300)
+    guest.click("#tabGame")
+    guest.wait_for_selector("#onRejoin", state="visible", timeout=20000)
+    label = guest.text_content("#onRejoin")
+    assert label == f"Rejoin room {code[:3]} {code[3:]}", f"rejoin button reads {label!r}"
+    guest.click("#onRejoin")
+    in_lobby(guest, 2)
+    assert uid_of(guest) == ben, "rejoin used a new player"
+    host.wait_for_function("document.getElementById('lList').textContent.split('online').length === 3")
+    assert "Outside 2" in host.inner_text("#lList"), "rejoin changed the role"
+    print("Rejoin from the remembered room after a reload")
+
+    guest.click("#lLeave")
+    assert guest.is_visible("#gSetup"), "Leave room does not return to setup"
+    assert guest.evaluate("localStorage.getItem('ksv51:room')") is None, "Leave room keeps the room code"
+    host.wait_for_function("document.querySelectorAll('#lList li').length === 1")
+    guest.click('input[name="gPlayers"][value="solo"]')
+    guest.click('input[name="gPlayers"][value="online"]')
+    guest.wait_for_function("document.getElementById('onRejoin').dataset.checked === '1'")
+    assert guest.is_hidden("#onRejoin"), "Rejoin offered after leaving"
+    host.click("#lLeave")
+    assert admin(emulator_db, "GET", f"rooms/{code}/meta") is not None, "the room is gone after the host left"
+    print("Leave room clears the remembered room; the room stays")
 
 
 def inject(emulator_db: str, code: str) -> None:
@@ -477,6 +670,22 @@ def takeover(host: Page, guest: Page, browser: Browser, url: str, emulator_db: s
         assert time.monotonic() < deadline, "a stale room is not deleted when a player hits it"
         time.sleep(0.2)
     print("stale room deleted on join")
+
+    now = int(time.time() * 1000)
+    admin(emulator_db, "PUT", f"rooms/{FRESH}", {"meta": {**old_meta, "activeAt": now}})
+    guest.fill("#onCode", FRESH)
+    guest.click("#onJoin")
+    guest.wait_for_selector("#gLobby", state="visible", timeout=20000)
+    guest.click("#lLeave")
+    admin(emulator_db, "PUT", f"rooms/{STALE}", {"meta": {**old_meta, "createdAt": now, "activeAt": 1000}})
+    guest.fill("#onCode", STALE)
+    guest.click("#onJoin")
+    guest.wait_for_function("document.getElementById('onErr').textContent.includes('expired')", timeout=20000)
+    deadline = time.monotonic() + 5
+    while admin(emulator_db, "GET", f"rooms/{STALE}") is not None:
+        assert time.monotonic() < deadline, "a room with an old activeAt is not deleted on hit"
+        time.sleep(0.2)
+    print("staleness follows activeAt: an old room in recent use is joinable, an idle one is deleted")
 
     live_meta = {"host": "x", "createdAt": int(time.time() * 1000), "state": "lobby", "i": 0}
     admin(emulator_db, "PUT", f"rooms/{LIVE}", {"meta": live_meta})
@@ -518,7 +727,7 @@ def takeover(host: Page, guest: Page, browser: Browser, url: str, emulator_db: s
     assert len(set(colours)) == 3, f"players joining at once share a colour: {colours}"
     print("colours distinct after joining at once:", colours)
 
-    roles = {first: "OP", host: "OH1", guest: "L"}
+    roles = {first: "OP", host: "OH1", guest: "OH2"}
     first.click("#lStart")
     for page, role in roles.items():
         page.wait_for_selector("#gPlay", state="visible")
@@ -567,9 +776,8 @@ def takeover(host: Page, guest: Page, browser: Browser, url: str, emulator_db: s
         check_reveal(page, {"Cid": "perfect", "Anna": "perfect", "Ben": "perfect"})
     assert new_host.is_visible("#rNext") and first.is_hidden("#rNext"), "the new host cannot advance"
     new_host.click("#rQuit")
-    for page in (other, first):
-        page.wait_for_selector("#gEnd", state="visible")
-        assert "host ended" in page.inner_text("#gEndTitle").lower(), "players not told the match ended"
+    for page in (new_host, other, first):
+        page.wait_for_selector("#gLobby", state="visible", timeout=10000)
 
 
 def asked_set(page: Page) -> str:
@@ -614,13 +822,17 @@ def set_calls(browser: Browser, url: str, emulator_db: str, errors: list[str]) -
     guest.wait_for_function("document.getElementById('wText').textContent.includes('(set call)')", timeout=10000)
     time.sleep(1.5)
     assert host.is_hidden("#gReveal"), "the reveal did not wait for an open set call check"
-    host.click("#gNext")
+    press_next(host)
     host.wait_for_selector("#gReveal", state="visible", timeout=10000)
     rows = {name: next(r for r in host.locator("#rList li").all_inner_texts() if name in r) for name in ("Anna", "Sam")}
-    assert f"Set call: {guest_set}, right (+30)" in rows["Sam"], f"setter's set call row: {rows['Sam']!r}"
+    assert f"Set call: {guest_set} ✓ +30" in rows["Sam"], f"setter's set call row: {rows['Sam']!r}"
     assert "Set call:" not in rows["Anna"], f"a skipped set call is shown: {rows['Anna']!r}"
     saved = admin(emulator_db, "GET", f"rooms/{code}/answers/0/{sam}/set")
     assert saved == {"ask": guest_set, "pick": guest_set, "ok": True}, f"set answer stored as {saved}"
+    stored = admin(emulator_db, "GET", f"rooms/{code}/answers/0/{sam}")
+    assert set(stored["bd"]) == {"base", "speed", "streak", "mult", "nb", "set"}, f"breakdown stored as {stored}"
+    assert stored["bd"]["set"] == 30, f"set bonus not in the breakdown: {stored['bd']}"
+    assert "bd" not in admin(emulator_db, "GET", f"rooms/{code}/players/{sam}/results/0"), "breakdown in results"
     print("set call answered by the setter, skipped by the attacker; the reveal waited for both")
 
     host.click("#rNext")
@@ -640,7 +852,7 @@ def set_calls(browser: Browser, url: str, emulator_db: str, errors: list[str]) -
     rows = {
         name: next(r for r in guest.locator("#rList li").all_inner_texts() if name in r) for name in ("Anna", "Evil")
     }
-    assert f"Set call: {wrong}, wrong (it is {host_set})" in rows["Anna"], f"attacker's set call row: {rows['Anna']!r}"
+    assert f"Set call: {wrong} ✗, it is {host_set} +0" in rows["Anna"], f"attacker's set call row: {rows['Anna']!r}"
     assert "Set call:" not in rows["Evil"], f"a made-up set name is shown: {rows['Evil']!r}"
     print("wrong set call shown with the right one; made-up set names are dropped")
     for page in (host, guest):
