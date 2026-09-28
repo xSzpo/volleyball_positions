@@ -1038,6 +1038,17 @@
         sans-serif;
       cursor: pointer;
     }
+    .nbq .opts button.picked {
+      background: var(--ink);
+      color: var(--panel);
+    }
+    .rwhy {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+    .rwhy li {
+      margin: 6px 0;
+    }
     .nbq .opts button.right {
       background: var(--good);
       border-color: var(--good);
@@ -1538,6 +1549,7 @@
             aria-label="Everyone's answers"
           ></svg>
           <ul class="rlist" id="rList"></ul>
+          <ul class="rwhy" id="rWhy"></ul>
           <div class="board" id="rBoard"></div>
           <div class="row">
             <button type="button" class="btn primary" id="rNext">Next moment</button
@@ -2300,6 +2312,15 @@
         );
       }
 
+      function nbSaved(id, picked) {
+        const box = $(id);
+        box.querySelectorAll("button").forEach((b) => {
+          b.disabled = true;
+        });
+        picked.classList.add("picked");
+        box.insertAdjacentHTML("beforeend", '<p class="hint" style="margin-top:6px">Saved.</p>');
+      }
+
       // ---------- Drill ----------
       let cur = null,
         answered = false,
@@ -2888,22 +2909,23 @@
       function gDraw() {
         const st = G.queue[G.i],
           pl = players(st.ri, st.phase),
-          me = pl.find((o) => o.p === G.role);
+          me = pl.find((o) => o.p === G.role),
+          shown = G.answered && !G.mp;
         let s = DEFS + courtBase();
-        if (G.answered && st.phase === "start") s += rotArrows();
-        if (G.answered && st.phase === "ar") s += arLayer(st.ri, pl, G.role);
+        if (shown && st.phase === "start") s += rotArrows();
+        if (shown && st.phase === "ar") s += arLayer(st.ri, pl, G.role);
         if (!G.answered && G.help >= 2 && me) {
           const jx = me.x + (G.jit ? G.jit[0] : 0),
             jy = me.y + (G.jit ? G.jit[1] : 0);
           s += `<circle cx="${jx * W}" cy="${jy * H}" r="46" fill="var(--accent)" fill-opacity=".25" stroke="var(--accent-ink)" stroke-width="2" stroke-dasharray="5 4"/>`;
         }
-        (G.answered ? pl.filter((o) => o.p !== G.role) : visible(visGame, pl, G.role)).forEach(
-          (o) => {
-            s += chip(o, { dim: G.answered || visGame === "all" });
-          },
-        );
-        if (G.answered && G.nb?.done) s += nbLayer(pl, G.role, G.nb.a);
-        if (G.answered) {
+        (shown ? pl.filter((o) => o.p !== G.role) : visible(visGame, pl, G.role)).forEach((o) => {
+          s += chip(o, { dim: shown || visGame === "all" });
+        });
+        if (shown && G.nb?.done) s += nbLayer(pl, G.role, G.nb.a);
+        if (G.answered && G.mp && G.tap)
+          s += `<circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="7" fill="var(--ink)" opacity=".7"/>`;
+        if (shown) {
           if (G.tap && me)
             s += `<line x1="${G.tap.x * W}" y1="${G.tap.y * H}" x2="${me.x * W}" y2="${me.y * H}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="3 3" opacity=".6"/>`;
           if (G.tap)
@@ -2994,11 +3016,17 @@
         if (base) parts.push(`${Math.round(base * mult)} position`);
         if (speed) parts.push(`+${speed} speed`);
         if (streakB) parts.push(`+${streakB} streak`);
-        $("gFb").className = `fb ${{ perfect: "good", close: "close", miss: "bad" }[q]}`;
-        $("gFb").innerHTML =
-          `<span class="pts">+${pts}</span><b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>${parts.length ? `<p class="hint" style="margin-top:4px">${parts.join(" · ")}</p>` : ""}`;
-        $("gScore").textContent = G.score;
-        $("gStreak").textContent = G.streak;
+        if (G.mp) {
+          $("gFb").className = "fb";
+          $("gFb").innerHTML =
+            '<b>Answer saved</b><p style="margin:2px 0 0">Everyone sees the answers after the last player.</p>';
+        } else {
+          $("gFb").className = `fb ${{ perfect: "good", close: "close", miss: "bad" }[q]}`;
+          $("gFb").innerHTML =
+            `<span class="pts">+${pts}</span><b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>${parts.length ? `<p class="hint" style="margin-top:4px">${parts.join(" · ")}</p>` : ""}`;
+          $("gScore").textContent = G.score;
+          $("gStreak").textContent = G.streak;
+        }
         $("gOff").disabled = true;
         $("gHelp").disabled = true;
         $("gNext").hidden = false;
@@ -3025,13 +3053,18 @@
                   G.nb.done = true;
                   G.nbN++;
                   const ok = !b.dataset.skip && b.dataset.p === nq.a;
+                  G.results[G.i].nb = { pick: b.dataset.p, a: nq.a, ok };
                   if (ok) {
                     G.nbOk++;
                     G.score += 30;
                     G.results[G.i].pts += 30;
-                    $("gScore").textContent = G.score;
-                    $("gFb").querySelector(".pts").textContent = `+${G.results[G.i].pts}`;
                   }
+                  if (G.mp) {
+                    nbSaved("gnb", b);
+                    return;
+                  }
+                  $("gScore").textContent = G.score;
+                  $("gFb").querySelector(".pts").textContent = `+${G.results[G.i].pts}`;
                   nbMark("gnb", nq, b.dataset.skip ? null : b.dataset.p);
                   gDraw();
                   nbLock("gNext", false);
@@ -3242,12 +3275,13 @@
         }
         return a;
       }
-      function mpBoard() {
+      function mpBoard(hideMoment = false) {
+        const score = (p) => p.score - (hideMoment ? p.taps[G.i]?.res?.pts || 0 : 0);
         return [...G.mp.players]
-          .sort((a, b) => b.score - a.score)
+          .sort((a, b) => score(b) - score(a))
           .map(
             (p) =>
-              `<span class="pchip"><i style="background:${p.color}"></i>${esc(p.name)} <b>${p.score}</b></span>`,
+              `<span class="pchip"><i style="background:${p.color}"></i>${esc(p.name)} <b>${score(p)}</b></span>`,
           )
           .join("");
       }
@@ -3265,7 +3299,7 @@
         $("pName").textContent = p.name;
         $("pName").style.color = p.color;
         $("pRole").textContent = `plays ${NAMES[p.role]}`;
-        $("pBoard").innerHTML = mpBoard();
+        $("pBoard").innerHTML = mpBoard(true);
         gView("gPass");
         window.scrollTo({ top: $("game").offsetTop - 10 });
       }
@@ -3310,13 +3344,21 @@
         $("courtR").innerHTML = s;
         $("rTitle").textContent = `${ROWS[st.ri].name} · ${FULL[st.phase]}`;
         $("rSub").textContent = `Moment ${G.i + 1} of ${G.queue.length}`;
-        const lab = { perfect: "Spot on", close: "Close", miss: "Not there" };
+        const lab = { perfect: "Spot on", close: "Close enough", miss: "Not there" };
         $("rList").innerHTML = G.mp.players
           .map((p) => {
             const t = p.taps[G.i] || {},
               r = t.res || { q: "miss", pts: 0 };
-            const d = describe(st.ri, st.phase, p.role);
-            return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${lab[r.q]}${t.res && !t.tap ? " (said off court)" : ""}<small>Correct: ${d.t}</small></div><span class="rp">+${r.pts}</span></li>`;
+            const nb = r.nb
+              ? `<small>Neighbour: ${esc(r.nb.pick)}, ${r.nb.ok ? "right (+30)" : `wrong (it is ${r.nb.a})`}</small>`
+              : "";
+            return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${lab[r.q]}${t.res && !t.tap ? " (said off court)" : ""}${nb}</div><span class="rp">+${r.pts}</span></li>`;
+          })
+          .join("");
+        $("rWhy").innerHTML = roles
+          .map((r) => {
+            const d = describe(st.ri, st.phase, r);
+            return `<li><b>${NAMES[r]}</b>: ${d.t}. ${d.d}</li>`;
           })
           .join("");
         $("rBoard").innerHTML = mpBoard();
