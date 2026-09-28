@@ -190,3 +190,6 @@ SETS: list[tuple[str, float, float, str, str]] = [
     ("7", 0.97, 0.50, "right", "Lower, faster back set to the right antenna."),
     ("6", 0.97, 0.92, "right", "High back set to the right antenna (zone 2)."),
 ]
+
+# Inferred from the guide's drawings only; left out of match questions until the coach confirms them.
+UNCONFIRMED_SETS: list[str] = ["Po", "4"]

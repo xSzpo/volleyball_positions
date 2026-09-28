@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from data import ATTACK_LINE as AL  # noqa: E402
-from data import ROWS, Row  # noqa: E402
+from data import ROWS, SETS, UNCONFIRMED_SETS, Row  # noqa: E402
 
 ORDER = [4, 3, 2, 5, 6, 1]
 issues: list[str] = []
@@ -88,5 +88,8 @@ for i in range(6):
             issues.append(f"{r['name']} serve: {p} at {z}, expected {exp}")
     if "S" in sb and sb[2] != "S" or "OP" in sb and sb[2] != "OP":
         issues.append(f"{r['name']} serve: S/OP not in zone 1")
+for name in UNCONFIRMED_SETS:
+    if name not in [s[0] for s in SETS]:
+        issues.append(f"unconfirmed set {name} is not in SETS")
 print("\n".join(issues) if issues else "DATA AUDIT: no issues")
 sys.exit(1 if issues else 0)

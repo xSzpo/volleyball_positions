@@ -27,9 +27,12 @@ src/
   tests/audit.py      data consistency checks (rotation order, overlap legality, serve lineups)
   tests/qa.py         Playwright end-to-end sweep (arg: m = phone/light, d = desktop/dark)
   tests/mp_test.py    Playwright test of same-device multiplayer
+  tests/match_test.py Playwright test of solo match scoring (Show on court multiplier) and the set call check
+  tests/online_test.py Playwright test of online multiplayer (host + guest) on the Firebase emulators
 reference/KSV_M3.pdf  official club guide (git-ignored; keep it private)
 infra/                Terraform for Firebase (project, web app, Realtime Database, optional auth/budget)
   database.rules.json RTDB security rules (uploaded by the Firebase CLI, not Terraform)
+  firebase.json       Firebase CLI config: rules file and emulator ports (auth 9099, database 9000)
   README.md           how to run it (free Spark path vs fully automated Blaze path)
 ```
 
@@ -47,7 +50,9 @@ python src/gen_sets.py                 # only if SETS changed
 python src/build.py                    # ALWAYS after editing template.html or data.py
 python src/tests/audit.py              # must print "DATA AUDIT: no issues"
 python src/tests/mp_test.py
+python src/tests/online_test.py       # starts the auth + database emulators itself (Firebase CLI + Java); needs ports 9000 and 9099 free
 python src/tests/theme_test.py
+python src/tests/match_test.py        # solo scoring and set call check
 python src/tests/qa.py m && python src/tests/qa.py d   # slow (~3-4 min each); expect "TOTAL FAILURES: 0"
 ```
 
@@ -90,7 +95,7 @@ Each entry in `ROWS` (index 0..5 = R1..R6):
 
 Serving order (from R1 zones 1..6): `S, OH1, MB1, OP, OH2, MB2`. The JS helper `relation()` uses this ("count k zones on from the setter").
 
-`SETS`: front-row set calls `(name, landing x between antennas, relative peak, family, description)`. **Uncertain:** the guide only shows set shapes. The meanings of "Po" and "4" are inferred (both land in front of the setter; 4 higher, Po a low quick) and need confirmation from the coach.
+`SETS`: front-row set calls `(name, landing x between antennas, relative peak, family, description)`. **Uncertain:** the guide only shows set shapes. The meanings of "Po" and "4" are inferred (both land in front of the setter; 4 higher, Po a low quick) and need confirmation from the coach. Until then they are listed in `UNCONFIRMED_SETS`: left out of match questions and marked "(not confirmed)" on the Sets tab.
 
 ## Rules logic (important)
 
@@ -102,7 +107,7 @@ Serving order (from R1 zones 1..6): `S, OH1, MB1, OP, OH2, MB2`. The JS helper `
 
 Tabs: **Learn**, **Drill**, **Match**, **Sets** (each with a one-line caption), plus printable downloads. At the top (hidden on Sets) a one-line summary bar (`#setupBar`, "Playing as: … · Official rules") expands to the role picker (`MB1 MB2 OH1 OH2 OP S L`) and the Rules switch (Official / Drill). It is open on the first visit (no stored `role`) and collapses after a role is picked. Switching tabs scrolls back to the tab bar if you were below it.
 
-Secondary content uses native `<details class="fold">`: in Learn, "How to learn" (open only on the first visit, `howToSeen`), "Before every serve", "Rules of thumb" and the all-rotations table; "Drill options" (`#dOpts`: neighbour check, reset) and "Match options" (`#gOpts`: steps, order, neighbour check). Match setup shows only Who is playing, Show on court and Start by default. Tests open these with `open_fold()` / `open_setup()` in `tests/qa.py`.
+Secondary content uses native `<details class="fold">`: in Learn, "How to learn" (open only on the first visit, `howToSeen`), "Before every serve", "Rules of thumb" and the all-rotations table; "Drill options" (`#dOpts`: neighbour check, reset) and "Match options" (`#gOpts`: steps, order, neighbour check, set call check). Match setup shows only Who is playing, Show on court and Start by default. Tests open these with `open_fold()` / `open_setup()` in `tests/qa.py`.
 
 Key JS pieces (all inside one IIFE):
 
@@ -110,7 +115,8 @@ Key JS pieces (all inside one IIFE):
 - `describe(ri, phase, role)` returns `{t, d}`: the title and explanation shown after each answer. Most user-facing wording lives here.
 - `zoneOf`, `relation`, `neighbourQ` (overlap-partner questions), `visible()` (Nobody / Setter / Everyone; for the setter role the reference player is the opposite)
 - Drill: weighted random questions from `stats` (misses come up more often), **Review weak spots** (up to 8 missed items), optional neighbour check
-- Match (`G` object): steps in real order per rotation (rotate → receive → after pass → serve; each step can be switched off), in order or mixed, help levels, scoring (100/60/0 + speed + streak, help keeps 60%/30%, neighbour check +30), results and replay mistakes, best score per settings key
+- Match (`G` object): steps in real order per rotation (rotate → receive → after pass → serve; each step can be switched off), in order or mixed, help levels, scoring (100/60/0 + speed + streak, help keeps 60%/30%, neighbour check +30; the total is then scaled by Show on court: Nobody ×1, Setter ×0.7, Everyone ×0.3, also online via `meta.vis`). Solo keeps the in-play Show on court picker (`#gVisPlay`) as a peek: each moment scores with the most revealing setting shown before the answer (`G.visMax`, reset per moment), and the end screen shows the starting setting plus "Peeked: n moments". Same-device and online hide it (same-device uses the setting at Start, online `meta.vis`; online never writes `ksv51:visGame`). Results and replay mistakes (positions only), best score per settings key `v2|role|steps|mixed|drill|vis|nb|sets`, fixed at Start (the `v2|` prefix ignores bests from before vis scoring)
+- Set call check (`#setGame`, `ksv51:setGame`, on by default; needs the After reception step): after the `ar` tap, a front-row attacker is asked a set from their own lane (`setQ()`: zone 4 → 1/0/2, middle → Shoot/Til, zone 2 → 7/6, from each set's family and landing) and the setter any match set; back row and libero get none. Four options, optional like the neighbour check, flat +30 (no vis, help, speed or streak). The end screen shows `ok/n set calls right` and "Set calls to practise" with a button to the Sets tab. In multiplayer only "Saved." until the reveal; online it is `meta.sets` and `answers/{i}/{uid}.set {ask, pick, ok}`, and the reveal waits for it like the neighbour check
 - Multiplayer, same device: `G.mp` with players `[{name, role, color, score, …}]`. Each moment the turn order is shuffled; a "Pass the device" screen, then that player's turn, then a reveal screen with everyone's taps. Implemented by swapping per-player fields into `G` (`swapIn`/`swapOut`, `MP_KEYS`) so the solo code path is reused. After a turn the player sees only "Answer saved" (no verdict, points, correct spot, teammates or neighbour correction; the pass screen shows scores from the start of the moment); verdicts, points incl. the neighbour bonus and the `describe()` text per role appear only on the reveal screen.
 - Sets: SVG net diagram, explore by tapping, and a "Name the set" quiz
 - Downloads: embedded base64 PDFs; uses `window.claude.use('downloads')` when running inside claude.ai, otherwise a Blob link (GitHub Pages)
@@ -123,7 +129,7 @@ Learning design (researched; keep it): the setter is the reference point that te
 - The serve column once had MB2 in the front row in every rotation (copied from a handwritten sheet); fixed so the front-row middle is whoever is front row in that rotation.
 - The owner prefers: teammates hidden by default ("Nobody"), rotation labels always with the setter (`R6 (S2)`), rules text explaining **why**.
 
-## Next task: online multiplayer (separate phones) with Firebase
+## Online multiplayer (separate phones) with Firebase
 
 Status: **live** (applied 2026-09-28). Project `ksv-volleyball-xszpo`, owned by the owner's personal gmail account (never the work account), Spark plan, no billing linked. Realtime Database `ksv-volleyball-xszpo-default-rtdb` in **europe-west1**, rules deployed, anonymous sign-in enabled (auto clean-up on), `xszpo.github.io` authorised. Smoke-tested: signed-in write to `rooms/{code}` works; unauthenticated, bad-code and root access are denied.
 
@@ -135,35 +141,26 @@ export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token --account=dani
 
 Facts to keep in mind: Terraform cannot deploy RTDB security rules (they live in `infra/database.rules.json`; `terraform apply` re-uploads them with the Firebase CLI when the file changes), and configuring Firebase Auth via Terraform needs the Blaze plan. `google_firebase_project` failed with 403 on first apply; Firebase was added in the console and imported.
 
-Database rules (source of truth: `infra/database.rules.json`; tighten if needed):
+Database rules (source of truth: `infra/database.rules.json`; live only after the next `terraform apply`). Everything needs `auth != null`; anything not listed is `$other: false`.
 
-```json
-{
-  "rules": {
-    ".read": false,
-    ".write": false,
-    "rooms": {
-      "$code": {
-        ".read": "auth != null",
-        ".write": "auth != null",
-        ".validate": "$code.matches(/^[A-Z0-9]{4,6}$/)"
-      }
-    }
-  }
-}
-```
+- `rooms/$code`: read by any signed-in user (no rooms-level read, so no listing or queries). Deleting the room is allowed for the host, or for anyone once `meta/createdAt` is older than 24 hours. `$code` must match `^[0-9]{6}$`.
+- `meta`: written only when it does not exist yet (create) or by `meta/host`. `host` may also be claimed by a player of the room, for themselves, while the current host's `online` is not `true` (takeover). Validated: `host`, `createdAt` (= `now`), `state`, `i` (0-99), `steps`, `order`, `vis`, `nb`, `sets`, `rulesMode`, `hostLeft`, `queue/{0-99}` `{ri 0-5, phase}`.
+- `players/$uid` and `answers/$i/$uid`: written only by that uid. A player needs an existing `meta`, `name` 1-16 chars, a known `role`, `color` `#RRGGBB`, `joinedAt` (= `now`); numbers are numbers; `misses`/`results` keys are 1-2 digits. `$i` is 1-2 digits; an answer needs `q`, `pts`, `done`.
 
-Suggested design:
+Built (Match → "Online room"):
 
-- Load the Firebase **compat** SDK (app, auth, database) via `<script>` from `https://www.gstatic.com/firebasejs/<pinned version>/…` so the single-file approach stays. Sign in anonymously on demand, only when the user opens online play.
-- Match setup gets a third option under "Who is playing?": **Online room**. The host creates a room (4-6 char code, avoid ambiguous characters such as O/0 and I/1). Others join with code + name + role. Show a lobby with the player list, and the host presses Start.
-- Room shape (suggestion): `rooms/{code}/{ meta:{host, createdAt, steps, order, vis, nb, rulesMode, queue:[{ri,phase}], i, state:'lobby'|'answering'|'reveal'|'done'}, players/{uid}:{name, role, color, score, …}, answers/{i}/{uid}:{tap:{x,y}|null, off:bool, q, pts, nbOk} }`
-- Everyone answers the current moment at the same time on their own phone. When all answers for moment `i` exist (or the host presses "Reveal now"), show the existing reveal screen to everyone, and the host advances `i`.
-- Reuse the scoring from `gAnswer` (compute points on the client and write the result) and the reveal/ranking rendering from the same-device multiplayer code.
-- Handle disconnects (presence via `.info/connected` plus `onDisconnect`) and let the host continue without a missing player. Delete rooms older than 24 hours (clean up on create, or add `createdAt` and ignore stale ones).
-- Keep same-device multiplayer and solo modes unchanged, and add a Playwright test with two browser contexts (it can use the Firebase emulator or a test room).
+- The Firebase compat SDK (app, auth, database; pinned `FIREBASE_SDK` version on gstatic) is injected by `fbSdk()` only when Online room is picked; solo and same-device play stay offline. `FIREBASE_CONFIG` is a const in `template.html`. Anonymous sign-in happens on Create/Join (`fbReady()`); load, sign-in and timeout failures show a message in `#onErr`.
+- `?emu=<db host:port>,<auth host:port>` points the app at the emulators (used by the test).
+- Host creates a room with a 6-digit code (`000000`-`999999`, shown as `482 715`; up to 10 tries: a live room means a new code, a stale one is deleted and reused; the join field takes digits only); guests join with code + name, role from the setup bar. Lobby `#gLobby` lists players with presence; the host's Start writes the settings (steps, order, vis, nb, rulesMode) and the queue into `meta`, which guests use. The Rules switch is locked for guests in the lobby (they follow `meta/rulesMode`) and for everyone during an online match ("Set by the host for this match"). Create and Join ignore repeat taps while pending.
+- Room `rooms/{code}`: `meta {host, createdAt, steps, order, vis, nb, sets, rulesMode, queue, i, state: lobby|answering|reveal|done, hostLeft?}`, `players/{uid} {name, role, color, joinedAt, online, score, streak, perfect, close, helps, nbOk, nbN, setOk, setN, misses, results}`, `answers/{i}/{uid} {tap, off, q, pts, nb, set, done}`. The host writes `meta` through `onMeta(expect, change)`, a transaction that applies only if `i` and `state` are still the expected ones, so a double tap or a returning old host cannot skip a moment; each player writes only their own nodes. Presence: create and join write no `online`; `onEnter` sets `online:true` only after `onDisconnect().set(false)` is registered, so a failed join never leaves a player online (the lobby shows a node without `online` as "joining"; auto-reveal and takeover count only `online === true`).
+- `G.online` (the module's `ON` object) sits beside `G.mp`; one `value` listener on the room drives `onSync()`. Scoring is `gAnswer` unchanged; the player sees only "Answer saved". An answer is `done` once any neighbour or set call check is answered or skipped with Continue. When every online player is done, or the host presses "Reveal now" (`#wReveal`), the host sets `reveal`; everyone renders `mpReveal()` from room data; the host's Next advances `i` or sets `done`, which shows `mpFinish()`. Offline players are skipped; rejoining with the same code and anonymous uid restores score and state. Nothing optional blocks the room: a pending neighbour or set call check is marked `done` after `NB_GRACE` (15 s) or on rejoin, and the wait text tells that player to answer or press Continue.
+- Host takeover: if the host's node is offline for `HOST_GRACE` (10 s), the online player with the earliest `joinedAt` claims `meta/host` in a transaction on that node (the rules re-check the old host is offline). Everyone sees "<name> is now the host" (`#onNote`); a returning old host stays a guest.
+- `onClean()` sanitises every room snapshot before use: player and answer uids must look like Firebase uids, list keys are 1-3 digits, whitelisted strings, `color` must be `#RRGGBB`, numbers through `Number()`, `queue`/`misses` entries bounded to real rotations and phases. Render only from its output.
+- Colours: joining runs a transaction on the player's own node with the first `PCOL` colour not in use; if two joiners clash, the later one (by `joinedAt`, then uid) picks again.
+- Join is refused if the room is missing, `done`, or older than 24 hours. A stale room found on Join or on a Create code collision is deleted (delete-on-hit); there is no sweep. Denied writes are caught and ignored. Presence writes into a room without `meta` are rejected by the rules. Leaving: a guest is marked offline (removed in the lobby); the host deletes the room in the lobby, otherwise sets `done` + `hostLeft`.
 
 ## Other open items
 
-- Confirm with the coach: the meaning of set calls "Po" and "4", and the serve column (not in the guide).
+- Confirm with the coach: the meaning of set calls "Po" and "4" (then empty `UNCONFIRMED_SETS`), which calls each front-row player is asked in the set call check, and the serve column (not in the guide).
 - Only tested in Chromium (desktop and mobile emulation). Safari/iOS is untested.
+- Online play is tested only against the emulators over http; try it on real phones against the live project (and from `file://`).

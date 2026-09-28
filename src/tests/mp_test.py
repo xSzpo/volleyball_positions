@@ -48,7 +48,8 @@ with sync_playwright() as p:
     shots = 0
     n = 0
     chips_before = 0
-    answered_by = {"tap": 0, "off": 0, "neighbour": 0}
+    answered_by = {"tap": 0, "off": 0, "neighbour": 0, "set": 0}
+    set_lines = 0
     moment_board = None
     moment_seen = None
     while n < 400:
@@ -73,6 +74,12 @@ with sync_playwright() as p:
                 assert re.search(r"Spot on|Close enough|Not there", row), f"reveal row has no verdict: {row!r}"
                 assert re.search(r"\+\d+", row), f"reveal row has no points: {row!r}"
             assert pg.locator("#rWhy li").count() >= 1, "reveal has no explanation"
+            for row in rows:
+                if "Set call:" in row:
+                    assert re.search(r"Set call: \S+, (right \(\+30\)|wrong \(it is \S+\))", row), (
+                        f"unreadable set call line: {row!r}"
+                    )
+                    set_lines += 1
             if shots == 0:
                 pg.locator("#gReveal").screenshot(path=str(SHOTS / "mp2.png"))
                 shots = 1
@@ -89,10 +96,21 @@ with sync_playwright() as p:
             check_hidden(pg, chips_before, "neighbour")
             answered_by["neighbour"] += 1
             continue
+        if pg.locator("#gsc button:enabled").count() and random.random() < 0.7:
+            pg.locator("#gsc button").nth(random.randrange(4)).click()
+            set_text = pg.inner_text("#gsc")
+            assert "Saved." in set_text, "set call answer not saved"
+            assert "Correct." not in set_text and "It is" not in set_text, "set call check leaks the answer"
+            marked = pg.locator('#gsc button[aria-pressed="true"], #gsc button.faded').count()
+            assert marked == 0, "set call check marks the answer before the reveal"
+            check_hidden(pg, chips_before, "set call")
+            answered_by["set"] += 1
+            continue
         if pg.is_visible("#gNext") and pg.is_enabled("#gNext"):
             pg.click("#gNext")
             continue
         if pg.is_enabled("#gOff"):
+            assert pg.is_hidden("#gVisPlay"), "Show on court can be changed during a multiplayer match"
             chips_before = pg.locator(CHIPS).count()
             if random.random() < 0.3:
                 pg.click("#gOff")
@@ -110,6 +128,8 @@ with sync_playwright() as p:
     print("ended:", pg.is_visible("#gEnd"), "actions", n)
     print("answers checked:", answered_by)
     assert all(answered_by.values()), f"not every answer path was checked: {answered_by}"
+    assert set_lines == answered_by["set"], f"{answered_by['set']} set calls answered, {set_lines} on the reveals"
+    assert "sets " in pg.inner_text("#gStats"), "final ranking has no set call score"
     print("first 9 turns:", order_seen[:9])
     pg.locator("#gEnd").screenshot(path=str(SHOTS / "mp3.png"))
     # rematch works

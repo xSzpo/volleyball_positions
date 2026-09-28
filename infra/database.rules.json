@@ -5,8 +5,118 @@
     "rooms": {
       "$code": {
         ".read": "auth != null",
-        ".write": "auth != null",
-        ".validate": "$code.matches(/^[A-Z0-9]{4,6}$/)"
+        ".write": "auth != null && !newData.exists() && (data.child('meta/host').val() == auth.uid || data.child('meta/createdAt').val() < now - 86400000)",
+        ".validate": "$code.matches(/^[0-9]{6}$/)",
+        "meta": {
+          ".write": "auth != null && (!data.exists() || data.child('host').val() == auth.uid)",
+          ".validate": "newData.hasChildren(['host', 'createdAt', 'state', 'i'])",
+          "host": {
+            ".write": "auth != null && newData.val() == auth.uid && data.parent().parent().child('players').child(auth.uid).exists() && data.parent().parent().child('players').child(data.val() + '').child('online').val() != true",
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "createdAt": { ".validate": "newData.val() == now || newData.val() == data.val()" },
+          "state": { ".validate": "newData.isString() && newData.val().matches(/^(lobby|answering|reveal|done)$/)" },
+          "i": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100" },
+          "steps": {
+            "$k": { ".validate": "$k.matches(/^[0-3]$/) && newData.isString() && newData.val().matches(/^(start|rec|ar|serve)$/)" }
+          },
+          "order": { ".validate": "newData.isString() && newData.val().matches(/^(order|mixed)$/)" },
+          "vis": { ".validate": "newData.isString() && newData.val().matches(/^(none|ref|all)$/)" },
+          "nb": { ".validate": "newData.isBoolean()" },
+          "sets": { ".validate": "newData.isBoolean()" },
+          "rulesMode": { ".validate": "newData.isString() && newData.val().matches(/^(official|drill)$/)" },
+          "hostLeft": { ".validate": "newData.isBoolean()" },
+          "queue": {
+            "$k": {
+              ".validate": "$k.matches(/^[0-9]{1,2}$/) && newData.hasChildren(['ri', 'phase'])",
+              "ri": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5" },
+              "phase": { ".validate": "newData.isString() && newData.val().matches(/^(start|rec|ar|serve)$/)" },
+              "$other": { ".validate": false }
+            }
+          },
+          "$other": { ".validate": false }
+        },
+        "players": {
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid",
+            ".validate": "$uid.length <= 40 && newData.parent().parent().child('meta').exists() && newData.hasChildren(['name', 'role', 'color', 'joinedAt'])",
+            "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 16" },
+            "role": { ".validate": "newData.isString() && newData.val().matches(/^(MB1|MB2|OH1|OH2|OP|S|L)$/)" },
+            "color": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" },
+            "joinedAt": { ".validate": "newData.val() == now || newData.val() == data.val()" },
+            "online": { ".validate": "newData.isBoolean()" },
+            "score": { ".validate": "newData.isNumber()" },
+            "streak": { ".validate": "newData.isNumber()" },
+            "perfect": { ".validate": "newData.isNumber()" },
+            "close": { ".validate": "newData.isNumber()" },
+            "helps": { ".validate": "newData.isNumber()" },
+            "nbOk": { ".validate": "newData.isNumber()" },
+            "nbN": { ".validate": "newData.isNumber()" },
+            "setOk": { ".validate": "newData.isNumber()" },
+            "setN": { ".validate": "newData.isNumber()" },
+            "misses": {
+              "$k": {
+                ".validate": "$k.matches(/^[0-9]{1,2}$/) && newData.hasChildren(['ri', 'phase'])",
+                "ri": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5" },
+                "phase": { ".validate": "newData.isString() && newData.val().matches(/^(start|rec|ar|serve)$/)" },
+                "$other": { ".validate": false }
+              }
+            },
+            "results": {
+              "$k": {
+                ".validate": "$k.matches(/^[0-9]{1,2}$/) && newData.hasChildren(['q', 'pts'])",
+                "q": { ".validate": "newData.isString() && newData.val().matches(/^(perfect|close|miss)$/)" },
+                "pts": { ".validate": "newData.isNumber()" },
+                "nb": {
+                  "pick": { ".validate": "newData.isString() && newData.val().length <= 3" },
+                  "a": { ".validate": "newData.isString() && newData.val().length <= 3" },
+                  "ok": { ".validate": "newData.isBoolean()" },
+                  "$other": { ".validate": false }
+                },
+                "set": {
+                  "ask": { ".validate": "newData.isString() && newData.val().length <= 8" },
+                  "pick": { ".validate": "newData.isString() && newData.val().length <= 8" },
+                  "ok": { ".validate": "newData.isBoolean()" },
+                  "$other": { ".validate": false }
+                },
+                "$other": { ".validate": false }
+              }
+            },
+            "$other": { ".validate": false }
+          }
+        },
+        "answers": {
+          "$i": {
+            ".validate": "$i.matches(/^[0-9]{1,2}$/)",
+            "$uid": {
+              ".write": "auth != null && auth.uid == $uid",
+              ".validate": "newData.hasChildren(['q', 'pts', 'done'])",
+              "tap": {
+                "x": { ".validate": "newData.isNumber()" },
+                "y": { ".validate": "newData.isNumber()" },
+                "$other": { ".validate": false }
+              },
+              "off": { ".validate": "newData.isBoolean()" },
+              "q": { ".validate": "newData.isString() && newData.val().matches(/^(perfect|close|miss)$/)" },
+              "pts": { ".validate": "newData.isNumber()" },
+              "nb": {
+                "pick": { ".validate": "newData.isString() && newData.val().length <= 3" },
+                "a": { ".validate": "newData.isString() && newData.val().length <= 3" },
+                "ok": { ".validate": "newData.isBoolean()" },
+                "$other": { ".validate": false }
+              },
+              "set": {
+                "ask": { ".validate": "newData.isString() && newData.val().length <= 8" },
+                "pick": { ".validate": "newData.isString() && newData.val().length <= 8" },
+                "ok": { ".validate": "newData.isBoolean()" },
+                "$other": { ".validate": false }
+              },
+              "done": { ".validate": "newData.isBoolean()" },
+              "$other": { ".validate": false }
+            }
+          }
+        },
+        "$other": { ".validate": false }
       }
     }
   }
