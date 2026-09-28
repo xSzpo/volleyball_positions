@@ -20,9 +20,10 @@
       --floor: #e9c98e;
       --floor-line: #6b4a22;
       --net: #14181a;
-      --accent: #c9e21f;
-      --accent-ink: #4d5e00;
-      --on-accent: #14181a;
+      --accent: #1d4ed8;
+      --accent-ink: #1d4ed8;
+      --on-accent: #ffffff;
+      --check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5' fill='none' stroke='%23ffffff' stroke-width='2.6'/%3E%3C/svg%3E");
       --good: #0f7a40;
       --bad: #b3261e;
       --radius: 4px;
@@ -52,8 +53,10 @@
         --floor: #3a3226;
         --floor-line: #a98957;
         --net: #eef1ec;
-        --accent: #c9f24a;
-        --accent-ink: #c9f24a;
+        --accent: #6c9cf5;
+        --accent-ink: #6c9cf5;
+        --on-accent: #0c1210;
+        --check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5' fill='none' stroke='%230c1210' stroke-width='2.6'/%3E%3C/svg%3E");
         --bad: #cc3a2b;
         --op: #050505;
         --move: #c9d3de;
@@ -72,8 +75,10 @@
       --floor: #3a3226;
       --floor-line: #a98957;
       --net: #eef1ec;
-      --accent: #c9f24a;
-      --accent-ink: #c9f24a;
+      --accent: #6c9cf5;
+      --accent-ink: #6c9cf5;
+      --on-accent: #0c1210;
+      --check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5' fill='none' stroke='%230c1210' stroke-width='2.6'/%3E%3C/svg%3E");
       --bad: #cc3a2b;
       --op: #050505;
       --move: #c9d3de;
@@ -125,10 +130,7 @@
       border-radius: 50%;
     }
     input[type="checkbox"]:checked {
-      background:
-        var(--accent)
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5' fill='none' stroke='%2314181a' stroke-width='2.6'/%3E%3C/svg%3E")
-        center / 16px no-repeat;
+      background: var(--accent) var(--check) center / 16px no-repeat;
     }
     input[type="radio"]:checked {
       background: radial-gradient(circle, var(--on-accent) 0 4px, var(--accent) 4.5px);
