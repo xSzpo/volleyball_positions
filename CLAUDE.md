@@ -36,6 +36,8 @@ infra/                Terraform for Firebase (project, web app, Realtime Databas
 ```bash
 python3 -m venv .venv && source .venv/bin/activate   # Homebrew Python refuses global pip installs
 pip install -r requirements.txt        # cairosvg, playwright
+pip install -r requirements-dev.txt    # ruff, mypy, pre-commit (includes requirements.txt)
+pre-commit install
 python -m playwright install chromium
 
 python src/gen_schema.py               # only if data.py or the schema changed
@@ -59,6 +61,15 @@ Deploy = commit and push to `main`. Pages rebuilds in 1-2 minutes. Phones cache 
 - **Language:** UI in English, plain and short. The owner is Polish and plays in Denmark; keep wording simple.
 - **Light and dark themes** via CSS tokens on `:root` (see the top of the `<style>` block).
 - Don't reintroduce `localStorage`-free assumptions or remove the embedded PDFs.
+
+## Code style
+
+- Python follows the Google Python Style Guide. Google-style docstrings on modules and public classes.
+- Comments say why, not what. No abbreviations in new names, no dead or commented-out code.
+- Tests: a bug fix gets a test that fails without the fix. Mock only at system boundaries (network, Firebase, the browser).
+- Agents run `terraform plan` only, never `terraform apply`.
+- Tools: `pre-commit run --all-files` (ruff, ruff-format, whitespace, gitleaks) and `mypy src` (strict). Config is in `pyproject.toml` and `.pre-commit-config.yaml`.
+- `src/template.html` is formatted with Biome: `npx --yes @biomejs/biome@2.5.14 format --write` (config in `biome.json`; HTML support is experimental, so check the build after upgrading Biome). Never format `index.html`.
 
 ## Domain model (src/data.py)
 

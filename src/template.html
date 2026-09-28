@@ -1,1091 +1,3169 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>KSV 5-1 rotation trainer</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-:root{
-  --bg:#EEF2F6; --panel:#FFFFFF; --ink:#16283D; --muted:#5B6B7C; --line:#D5DDE6;
-  --floor:#F7E9D2; --floor-line:#C9A878; --net:#16283D; --orange:#F08A1C; --good:#1E9E5A; --bad:#D8412F; --move:#33414F;
-  --s:#F2B53A; --op:#222222; --mb:#8E2436; --oh:#27598C; --l:#D63A78;
-  --set-left:#27598C; --set-mid:#C2410C; --set-right:#222222; --netmesh:#5B2A86;
-  box-sizing:border-box;
-  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#0F1A27; --panel:#172536; --ink:#E8EEF5; --muted:#9AAABB; --line:#2A3B50;
-    --floor:#3A3226; --floor-line:#8C7552; --net:#E8EEF5; --op:#050505; --move:#C9D3DE;
-    --set-left:#6FA8E0; --set-mid:#F28B4B; --set-right:#E8EEF5; --netmesh:#A77BD1;
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#0F1A27; --panel:#172536; --ink:#E8EEF5; --muted:#9AAABB; --line:#2A3B50;
-  --floor:#3A3226; --floor-line:#8C7552; --net:#E8EEF5; --op:#050505; --move:#C9D3DE;
-  --set-left:#6FA8E0; --set-mid:#F28B4B; --set-right:#E8EEF5; --netmesh:#A77BD1;
-}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
-*,*::before,*::after{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.45}
-.wrap{max-width:720px;margin:0 auto;padding:18px 16px 40px}
-h1{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:800;font-size:clamp(30px,7vw,44px);line-height:1;margin:6px 0 4px;letter-spacing:-.01em}
-h1 span{display:block;font-size:.5em;font-weight:600;color:var(--muted);letter-spacing:0;margin-top:6px}
-.bar{height:5px;width:72px;background:var(--orange);margin:12px 0 18px;border-radius:2px}
-.roles{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
-.role{border:2px solid var(--line);background:var(--panel);color:var(--ink);font:600 15px Barlow,sans-serif;padding:8px 12px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:8px}
-.role i{width:12px;height:12px;border-radius:3px;display:inline-block}
-.role[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--panel)}
-.tabs{display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:16px}
-.tab{border:0;background:transparent;color:var(--muted);font:700 18px "Barlow Condensed",sans-serif;padding:10px;border-radius:9px;cursor:pointer}
-.tab[aria-selected="true"]{background:var(--orange);color:#fff}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
-.card + .card{margin-top:16px}
-.rots{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:10px}
-.rot{border:1.5px solid var(--line);background:transparent;color:var(--ink);border-radius:9px;padding:6px 0;cursor:pointer;font:700 17px "Barlow Condensed",sans-serif;line-height:1.1}
-.rot small{display:block;font:500 11px Barlow,sans-serif;color:var(--muted)}
-.rot[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--panel)}
-.rot[aria-pressed="true"] small{color:inherit;opacity:.75}
-.phases{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
-.ph{border:0;background:var(--bg);color:var(--ink);border-radius:8px;padding:8px 4px;font:600 13px Barlow,sans-serif;cursor:pointer;line-height:1.15}
-.ph[aria-pressed="true"]{background:var(--orange);color:#fff}
-svg.court,svg.netsvg{width:100%;height:auto;display:block;touch-action:manipulation;user-select:none;-webkit-user-select:none}
-.cue{margin-top:12px;padding:12px 14px;border-left:5px solid var(--orange);background:var(--bg);border-radius:0 10px 10px 0}
-.cue b{font-family:"Barlow Condensed",sans-serif;font-size:20px;display:block;line-height:1.15;margin-bottom:2px}
-.cue p{margin:0;color:var(--muted)}
-.cue p.guide{margin-top:6px;color:var(--ink);font-size:14px}
-h2{font:800 24px "Barlow Condensed",sans-serif;margin:0 0 8px}
-.card ul{margin:0;padding-left:20px}
-.card li{margin:6px 0}
-.table{overflow-x:auto;margin-top:12px}
-table{border-collapse:collapse;width:100%;font-size:14px;min-width:460px}
-th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-th{font:700 15px "Barlow Condensed",sans-serif;color:var(--muted)}
-td.r{font:700 16px "Barlow Condensed",sans-serif;white-space:nowrap}
-.prompt{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:10px}
-.prompt .big{font:800 clamp(24px,6vw,32px) "Barlow Condensed",sans-serif;line-height:1.05}
-.prompt .sub{color:var(--muted);font-size:14px}
-.score{text-align:right;font:700 15px "Barlow Condensed",sans-serif;color:var(--muted);white-space:nowrap}
-.score strong{display:block;font-size:26px;color:var(--ink)}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
-.btn{border:2px solid var(--ink);background:transparent;color:var(--ink);border-radius:10px;padding:10px 14px;font:700 16px "Barlow Condensed",sans-serif;cursor:pointer}
-.btn.primary{background:var(--ink);color:var(--panel)}
-.btn[hidden]{display:none}
-.btn:disabled{opacity:.4;cursor:default}
-.toggle{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;cursor:pointer}
-.fb{margin-top:10px;padding:12px 14px;border-radius:10px;background:var(--bg);min-height:48px}
-.fb.good{border-left:5px solid var(--good)} .fb.bad{border-left:5px solid var(--bad)} .fb.close{border-left:5px solid var(--orange)}
-.fb b{font:800 20px "Barlow Condensed",sans-serif}
-.weak{margin-top:12px;font-size:14px;color:var(--muted)}
-.hint{color:var(--muted);font-size:14px;margin:0}
-.setchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.setchip{border:2px solid currentColor;background:transparent;border-radius:9px;padding:6px 12px;font:800 17px "Barlow Condensed",sans-serif;cursor:pointer;min-width:48px}
-.setchip[aria-pressed="true"]{background:currentColor}
-.setchip[aria-pressed="true"] span{color:var(--panel)}
-.setchip.left{color:var(--set-left)} .setchip.mid{color:var(--set-mid)} .setchip.right{color:var(--set-right)}
-.dl{display:grid;gap:8px}
-.dl .btn{text-align:left;display:flex;justify-content:space-between;align-items:center}
-.dl .btn small{font:500 13px Barlow,sans-serif;color:var(--muted)}
-.rules{margin-bottom:16px;border-left:5px solid var(--orange)}
-.rules summary{font:800 22px "Barlow Condensed",sans-serif;cursor:pointer}
-.rules ol{margin:8px 0 0;padding-left:22px}
-.rules li{margin:6px 0}
-.steps{border:1px solid var(--line);border-radius:10px;padding:8px 12px 10px;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}
-.steps legend{font:700 16px "Barlow Condensed",sans-serif;padding:0 4px}
-.steps label{display:flex;gap:8px;align-items:center;cursor:pointer}
-.scoring{margin-top:10px;color:var(--muted);font-size:14px}
-.scoring summary{cursor:pointer;font-weight:600}
-.progress{height:6px;background:var(--bg);border-radius:3px;overflow:hidden}
-.progress i{display:block;height:100%;width:0;background:var(--orange);transition:width .3s}
-.steptrack{display:flex;gap:4px;margin:8px 0 2px;flex-wrap:wrap}
-.steptrack span{font:600 12px Barlow,sans-serif;padding:3px 8px;border-radius:999px;background:var(--bg);color:var(--muted)}
-.steptrack span.now{background:var(--ink);color:var(--panel)}
-.steptrack span.ok{background:color-mix(in srgb,var(--good) 22%,transparent);color:var(--ink)}
-.steptrack span.bad{background:color-mix(in srgb,var(--bad) 22%,transparent);color:var(--ink)}
-.story{margin:8px 0 10px;font-size:17px;font-weight:500}
-.btn.quiet{border-color:transparent;color:var(--muted)}
-.pts{float:right;font:800 22px "Barlow Condensed",sans-serif}
-.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:8px 0 14px}
-.stats div{background:var(--bg);border-radius:10px;padding:10px 12px}
-.stats strong{display:block;font:800 28px "Barlow Condensed",sans-serif;line-height:1}
-.stats span{color:var(--muted);font-size:14px}
-.mist{list-style:none;padding:0;margin:0}
-.mist li{padding:8px 0;border-bottom:1px solid var(--line)}
-.mist b{font-family:"Barlow Condensed",sans-serif;font-size:17px}
-.switch{display:flex;align-items:center;gap:12px;margin:12px 0 0;padding:12px 14px;border:2px solid var(--orange);border-radius:12px;background:color-mix(in srgb,var(--orange) 9%,var(--panel));cursor:pointer}
-.switch.compact{margin:10px 0 0;padding:6px 10px;border-width:1.5px;display:inline-flex}
-.switch input{position:absolute;opacity:0;width:1px;height:1px}
-.switch .track{flex:0 0 auto;width:52px;height:30px;border-radius:999px;background:var(--line);position:relative;transition:background .2s}
-.switch.compact .track{width:42px;height:24px}
-.switch .thumb{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
-.switch.compact .thumb{width:18px;height:18px}
-.switch input:checked + .track{background:var(--orange)}
-.switch input:checked + .track .thumb{transform:translateX(22px)}
-.switch.compact input:checked + .track .thumb{transform:translateX(18px)}
-.switch input:focus-visible + .track{outline:3px solid var(--orange);outline-offset:2px}
-.swtext b{display:block;font:800 19px "Barlow Condensed",sans-serif;line-height:1.1}
-.switch.compact .swtext b{font-size:16px}
-.swtext small{display:block;color:var(--muted);font-size:14px;line-height:1.3;margin-top:2px}
-@media (prefers-reduced-motion: reduce){.switch .track,.switch .thumb{transition:none}}
-.thumbh{font:800 20px "Barlow Condensed",sans-serif;margin:18px 0 4px;padding-top:12px;border-top:1px solid var(--line)}
-.thumbs{margin:0;padding-left:22px}
-.thumbs li{margin:8px 0;color:var(--muted)}
-.thumbs li b{color:var(--ink)}
-.thumbs li.mine{color:var(--ink)}
-.tag{display:inline-block;font:700 11px Barlow,sans-serif;background:var(--orange);color:#fff;border-radius:999px;padding:1px 7px;vertical-align:2px}
-.rulesmode{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:-4px 0 14px}
-.rulesmode button{border:1.5px solid var(--line);background:var(--panel);color:var(--ink);font:600 14px Barlow,sans-serif;padding:5px 11px;border-radius:999px;cursor:pointer}
-.rulesmode button[aria-checked="true"]{border-color:var(--ink);background:var(--ink);color:var(--panel)}
-.rulesmode small{flex-basis:100%;color:var(--muted);font-size:13px;margin-top:2px}
-.vis{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:0 0 8px}
-.vislabel{font:600 13px Barlow,sans-serif;color:var(--muted);margin-right:4px}
-.vis button{border:2px solid var(--orange);background:transparent;color:var(--ink);font:700 15px "Barlow Condensed",sans-serif;padding:6px 12px;border-radius:999px;cursor:pointer}
-.vis button[aria-checked="true"]{background:var(--orange);color:#fff}
-.visbox{margin:12px 0 0;padding:12px 14px;border:2px solid var(--orange);border-radius:12px;background:color-mix(in srgb,var(--orange) 9%,var(--panel))}
-.visbox .vis{margin:0}
-.visbox .vislabel{width:100%;font-size:15px;font-weight:700;color:var(--ink);margin-bottom:4px}
-.visbox .vis button{font-size:17px;padding:8px 14px}
-.visbox small{display:block;color:var(--muted);font-size:14px;margin-top:8px}
-.vis.compact{margin:10px 0 0}
-.check{display:flex;align-items:center;gap:8px;margin:6px 0 4px;font-size:15px;cursor:pointer}
-.steps.one{grid-template-columns:1fr;margin-top:10px}
-.tip{margin:10px 0 0;font-size:14px;color:var(--muted);border-left:3px solid var(--orange);padding-left:10px}
-.check4,.learnsteps{margin:0;padding-left:22px}
-.check4 li,.learnsteps li{margin:8px 0}
-.nbq{margin:10px 0 0;padding:10px 12px;border:2px solid var(--orange);border-radius:10px;background:color-mix(in srgb,var(--orange) 9%,var(--panel))}
-.nbq .opts button.skip{border-color:transparent;color:var(--muted);background:transparent}
-.nbq .opts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.nbq .opts button{border:2px solid var(--ink);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 12px;font:700 15px Barlow,sans-serif;cursor:pointer}
-.nbq .opts button.right{background:var(--good);border-color:var(--good);color:#fff}
-.nbq .opts button.wrong{background:var(--bad);border-color:var(--bad);color:#fff}
-.stats div.wide{grid-column:1/-1}
-.mprow{display:grid;grid-template-columns:14px 1fr auto auto;gap:8px;align-items:center;margin:6px 0}
-.mprow i{width:14px;height:14px;border-radius:50%}
-.mprow input,.mprow select{font:500 16px Barlow,sans-serif;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);min-width:0}
-.mprow button{border:0;background:transparent;color:var(--muted);font-size:18px;cursor:pointer;padding:6px}
-.mprow button:disabled{opacity:.3;cursor:default}
-.pass{text-align:center}
-.passname{font:800 clamp(34px,9vw,48px) "Barlow Condensed",sans-serif;line-height:1}
-.bigbtn{font-size:22px;padding:14px 28px}
-.who{display:inline-flex;align-items:center;gap:6px;font:700 15px Barlow,sans-serif;margin-bottom:2px}
-.who i{width:12px;height:12px;border-radius:50%}
-.board{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:16px}
-.pchip{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border-radius:999px;padding:5px 12px;font:600 14px Barlow,sans-serif}
-.pchip i{width:10px;height:10px;border-radius:50%}
-.pchip b{font:800 17px "Barlow Condensed",sans-serif}
-.rlist{list-style:none;margin:10px 0 0;padding:0}
-.rlist li{display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:start;padding:9px 0;border-bottom:1px solid var(--line)}
-.rlist li i{width:14px;height:14px;border-radius:50%;margin-top:4px}
-.rlist .rp{font:800 20px "Barlow Condensed",sans-serif}
-.rlist small{display:block;color:var(--muted)}
-.rank{list-style:none;padding:0;margin:8px 0 14px}
-.rank li{display:grid;grid-template-columns:34px 14px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
-.rank .pos{font:800 26px "Barlow Condensed",sans-serif;color:var(--muted)}
-.rank li:first-child .pos{color:var(--orange)}
-.rank li i{width:14px;height:14px;border-radius:50%}
-.rank .sc{font:800 26px "Barlow Condensed",sans-serif}
-.rank small{display:block;color:var(--muted)}
-.stats .rank div{background:none;padding:0;border-radius:0}
-.stats .rank .sc{color:var(--ink);font-size:26px}
-.stats .rank .pos{color:var(--muted)}
-.stats .rank li:first-child .pos{color:var(--orange)}
-.stats .rank small{color:var(--muted)}
-details.pm{margin:6px 0}
-details.pm summary{cursor:pointer;font-weight:600}
-button:focus-visible,label:focus-within{outline:3px solid var(--orange);outline-offset:2px}
-@media (prefers-reduced-motion: no-preference){ .pulse{animation:pulse 1.4s ease-out 2} @keyframes pulse{0%{opacity:.95;r:14}100%{opacity:0;r:34}} }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>Where do I stand?<span>KSV 5-1 system · receiving positions, movements and sets</span></h1>
-  <div class="bar"></div>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>KSV 5-1 rotation trainer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    >
+    <style>
+    :root {
+      --bg: #eef2f6;
+      --panel: #ffffff;
+      --ink: #16283d;
+      --muted: #5b6b7c;
+      --line: #d5dde6;
+      --floor: #f7e9d2;
+      --floor-line: #c9a878;
+      --net: #16283d;
+      --orange: #f08a1c;
+      --good: #1e9e5a;
+      --bad: #d8412f;
+      --move: #33414f;
+      --s: #f2b53a;
+      --op: #222222;
+      --mb: #8e2436;
+      --oh: #27598c;
+      --l: #d63a78;
+      --set-left: #27598c;
+      --set-mid: #c2410c;
+      --set-right: #222222;
+      --netmesh: #5b2a86;
+      box-sizing: border-box;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0f1a27;
+        --panel: #172536;
+        --ink: #e8eef5;
+        --muted: #9aaabb;
+        --line: #2a3b50;
+        --floor: #3a3226;
+        --floor-line: #8c7552;
+        --net: #e8eef5;
+        --op: #050505;
+        --move: #c9d3de;
+        --set-left: #6fa8e0;
+        --set-mid: #f28b4b;
+        --set-right: #e8eef5;
+        --netmesh: #a77bd1;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0f1a27;
+      --panel: #172536;
+      --ink: #e8eef5;
+      --muted: #9aaabb;
+      --line: #2a3b50;
+      --floor: #3a3226;
+      --floor-line: #8c7552;
+      --net: #e8eef5;
+      --op: #050505;
+      --move: #c9d3de;
+      --set-left: #6fa8e0;
+      --set-mid: #f28b4b;
+      --set-right: #e8eef5;
+      --netmesh: #a77bd1;
+    }
+    html {
+      scroll-padding-top: env(safe-area-inset-top, 0px);
+    }
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Barlow, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.45;
+    }
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 18px 16px 40px;
+    }
+    h1 {
+      font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+      font-weight: 800;
+      font-size: clamp(30px, 7vw, 44px);
+      line-height: 1;
+      margin: 6px 0 4px;
+      letter-spacing: -0.01em;
+    }
+    h1 span {
+      display: block;
+      font-size: 0.5em;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0;
+      margin-top: 6px;
+    }
+    .bar {
+      height: 5px;
+      width: 72px;
+      background: var(--orange);
+      margin: 12px 0 18px;
+      border-radius: 2px;
+    }
+    .roles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .role {
+      border: 2px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      font:
+        600 15px Barlow,
+        sans-serif;
+      padding: 8px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .role i {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+    .role[aria-pressed="true"] {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: var(--panel);
+    }
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 16px;
+    }
+    .tab {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font:
+        700 18px "Barlow Condensed",
+        sans-serif;
+      padding: 10px;
+      border-radius: 9px;
+      cursor: pointer;
+    }
+    .tab[aria-selected="true"] {
+      background: var(--orange);
+      color: #fff;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .card + .card {
+      margin-top: 16px;
+    }
+    .rots {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .rot {
+      border: 1.5px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      border-radius: 9px;
+      padding: 6px 0;
+      cursor: pointer;
+      font:
+        700 17px "Barlow Condensed",
+        sans-serif;
+      line-height: 1.1;
+    }
+    .rot small {
+      display: block;
+      font:
+        500 11px Barlow,
+        sans-serif;
+      color: var(--muted);
+    }
+    .rot[aria-pressed="true"] {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: var(--panel);
+    }
+    .rot[aria-pressed="true"] small {
+      color: inherit;
+      opacity: 0.75;
+    }
+    .phases {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .ph {
+      border: 0;
+      background: var(--bg);
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 8px 4px;
+      font:
+        600 13px Barlow,
+        sans-serif;
+      cursor: pointer;
+      line-height: 1.15;
+    }
+    .ph[aria-pressed="true"] {
+      background: var(--orange);
+      color: #fff;
+    }
+    svg.court,
+    svg.netsvg {
+      width: 100%;
+      height: auto;
+      display: block;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .cue {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-left: 5px solid var(--orange);
+      background: var(--bg);
+      border-radius: 0 10px 10px 0;
+    }
+    .cue b {
+      font-family: "Barlow Condensed", sans-serif;
+      font-size: 20px;
+      display: block;
+      line-height: 1.15;
+      margin-bottom: 2px;
+    }
+    .cue p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .cue p.guide {
+      margin-top: 6px;
+      color: var(--ink);
+      font-size: 14px;
+    }
+    h2 {
+      font:
+        800 24px "Barlow Condensed",
+        sans-serif;
+      margin: 0 0 8px;
+    }
+    .card ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .card li {
+      margin: 6px 0;
+    }
+    .table {
+      overflow-x: auto;
+      margin-top: 12px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 14px;
+      min-width: 460px;
+    }
+    th,
+    td {
+      padding: 7px 8px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      font:
+        700 15px "Barlow Condensed",
+        sans-serif;
+      color: var(--muted);
+    }
+    td.r {
+      font:
+        700 16px "Barlow Condensed",
+        sans-serif;
+      white-space: nowrap;
+    }
+    .prompt {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .prompt .big {
+      font:
+        800 clamp(24px, 6vw, 32px) "Barlow Condensed",
+        sans-serif;
+      line-height: 1.05;
+    }
+    .prompt .sub {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .score {
+      text-align: right;
+      font:
+        700 15px "Barlow Condensed",
+        sans-serif;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .score strong {
+      display: block;
+      font-size: 26px;
+      color: var(--ink);
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      align-items: center;
+    }
+    .btn {
+      border: 2px solid var(--ink);
+      background: transparent;
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font:
+        700 16px "Barlow Condensed",
+        sans-serif;
+      cursor: pointer;
+    }
+    .btn.primary {
+      background: var(--ink);
+      color: var(--panel);
+    }
+    .btn[hidden] {
+      display: none;
+    }
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    .toggle {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .fb {
+      margin-top: 10px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: var(--bg);
+      min-height: 48px;
+    }
+    .fb.good {
+      border-left: 5px solid var(--good);
+    }
+    .fb.bad {
+      border-left: 5px solid var(--bad);
+    }
+    .fb.close {
+      border-left: 5px solid var(--orange);
+    }
+    .fb b {
+      font:
+        800 20px "Barlow Condensed",
+        sans-serif;
+    }
+    .weak {
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 14px;
+      margin: 0;
+    }
+    .setchips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .setchip {
+      border: 2px solid currentColor;
+      background: transparent;
+      border-radius: 9px;
+      padding: 6px 12px;
+      font:
+        800 17px "Barlow Condensed",
+        sans-serif;
+      cursor: pointer;
+      min-width: 48px;
+    }
+    .setchip[aria-pressed="true"] {
+      background: currentColor;
+    }
+    .setchip[aria-pressed="true"] span {
+      color: var(--panel);
+    }
+    .setchip.left {
+      color: var(--set-left);
+    }
+    .setchip.mid {
+      color: var(--set-mid);
+    }
+    .setchip.right {
+      color: var(--set-right);
+    }
+    .dl {
+      display: grid;
+      gap: 8px;
+    }
+    .dl .btn {
+      text-align: left;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .dl .btn small {
+      font:
+        500 13px Barlow,
+        sans-serif;
+      color: var(--muted);
+    }
+    .rules {
+      margin-bottom: 16px;
+      border-left: 5px solid var(--orange);
+    }
+    .rules summary {
+      font:
+        800 22px "Barlow Condensed",
+        sans-serif;
+      cursor: pointer;
+    }
+    .rules ol {
+      margin: 8px 0 0;
+      padding-left: 22px;
+    }
+    .rules li {
+      margin: 6px 0;
+    }
+    .steps {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 12px 10px;
+      margin: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 12px;
+    }
+    .steps legend {
+      font:
+        700 16px "Barlow Condensed",
+        sans-serif;
+      padding: 0 4px;
+    }
+    .steps label {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      cursor: pointer;
+    }
+    .scoring {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .scoring summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .progress {
+      height: 6px;
+      background: var(--bg);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress i {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: var(--orange);
+      transition: width 0.3s;
+    }
+    .steptrack {
+      display: flex;
+      gap: 4px;
+      margin: 8px 0 2px;
+      flex-wrap: wrap;
+    }
+    .steptrack span {
+      font:
+        600 12px Barlow,
+        sans-serif;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--bg);
+      color: var(--muted);
+    }
+    .steptrack span.now {
+      background: var(--ink);
+      color: var(--panel);
+    }
+    .steptrack span.ok {
+      background: color-mix(in srgb, var(--good) 22%, transparent);
+      color: var(--ink);
+    }
+    .steptrack span.bad {
+      background: color-mix(in srgb, var(--bad) 22%, transparent);
+      color: var(--ink);
+    }
+    .story {
+      margin: 8px 0 10px;
+      font-size: 17px;
+      font-weight: 500;
+    }
+    .btn.quiet {
+      border-color: transparent;
+      color: var(--muted);
+    }
+    .pts {
+      float: right;
+      font:
+        800 22px "Barlow Condensed",
+        sans-serif;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin: 8px 0 14px;
+    }
+    .stats div {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .stats strong {
+      display: block;
+      font:
+        800 28px "Barlow Condensed",
+        sans-serif;
+      line-height: 1;
+    }
+    .stats span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .mist {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .mist li {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .mist b {
+      font-family: "Barlow Condensed", sans-serif;
+      font-size: 17px;
+    }
+    .switch {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 12px 0 0;
+      padding: 12px 14px;
+      border: 2px solid var(--orange);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--orange) 9%, var(--panel));
+      cursor: pointer;
+    }
+    .switch.compact {
+      margin: 10px 0 0;
+      padding: 6px 10px;
+      border-width: 1.5px;
+      display: inline-flex;
+    }
+    .switch input {
+      position: absolute;
+      opacity: 0;
+      width: 1px;
+      height: 1px;
+    }
+    .switch .track {
+      flex: 0 0 auto;
+      width: 52px;
+      height: 30px;
+      border-radius: 999px;
+      background: var(--line);
+      position: relative;
+      transition: background 0.2s;
+    }
+    .switch.compact .track {
+      width: 42px;
+      height: 24px;
+    }
+    .switch .thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s;
+    }
+    .switch.compact .thumb {
+      width: 18px;
+      height: 18px;
+    }
+    .switch input:checked + .track {
+      background: var(--orange);
+    }
+    .switch input:checked + .track .thumb {
+      transform: translateX(22px);
+    }
+    .switch.compact input:checked + .track .thumb {
+      transform: translateX(18px);
+    }
+    .switch input:focus-visible + .track {
+      outline: 3px solid var(--orange);
+      outline-offset: 2px;
+    }
+    .swtext b {
+      display: block;
+      font:
+        800 19px "Barlow Condensed",
+        sans-serif;
+      line-height: 1.1;
+    }
+    .switch.compact .swtext b {
+      font-size: 16px;
+    }
+    .swtext small {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.3;
+      margin-top: 2px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .switch .track,
+      .switch .thumb {
+        transition: none;
+      }
+    }
+    .thumbh {
+      font:
+        800 20px "Barlow Condensed",
+        sans-serif;
+      margin: 18px 0 4px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .thumbs {
+      margin: 0;
+      padding-left: 22px;
+    }
+    .thumbs li {
+      margin: 8px 0;
+      color: var(--muted);
+    }
+    .thumbs li b {
+      color: var(--ink);
+    }
+    .thumbs li.mine {
+      color: var(--ink);
+    }
+    .tag {
+      display: inline-block;
+      font:
+        700 11px Barlow,
+        sans-serif;
+      background: var(--orange);
+      color: #fff;
+      border-radius: 999px;
+      padding: 1px 7px;
+      vertical-align: 2px;
+    }
+    .rulesmode {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin: -4px 0 14px;
+    }
+    .rulesmode button {
+      border: 1.5px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      font:
+        600 14px Barlow,
+        sans-serif;
+      padding: 5px 11px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .rulesmode button[aria-checked="true"] {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: var(--panel);
+    }
+    .rulesmode small {
+      flex-basis: 100%;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 2px;
+    }
+    .vis {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin: 0 0 8px;
+    }
+    .vislabel {
+      font:
+        600 13px Barlow,
+        sans-serif;
+      color: var(--muted);
+      margin-right: 4px;
+    }
+    .vis button {
+      border: 2px solid var(--orange);
+      background: transparent;
+      color: var(--ink);
+      font:
+        700 15px "Barlow Condensed",
+        sans-serif;
+      padding: 6px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .vis button[aria-checked="true"] {
+      background: var(--orange);
+      color: #fff;
+    }
+    .visbox {
+      margin: 12px 0 0;
+      padding: 12px 14px;
+      border: 2px solid var(--orange);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--orange) 9%, var(--panel));
+    }
+    .visbox .vis {
+      margin: 0;
+    }
+    .visbox .vislabel {
+      width: 100%;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+    .visbox .vis button {
+      font-size: 17px;
+      padding: 8px 14px;
+    }
+    .visbox small {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    .vis.compact {
+      margin: 10px 0 0;
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0 4px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    .steps.one {
+      grid-template-columns: 1fr;
+      margin-top: 10px;
+    }
+    .tip {
+      margin: 10px 0 0;
+      font-size: 14px;
+      color: var(--muted);
+      border-left: 3px solid var(--orange);
+      padding-left: 10px;
+    }
+    .check4,
+    .learnsteps {
+      margin: 0;
+      padding-left: 22px;
+    }
+    .check4 li,
+    .learnsteps li {
+      margin: 8px 0;
+    }
+    .nbq {
+      margin: 10px 0 0;
+      padding: 10px 12px;
+      border: 2px solid var(--orange);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--orange) 9%, var(--panel));
+    }
+    .nbq .opts button.skip {
+      border-color: transparent;
+      color: var(--muted);
+      background: transparent;
+    }
+    .nbq .opts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .nbq .opts button {
+      border: 2px solid var(--ink);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font:
+        700 15px Barlow,
+        sans-serif;
+      cursor: pointer;
+    }
+    .nbq .opts button.right {
+      background: var(--good);
+      border-color: var(--good);
+      color: #fff;
+    }
+    .nbq .opts button.wrong {
+      background: var(--bad);
+      border-color: var(--bad);
+      color: #fff;
+    }
+    .stats div.wide {
+      grid-column: 1 / -1;
+    }
+    .mprow {
+      display: grid;
+      grid-template-columns: 14px 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+      margin: 6px 0;
+    }
+    .mprow i {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+    }
+    .mprow input,
+    .mprow select {
+      font:
+        500 16px Barlow,
+        sans-serif;
+      padding: 8px 10px;
+      border: 1.5px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      min-width: 0;
+    }
+    .mprow button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 6px;
+    }
+    .mprow button:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+    .pass {
+      text-align: center;
+    }
+    .passname {
+      font:
+        800 clamp(34px, 9vw, 48px) "Barlow Condensed",
+        sans-serif;
+      line-height: 1;
+    }
+    .bigbtn {
+      font-size: 22px;
+      padding: 14px 28px;
+    }
+    .who {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font:
+        700 15px Barlow,
+        sans-serif;
+      margin-bottom: 2px;
+    }
+    .who i {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .board {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      margin-top: 16px;
+    }
+    .pchip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg);
+      border-radius: 999px;
+      padding: 5px 12px;
+      font:
+        600 14px Barlow,
+        sans-serif;
+    }
+    .pchip i {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .pchip b {
+      font:
+        800 17px "Barlow Condensed",
+        sans-serif;
+    }
+    .rlist {
+      list-style: none;
+      margin: 10px 0 0;
+      padding: 0;
+    }
+    .rlist li {
+      display: grid;
+      grid-template-columns: 14px 1fr auto;
+      gap: 10px;
+      align-items: start;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .rlist li i {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      margin-top: 4px;
+    }
+    .rlist .rp {
+      font:
+        800 20px "Barlow Condensed",
+        sans-serif;
+    }
+    .rlist small {
+      display: block;
+      color: var(--muted);
+    }
+    .rank {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0 14px;
+    }
+    .rank li {
+      display: grid;
+      grid-template-columns: 34px 14px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .rank .pos {
+      font:
+        800 26px "Barlow Condensed",
+        sans-serif;
+      color: var(--muted);
+    }
+    .rank li:first-child .pos {
+      color: var(--orange);
+    }
+    .rank li i {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+    }
+    .rank .sc {
+      font:
+        800 26px "Barlow Condensed",
+        sans-serif;
+    }
+    .rank small {
+      display: block;
+      color: var(--muted);
+    }
+    .stats .rank div {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+    }
+    .stats .rank .sc {
+      color: var(--ink);
+      font-size: 26px;
+    }
+    .stats .rank .pos {
+      color: var(--muted);
+    }
+    .stats .rank li:first-child .pos {
+      color: var(--orange);
+    }
+    .stats .rank small {
+      color: var(--muted);
+    }
+    details.pm {
+      margin: 6px 0;
+    }
+    details.pm summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:focus-visible,
+    label:focus-within {
+      outline: 3px solid var(--orange);
+      outline-offset: 2px;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .pulse {
+        animation: pulse 1.4s ease-out 2;
+      }
+      @keyframes pulse {
+        0% {
+          opacity: 0.95;
+          r: 14;
+        }
+        100% {
+          opacity: 0;
+          r: 34;
+        }
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>
+        Where do I stand?<span>KSV 5-1 system · receiving positions, movements and sets</span>
+      </h1>
+      <div class="bar"></div>
 
-  <p class="hint" style="margin-bottom:8px">I'm playing today as</p>
-  <div class="roles" id="roles"></div>
-  <div class="rulesmode" role="radiogroup" aria-label="Rules">
-    <span class="vislabel">Rules</span>
-    <button type="button" role="radio" data-rm="official">Official</button><button type="button" role="radio" data-rm="drill">Drill: libero stays on</button>
-    <small id="rmSub"></small>
-  </div>
-
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" id="tabLearn" aria-selected="true">Learn</button>
-    <button class="tab" role="tab" id="tabDrill" aria-selected="false">Drill</button>
-    <button class="tab" role="tab" id="tabGame" aria-selected="false">Match</button>
-    <button class="tab" role="tab" id="tabSets" aria-selected="false">Sets</button>
-  </div>
-
-  <section id="learn">
-    <div class="card">
-      <div class="rots" id="rots"></div>
-      <div class="phases" id="phases"></div>
-      <svg class="court" id="courtL" viewBox="-26 -34 352 262" aria-label="Court diagram"></svg>
-      <div class="cue" id="cue"></div>
-    </div>
-    <div class="card" id="sheet"></div>
-    <div class="card">
-      <h2>Before every serve</h2>
-      <p class="hint" style="margin-bottom:6px">Four quick checks, in this order. Use them in the app and on court.</p>
-      <ol class="check4">
-        <li><b>Where is the setter?</b> That tells you the rotation.</li>
-        <li><b>Who is in front of or behind me, and who is beside me?</b> That confirms your legal spot.</li>
-        <li><b>Am I on court, or is the libero in?</b> Middles, check this every time.</li>
-        <li><b>What is my job after the pass?</b> Receive, attack which lane, set, or cover.</li>
-      </ol>
-    </div>
-    <div class="card">
-      <h2>How to learn with this app</h2>
-      <ol class="learnsteps">
-        <li><b>Study once, then stop rereading.</b> Pick your role and step through R1 (S1) to R6 (S2) here in Learn. For each rotation, say the four checks out loud.</li>
-        <li><b>Test yourself.</b> Go to Drill with the setter shown. Guess first, then look at the answer. Mistakes are part of how you learn.</li>
-        <li><b>Play a Match in order, then mixed.</b> When you score 80% or more, switch to mixed order and show nobody. Mixing the order makes you think, which helps you remember.</li>
-        <li><b>Little and often.</b> Five minutes on three or four days a week works better than one long session. Start each session with “Review weak spots” in Drill.</li>
-        <li><b>Before training or a match,</b> do a two-minute review of the role you will play. If you might play several roles, practise each one.</li>
-        <li><b>Finish on court.</b> The app gets you ready; walking through the rotations with your team makes it stick. Your coach and the KSV guide have the final word.</li>
-      </ol>
-    </div>
-  </section>
-
-  <section id="drill" hidden>
-    <div class="card">
-      <div class="prompt">
-        <div><div class="big" id="dq"></div><div class="sub" id="dsub"></div></div>
-        <div class="score"><strong id="dscore">0/0</strong>streak <span id="dstreak">0</span></div>
+      <p class="hint" style="margin-bottom:8px">I'm playing today as</p>
+      <div class="roles" id="roles"></div>
+      <div class="rulesmode" role="radiogroup" aria-label="Rules">
+        <span class="vislabel">Rules</span>
+        <button type="button" role="radio" data-rm="official">Official</button
+        ><button type="button" role="radio" data-rm="drill">Drill: libero stays on</button>
+        <small id="rmSub"></small>
       </div>
-      <div class="vis " role="radiogroup" aria-label="Who to show on court" data-vis="drill">
-        <span class="vislabel">Show on court</span>
-        <button type="button" role="radio" data-v="none">Nobody</button><button type="button" role="radio" data-v="ref" class="refbtn">Setter</button><button type="button" role="radio" data-v="all">Everyone</button>
+
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tabLearn" aria-selected="true">Learn</button>
+        <button class="tab" role="tab" id="tabDrill" aria-selected="false">Drill</button>
+        <button class="tab" role="tab" id="tabGame" aria-selected="false">Match</button>
+        <button class="tab" role="tab" id="tabSets" aria-selected="false">Sets</button>
       </div>
-      <label class="check"><input type="checkbox" id="nbDrill"> Neighbour check after reception</label>
-      <svg class="court" id="courtD" viewBox="-26 -34 352 262" aria-label="Tap where you stand"></svg>
-      <div id="dNbBox"></div>
-      <div class="row">
-        <button class="btn" id="offBtn">I'm off court</button>
-        <button class="btn primary" id="nextBtn" hidden>Next</button>
+
+      <section id="learn">
+        <div class="card">
+          <div class="rots" id="rots"></div>
+          <div class="phases" id="phases"></div>
+          <svg class="court" id="courtL" viewBox="-26 -34 352 262" aria-label="Court diagram"></svg>
+          <div class="cue" id="cue"></div>
+        </div>
+        <div class="card" id="sheet"></div>
+        <div class="card">
+          <h2>Before every serve</h2>
+          <p class="hint" style="margin-bottom:6px">
+            Four quick checks, in this order. Use them in the app and on court.
+          </p>
+          <ol class="check4">
+            <li><b>Where is the setter?</b> That tells you the rotation.</li>
+            <li>
+              <b>Who is in front of or behind me, and who is beside me?</b>
+              That confirms your legal spot.
+            </li>
+            <li><b>Am I on court, or is the libero in?</b> Middles, check this every time.</li>
+            <li>
+              <b>What is my job after the pass?</b>
+              Receive, attack which lane, set, or cover.
+            </li>
+          </ol>
+        </div>
+        <div class="card">
+          <h2>How to learn with this app</h2>
+          <ol class="learnsteps">
+            <li>
+              <b>Study once, then stop rereading.</b>
+              Pick your role and step through R1 (S1) to R6 (S2) here in Learn. For each rotation,
+              say the four checks out loud.
+            </li>
+            <li>
+              <b>Test yourself.</b>
+              Go to Drill with the setter shown. Guess first, then look at the answer. Mistakes are
+              part of how you learn.
+            </li>
+            <li>
+              <b>Play a Match in order, then mixed.</b>
+              When you score 80% or more, switch to mixed order and show nobody. Mixing the order
+              makes you think, which helps you remember.
+            </li>
+            <li>
+              <b>Little and often.</b>
+              Five minutes on three or four days a week works better than one long session. Start
+              each session with “Review weak spots” in Drill.
+            </li>
+            <li>
+              <b>Before training or a match,</b>
+              do a two-minute review of the role you will play. If you might play several roles,
+              practise each one.
+            </li>
+            <li>
+              <b>Finish on court.</b>
+              The app gets you ready; walking through the rotations with your team makes it stick.
+              Your coach and the KSV guide have the final word.
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="drill" hidden>
+        <div class="card">
+          <div class="prompt">
+            <div>
+              <div class="big" id="dq"></div>
+              <div class="sub" id="dsub"></div>
+            </div>
+            <div class="score">
+              <strong id="dscore">0/0</strong>streak <span id="dstreak">0</span>
+            </div>
+          </div>
+          <div class="vis " role="radiogroup" aria-label="Who to show on court" data-vis="drill">
+            <span class="vislabel">Show on court</span>
+            <button type="button" role="radio" data-v="none">Nobody</button
+            ><button type="button" role="radio" data-v="ref" class="refbtn">Setter</button
+            ><button type="button" role="radio" data-v="all">Everyone</button>
+          </div>
+          <label class="check"
+            ><input type="checkbox" id="nbDrill">
+            Neighbour check after reception</label
+          >
+          <svg
+            class="court"
+            id="courtD"
+            viewBox="-26 -34 352 262"
+            aria-label="Tap where you stand"
+          ></svg>
+          <div id="dNbBox"></div>
+          <div class="row">
+            <button class="btn" id="offBtn">I'm off court</button>
+            <button class="btn primary" id="nextBtn" hidden>Next</button>
+          </div>
+          <div class="fb" id="fb"></div>
+          <div class="weak" id="weak"></div>
+          <div class="row">
+            <button class="btn" id="reviewBtn" hidden>Review weak spots</button
+            ><button class="btn quiet" id="resetBtn">Reset my progress</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="game" hidden>
+        <div class="card" id="gSetup">
+          <h2>Match mode</h2>
+          <fieldset class="steps one" style="margin-bottom:10px">
+            <legend>Who is playing?</legend>
+            <label><input type="radio" name="gPlayers" value="solo"> Just me</label>
+            <label
+              ><input type="radio" name="gPlayers" value="mp">
+              With friends, on this device</label
+            >
+          </fieldset>
+          <div id="mpBox" hidden>
+            <div id="mpList"></div>
+            <div class="row" style="margin-top:6px">
+              <button type="button" class="btn" id="mpAdd">+ Add player</button>
+            </div>
+            <p class="tip">
+              Pass the device around. In every moment the turn order is random, and each player
+              answers in secret. When everyone has answered, all answers are shown together.
+            </p>
+          </div>
+          <p class="hint" style="margin:10px 0">
+            Play all six rotations as <b id="gRole"></b>. Each rotation runs in real match order:
+            rotate, receive, move after the pass, then serve. Your mistakes show you where you
+            should have been.
+          </p>
+          <fieldset class="steps">
+            <legend>Steps to play in each rotation</legend>
+            <label><input type="checkbox" id="gs-start" checked> Rotation</label>
+            <label><input type="checkbox" id="gs-rec" checked> Reception</label>
+            <label><input type="checkbox" id="gs-ar" checked> After reception</label>
+            <label><input type="checkbox" id="gs-serve" checked> Serve</label>
+          </fieldset>
+          <p class="hint" id="gStepsMsg"></p>
+          <fieldset class="steps one">
+            <legend>Rotation order</legend>
+            <label
+              ><input type="radio" name="gOrder" value="order">
+              In order: R1 (S1) → R6 (S2)</label
+            >
+            <label
+              ><input type="radio" name="gOrder" value="mixed">
+              Mixed, like R1, R3, R5, R2, R4, R6</label
+            >
+          </fieldset>
+          <div class="visbox">
+            <div class="vis " role="radiogroup" aria-label="Who to show on court" data-vis="game">
+              <span class="vislabel">Show on court</span>
+              <button type="button" role="radio" data-v="none">Nobody</button
+              ><button type="button" role="radio" data-v="ref" class="refbtn">Setter</button
+              ><button type="button" role="radio" data-v="all">Everyone</button>
+            </div>
+            <small id="gVisSub"></small>
+          </div>
+          <label class="check"
+            ><input type="checkbox" id="nbGame">
+            Neighbour check after reception (optional, +30 points)</label
+          >
+          <p class="tip">
+            Tip: start in order with the setter shown. When you score 80% or more, switch to mixed
+            order and show nobody.
+          </p>
+          <div class="row"><button class="btn primary" id="gStart">Start match</button></div>
+          <p class="hint" id="gBest" style="margin-top:10px"></p>
+          <details class="scoring">
+            <summary>How scoring works</summary>
+            <ul>
+              <li>Spot on: 100 points. Close: 60 points. Wrong: 0.</li>
+              <li>Answer fast for up to +20 points.</li>
+              <li>Each perfect answer in a row adds +10 more, up to +50.</li>
+              <li>Help costs points: a hint keeps 60% of the base points, more help keeps 30%.</li>
+            </ul>
+          </details>
+        </div>
+
+        <div class="card pass" id="gPass" hidden>
+          <div class="sub" id="pMoment"></div>
+          <p class="hint" style="margin:14px 0 4px">Pass the device to</p>
+          <div class="passname" id="pName"></div>
+          <p class="hint" id="pRole" style="margin:4px 0 14px"></p>
+          <p style="margin:0 0 14px">Everyone else: look away until it's your turn.</p>
+          <button type="button" class="btn primary bigbtn" id="pReady">I'm ready</button>
+          <div class="board" id="pBoard"></div>
+          <div class="row">
+            <button type="button" class="btn quiet" id="pQuit">Quit match</button>
+          </div>
+        </div>
+
+        <div class="card" id="gReveal" hidden>
+          <div class="prompt">
+            <div>
+              <div class="big" id="rTitle"></div>
+              <div class="sub" id="rSub"></div>
+            </div>
+          </div>
+          <p class="hint" style="margin:0 0 6px">
+            Everyone's answers. Big chip = where you should be, dot = where you tapped.
+          </p>
+          <svg
+            class="court"
+            id="courtR"
+            viewBox="-26 -34 352 262"
+            aria-label="Everyone's answers"
+          ></svg>
+          <ul class="rlist" id="rList"></ul>
+          <div class="board" id="rBoard"></div>
+          <div class="row">
+            <button type="button" class="btn primary" id="rNext">Next moment</button
+            ><button type="button" class="btn quiet" id="rQuit">Quit</button>
+          </div>
+        </div>
+
+        <div class="card" id="gPlay" hidden>
+          <div class="prompt">
+            <div>
+              <div class="who" id="gWho" hidden></div>
+              <div class="big" id="gTitle"></div>
+              <div class="sub" id="gStepName"></div>
+            </div>
+            <div class="score">
+              <strong id="gScore">0</strong>streak <span id="gStreak">0</span>
+            </div>
+          </div>
+          <div class="progress" aria-hidden="true"><i id="gBar"></i></div>
+          <div class="steptrack" id="gTrack"></div>
+          <div
+            class="vis compact"
+            role="radiogroup"
+            aria-label="Who to show on court"
+            data-vis="game"
+          >
+            <span class="vislabel">Show on court</span>
+            <button type="button" role="radio" data-v="none">Nobody</button
+            ><button type="button" role="radio" data-v="ref" class="refbtn">Setter</button
+            ><button type="button" role="radio" data-v="all">Everyone</button>
+          </div>
+          <p class="story" id="gStory"></p>
+          <svg
+            class="court"
+            id="courtG"
+            viewBox="-26 -34 352 262"
+            aria-label="Tap where you stand"
+          ></svg>
+          <div id="gNbBox"></div>
+          <div class="row">
+            <button class="btn" id="gOff">I'm off court</button>
+            <button class="btn" id="gHelp">Help</button>
+            <button class="btn primary" id="gNext" hidden>Continue</button>
+            <button class="btn quiet" id="gQuit">Quit</button>
+          </div>
+          <div class="fb" id="gFb"></div>
+        </div>
+
+        <div class="card" id="gEnd" hidden>
+          <h2 id="gEndTitle">Match finished</h2>
+          <div class="stats" id="gStats"></div>
+          <div id="gMist"></div>
+          <div class="row">
+            <button class="btn primary" id="gReplay">Replay my mistakes</button>
+            <button class="btn" id="gAgain">Play again</button>
+            <button class="btn quiet" id="gSettings">Change settings</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="sets" hidden>
+        <div class="card">
+          <h2>Front row sets</h2>
+          <p class="hint">Seen from our side of the net. Tap a set to see its path.</p>
+          <svg
+            class="netsvg"
+            id="netS"
+            viewBox="30 10 940 480"
+            aria-label="Front row sets diagram"
+          ></svg>
+          <div class="setchips" id="setchips"></div>
+          <div class="cue" id="setcue"></div>
+        </div>
+        <div class="card">
+          <div class="prompt">
+            <div>
+              <div class="big">Name the set</div>
+              <div class="sub">One path is shown. Which call is it?</div>
+            </div>
+            <div class="score">
+              <strong id="sscore">0/0</strong>streak <span id="sstreak">0</span>
+            </div>
+          </div>
+          <svg
+            class="netsvg"
+            id="netQ"
+            viewBox="30 10 940 480"
+            aria-label="Which set is this?"
+          ></svg>
+          <div class="setchips" id="setanswers"></div>
+          <div class="fb" id="sfb"><p class="hint">Pick the name of the highlighted set.</p></div>
+          <div class="row"><button class="btn primary" id="snext" hidden>Next set</button></div>
+        </div>
+      </section>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Printable cheat sheets</h2>
+        <div class="dl">
+          <button class="btn" data-dl="schema">
+            Rotation schema (PDF) <small>all 6 rotations</small>
+          </button>
+          <button class="btn" data-dl="sets">Front row sets (PDF) <small>set calls</small></button>
+        </div>
+        <p class="hint" id="dlmsg" style="margin-top:8px"></p>
       </div>
-      <div class="fb" id="fb"></div>
-      <div class="weak" id="weak"></div>
-      <div class="row"><button class="btn" id="reviewBtn" hidden>Review weak spots</button><button class="btn quiet" id="resetBtn">Reset my progress</button></div>
     </div>
-  </section>
 
-  <section id="game" hidden>
-    <div class="card" id="gSetup">
-      <h2>Match mode</h2>
-      <fieldset class="steps one" style="margin-bottom:10px">
-        <legend>Who is playing?</legend>
-        <label><input type="radio" name="gPlayers" value="solo"> Just me</label>
-        <label><input type="radio" name="gPlayers" value="mp"> With friends, on this device</label>
-      </fieldset>
-      <div id="mpBox" hidden>
-        <div id="mpList"></div>
-        <div class="row" style="margin-top:6px"><button type="button" class="btn" id="mpAdd">+ Add player</button></div>
-        <p class="tip">Pass the device around. In every moment the turn order is random, and each player answers in secret. When everyone has answered, all answers are shown together.</p>
-      </div>
-      <p class="hint" style="margin:10px 0">Play all six rotations as <b id="gRole"></b>. Each rotation runs in real match order: rotate, receive, move after the pass, then serve. Your mistakes show you where you should have been.</p>
-      <fieldset class="steps">
-        <legend>Steps to play in each rotation</legend>
-        <label><input type="checkbox" id="gs-start" checked> Rotation</label>
-        <label><input type="checkbox" id="gs-rec" checked> Reception</label>
-        <label><input type="checkbox" id="gs-ar" checked> After reception</label>
-        <label><input type="checkbox" id="gs-serve" checked> Serve</label>
-      </fieldset>
-      <p class="hint" id="gStepsMsg"></p>
-      <fieldset class="steps one">
-        <legend>Rotation order</legend>
-        <label><input type="radio" name="gOrder" value="order"> In order: R1 (S1) → R6 (S2)</label>
-        <label><input type="radio" name="gOrder" value="mixed"> Mixed, like R1, R3, R5, R2, R4, R6</label>
-      </fieldset>
-      <div class="visbox">
-        <div class="vis " role="radiogroup" aria-label="Who to show on court" data-vis="game">
-        <span class="vislabel">Show on court</span>
-        <button type="button" role="radio" data-v="none">Nobody</button><button type="button" role="radio" data-v="ref" class="refbtn">Setter</button><button type="button" role="radio" data-v="all">Everyone</button>
-      </div>
-        <small id="gVisSub"></small>
-      </div>
-      <label class="check"><input type="checkbox" id="nbGame"> Neighbour check after reception (optional, +30 points)</label>
-      <p class="tip">Tip: start in order with the setter shown. When you score 80% or more, switch to mixed order and show nobody.</p>
-      <div class="row"><button class="btn primary" id="gStart">Start match</button></div>
-      <p class="hint" id="gBest" style="margin-top:10px"></p>
-      <details class="scoring">
-        <summary>How scoring works</summary>
-        <ul>
-          <li>Spot on: 100 points. Close: 60 points. Wrong: 0.</li>
-          <li>Answer fast for up to +20 points.</li>
-          <li>Each perfect answer in a row adds +10 more, up to +50.</li>
-          <li>Help costs points: a hint keeps 60% of the base points, more help keeps 30%.</li>
-        </ul>
-      </details>
-    </div>
+    <script>
+    (function () {
+      const DATA = __DATA__;
+      const ROWS = DATA.rows.map((r) => ({
+          ...r,
+          short: r.name,
+          name: `${r.name} (S${r.setter})`,
+        })),
+        AL = DATA.attackLine,
+        SETS = DATA.sets,
+        SETTER_X = DATA.setterX;
+      const PDF = {
+        schema: { name: "KSV_5-1_rotation_schema.pdf", b64: "__PDF_SCHEMA__" },
+        sets: { name: "KSV_front_row_sets.pdf", b64: "__PDF_SETS__" },
+      };
 
-    <div class="card pass" id="gPass" hidden>
-      <div class="sub" id="pMoment"></div>
-      <p class="hint" style="margin:14px 0 4px">Pass the device to</p>
-      <div class="passname" id="pName"></div>
-      <p class="hint" id="pRole" style="margin:4px 0 14px"></p>
-      <p style="margin:0 0 14px">Everyone else: look away until it's your turn.</p>
-      <button type="button" class="btn primary bigbtn" id="pReady">I'm ready</button>
-      <div class="board" id="pBoard"></div>
-      <div class="row"><button type="button" class="btn quiet" id="pQuit">Quit match</button></div>
-    </div>
+      const COLORS = {
+        S: "var(--s)",
+        OP: "var(--op)",
+        MB1: "var(--mb)",
+        MB2: "var(--mb)",
+        OH1: "var(--oh)",
+        OH2: "var(--oh)",
+        L: "var(--l)",
+      };
+      const NAMES = {
+        S: "Setter",
+        OP: "Opposite",
+        MB1: "Middle 1",
+        MB2: "Middle 2",
+        OH1: "Outside 1",
+        OH2: "Outside 2",
+        L: "Libero",
+      };
+      const ROLES = ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"];
+      const PHASES = [
+        ["start", "Rotation"],
+        ["rec", "Reception"],
+        ["ar", "After rec."],
+        ["serve", "Serve"],
+      ];
+      const FULL = { start: "Rotation", rec: "Reception", ar: "After reception", serve: "Serve" };
+      const ZONES = { 4: [0, 0], 3: [1, 0], 2: [2, 0], 5: [0, 1], 6: [1, 1], 1: [2, 1] };
+      const ORDER = [4, 3, 2, 5, 6, 1];
+      const XS = [0.17, 0.5, 0.83],
+        FY = 0.21,
+        BY = 0.71;
+      const $ = (id) => document.getElementById(id);
 
-    <div class="card" id="gReveal" hidden>
-      <div class="prompt"><div><div class="big" id="rTitle"></div><div class="sub" id="rSub"></div></div></div>
-      <p class="hint" style="margin:0 0 6px">Everyone's answers. Big chip = where you should be, dot = where you tapped.</p>
-      <svg class="court" id="courtR" viewBox="-26 -34 352 262" aria-label="Everyone's answers"></svg>
-      <ul class="rlist" id="rList"></ul>
-      <div class="board" id="rBoard"></div>
-      <div class="row"><button type="button" class="btn primary" id="rNext">Next moment</button><button type="button" class="btn quiet" id="rQuit">Quit</button></div>
-    </div>
+      function players(ri, phase) {
+        const r = ROWS[ri];
+        const grid = (f, b) => [
+          ...f.map((p, i) => ({ p, x: XS[i], y: FY })),
+          ...b.map((p, i) => ({ p, x: XS[i], y: BY })),
+        ];
+        if (phase === "start") return grid(r.front, r.back);
+        if (phase === "rec") return r.rec.map(([p, x, y]) => ({ p, x, y }));
+        if (phase === "serve") {
+          const sv = serveLineup(ri);
+          return grid(sv[0], sv[1]);
+        }
+        return r.ar.map(([p, x, y, k]) => ({ p, x, y, kind: k }));
+      }
+      let rulesMode = (() => {
+        try {
+          return JSON.parse(localStorage.getItem("ksv51:rulesMode")) || "official";
+        } catch (e) {
+          return "official";
+        }
+      })();
+      const MID_SERVER = { 2: "MB1", 5: "MB2" }; // rotations where a middle is in zone 1 when we serve
+      function serveLineup(ri) {
+        const r = ROWS[ri];
+        if (rulesMode === "drill" && MID_SERVER[ri]) {
+          const m = MID_SERVER[ri];
+          return [r.serve[0], ["L", ...r.serve[1].filter((p) => p !== m)]];
+        }
+        return r.serve;
+      }
+      function zoneOf(ri, role) {
+        const r = ROWS[ri];
+        const i = [...r.front, ...r.back].indexOf(role);
+        return i < 0 ? null : ORDER[i];
+      }
+      function isFront(ri, role) {
+        return ROWS[ri].front.includes(role);
+      }
+      function cap(s) {
+        return s[0].toUpperCase() + s.slice(1);
+      }
 
-    <div class="card" id="gPlay" hidden>
-      <div class="prompt">
-        <div><div class="who" id="gWho" hidden></div><div class="big" id="gTitle"></div><div class="sub" id="gStepName"></div></div>
-        <div class="score"><strong id="gScore">0</strong>streak <span id="gStreak">0</span></div>
-      </div>
-      <div class="progress" aria-hidden="true"><i id="gBar"></i></div>
-      <div class="steptrack" id="gTrack"></div>
-      <div class="vis compact" role="radiogroup" aria-label="Who to show on court" data-vis="game">
-        <span class="vislabel">Show on court</span>
-        <button type="button" role="radio" data-v="none">Nobody</button><button type="button" role="radio" data-v="ref" class="refbtn">Setter</button><button type="button" role="radio" data-v="all">Everyone</button>
-      </div>
-      <p class="story" id="gStory"></p>
-      <svg class="court" id="courtG" viewBox="-26 -34 352 262" aria-label="Tap where you stand"></svg>
-      <div id="gNbBox"></div>
-      <div class="row">
-        <button class="btn" id="gOff">I'm off court</button>
-        <button class="btn" id="gHelp">Help</button>
-        <button class="btn primary" id="gNext" hidden>Continue</button>
-        <button class="btn quiet" id="gQuit">Quit</button>
-      </div>
-      <div class="fb" id="gFb"></div>
-    </div>
+      function describe(ri, phase, role) {
+        const r = ROWS[ri];
+        const pl = players(ri, phase);
+        const me = pl.find((o) => o.p === role);
+        const z = zoneOf(ri, role);
+        if (!me) {
+          if (role === "L") {
+            const m = MID_SERVER[ri];
+            return {
+              t: "Off court",
+              d: `${m} is in zone 1, so ${m} has to serve. Under the official rules (FIVB, used in Denmark) the libero may never serve, so you are off while ${m} is serving. If we win the rally, ${m} serves again and you stay off. When we lose the serve, you come back in for ${m} after that rally.`,
+            };
+          }
+          if (phase === "serve" && rulesMode === "drill" && MID_SERVER[ri] === role)
+            return {
+              t: "Off court",
+              d: "Drill rules: the libero stays on and serves from zone 1 for you. Under the official rules you would serve here yourself.",
+            };
+          if (phase === "serve")
+            return { t: "Off court", d: "The libero is in for you while your team serves." };
+          return {
+            t: "Off court (libero in)",
+            d: `You are back row in ${r.name}. The libero takes your zone ${zoneOf(ri, "L")}. You come back on when you rotate to the front.`,
+          };
+        }
+        let near = null,
+          dmin = 9;
+        pl.forEach((o) => {
+          if (o === me) return;
+          const d = Math.hypot(o.x - me.x, (o.y - me.y) * 0.67);
+          if (d < dmin) {
+            dmin = d;
+            near = o.p;
+          }
+        });
+        const side =
+          me.x <= 0.09
+            ? "at the left sideline"
+            : me.x >= 0.91
+              ? "at the right sideline"
+              : me.x < 0.34
+                ? "left"
+                : me.x < 0.67
+                  ? "middle"
+                  : "right";
+        const depth =
+          me.y < 0.2
+            ? "close to the net"
+            : me.y < AL - 0.03
+              ? "front court"
+              : me.y < AL + 0.08
+                ? "on the 3 m line"
+                : me.y < 0.84
+                  ? "on the receiving line"
+                  : "deep, near the end line";
+        if (phase === "start")
+          return {
+            t: `Zone ${z}, ${isFront(ri, role) ? "front row" : "back row"}`,
+            d: relation(ri, role),
+          };
+        if (phase === "rec") {
+          const nb = dmin < 0.26 ? ` next to ${near}` : "";
+          const recv = ["OH1", "OH2", "L"].includes(role);
+          const d = recv
+            ? `You receive${nb}.`
+            : role === "S"
+              ? `Stay out of the passing lanes${nb}, ready to run to your setting spot.`
+              : `Stay out of the receivers' way${nb}. Keep your zone ${z} order for overlap.`;
+          return { t: `${cap(side)}, ${depth}`, d };
+        }
+        if (phase === "ar") {
+          const rp = ROWS[ri].rec.find((x) => x[0] === role);
+          const moved = rp && Math.hypot(rp[1] - me.x, rp[2] - me.y) > 0.07;
+          if (me.kind === "set")
+            return {
+              t: "Setting spot",
+              d: moved
+                ? "Move to the net, right of the middle, and set."
+                : "You are already at the net. Set from here.",
+            };
+          if (me.kind === "back")
+            return {
+              t: "Zone 1, back-row attack",
+              d: "Go straight to zone 1. Take off behind the 3 m line.",
+            };
+          if (me.kind === "front") {
+            const lane = me.x < 0.34 ? "left (zone 4)" : me.x < 0.67 ? "middle" : "right (zone 2)";
+            return { t: `Attack ${lane}`, d: "Get to the 3 m line, then approach." };
+          }
+          return {
+            t: `Cover ${me.x < 0.34 ? "left back (zone 5)" : "middle back (zone 6)"}`,
+            d: "Cover the attack, then defend from here.",
+          };
+        }
+        const zz = { 0: { 0: 4, 1: 3, 2: 2 }, 1: { 0: 5, 1: 6, 2: 1 } }[me.y < AL ? 0 : 1][
+          XS.indexOf(me.x)
+        ];
+        let d =
+          zoneOf(ri, role) === 1
+            ? zz === 1
+              ? "You serve, then defend in zone 1."
+              : `You serve from zone 1, then run to zone ${zz}.`
+            : "Switch to your spot right after the serve.";
+        if (rulesMode === "official" && MID_SERVER[ri] === role)
+          d =
+            "You are in zone 1, so you serve. The libero may not serve under the official rules, so you stay on court and defend zone 6. If we win the rally, you serve again. When we lose the serve, the libero comes back in for you.";
+        if (rulesMode === "drill" && role === "L" && MID_SERVER[ri])
+          d = `Drill rules: you stay on and serve for ${MID_SERVER[ri]} from zone 1, then run to zone 5. Under the official rules the libero may not serve.`;
+        return { t: `Switch to zone ${zz}`, d };
+      }
 
-    <div class="card" id="gEnd" hidden>
-      <h2 id="gEndTitle">Match finished</h2>
-      <div class="stats" id="gStats"></div>
-      <div id="gMist"></div>
-      <div class="row">
-        <button class="btn primary" id="gReplay">Replay my mistakes</button>
-        <button class="btn" id="gAgain">Play again</button>
-        <button class="btn quiet" id="gSettings">Change settings</button>
-      </div>
-    </div>
-  </section>
+      // ---------- court drawing ----------
+      const W = 300,
+        H = 200;
+      const DEFS = `<defs>${["bad", "muted", "move", "good"].map((c) => `<marker id="m-${c}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="var(--${c})"/></marker>`).join("")}</defs>`;
+      function courtBase() {
+        let s = `<rect x="0" y="0" width="${W}" height="${H}" rx="3" fill="var(--floor)" stroke="var(--floor-line)" stroke-width="2"/>`;
+        s += `<line x1="0" y1="${H * AL}" x2="${W}" y2="${H * AL}" stroke="var(--floor-line)" stroke-width="1.5" stroke-dasharray="6 5"/>`;
+        s += `<line x1="-14" y1="0" x2="${W + 14}" y2="0" stroke="var(--net)" stroke-width="6" stroke-linecap="round"/>`;
+        s += `<text x="${W / 2}" y="-12" text-anchor="middle" font-size="12" font-weight="600" fill="var(--muted)" font-family="Barlow,sans-serif">net</text>`;
+        for (const z in ZONES) {
+          const [c, r] = ZONES[z];
+          s += `<text x="${((c + 1) * W) / 3 - 7}" y="${r ? H - 7 : H * AL - 6}" text-anchor="end" font-size="20" font-weight="800" fill="var(--ink)" opacity=".13" font-family="Barlow Condensed,sans-serif">${z}</text>`;
+        }
+        return s;
+      }
+      function chip(o, { me = false, dim = false } = {}) {
+        const X = o.x * W,
+          Y = o.y * H,
+          w = o.p.length > 1 ? 42 : 30,
+          h = 24,
+          fg = o.p === "S" ? "#16283D" : "#fff";
+        let s = `<g opacity="${dim ? 0.4 : 1}">`;
+        if (me)
+          s += `<circle cx="${X}" cy="${Y}" r="26" fill="none" stroke="var(--orange)" stroke-width="4"/><circle class="pulse" cx="${X}" cy="${Y}" r="14" fill="none" stroke="var(--orange)" stroke-width="3" opacity="0"/>`;
+        if (o.kind === "set" && !me)
+          s += `<circle cx="${X}" cy="${Y}" r="20" fill="none" stroke="var(--good)" stroke-width="2.5"/>`;
+        s += `<rect x="${X - w / 2}" y="${Y - h / 2}" width="${w}" height="${h}" rx="6" fill="${COLORS[o.p]}" stroke="#fff" stroke-width="1.5"/>`;
+        return (
+          s +
+          `<text x="${X}" y="${Y + 4.5}" text-anchor="middle" font-size="13" font-weight="700" fill="${fg}" font-family="Barlow,sans-serif">${o.p}</text></g>`
+        );
+      }
+      function line(x1, y1, x2, y2, c, { dash = "", w = 2, op = 1 } = {}) {
+        return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--${c})" stroke-width="${w}" ${dash ? `stroke-dasharray="${dash}"` : ""} opacity="${op}" marker-end="url(#m-${c})"/>`;
+      }
+      function shorten(x1, y1, x2, y2, a = 15, b = 17) {
+        const L = Math.hypot(x2 - x1, y2 - y1) || 1,
+          ux = (x2 - x1) / L,
+          uy = (y2 - y1) / L;
+        return [x1 + ux * a, y1 + uy * a, x2 - ux * b, y2 - uy * b];
+      }
+      function arLayer(ri, pl, role) {
+        let s = "";
+        const rec = Object.fromEntries(ROWS[ri].rec.map(([p, x, y]) => [p, [x, y]]));
+        pl.forEach((o) => {
+          const r = rec[o.p];
+          if (!r) return;
+          if (Math.hypot(r[0] - o.x, r[1] - o.y) < 0.07) return;
+          const mine = o.p === role;
+          const [a, b, c, d] = shorten(r[0] * W, r[1] * H, o.x * W, o.y * H);
+          s += `<circle cx="${r[0] * W}" cy="${r[1] * H}" r="3.5" fill="var(--${o.kind === "set" ? "good" : "move"})" opacity="${mine ? 0.8 : 0.35}"/>`;
+          s += line(a, b, c, d, o.kind === "set" ? "good" : "move", {
+            w: mine ? 2.6 : 1.6,
+            op: mine ? 0.95 : 0.4,
+          });
+        });
+        pl.forEach((o) => {
+          if (o.kind !== "front" && o.kind !== "back") return;
+          const mine = o.p === role;
+          s += line(o.x * W, o.y * H - 15, o.x * W, o.kind === "back" ? H * AL + 5 : 8, "bad", {
+            dash: "5 4",
+            w: 2.4,
+            op: mine ? 0.95 : 0.35,
+          });
+        });
+        return s;
+      }
+      function rotArrows() {
+        return [
+          [0.27, FY, 0.39, FY],
+          [0.61, FY, 0.73, FY],
+          [0.83, 0.31, 0.83, 0.6],
+          [0.73, BY, 0.61, BY],
+          [0.39, BY, 0.27, BY],
+          [0.17, 0.6, 0.17, 0.31],
+        ]
+          .map(([a, b, c, d]) => line(a * W, b * H, c * W, d * H, "muted", { op: 0.45 }))
+          .join("");
+      }
 
-  <section id="sets" hidden>
-    <div class="card">
-      <h2>Front row sets</h2>
-      <p class="hint">Seen from our side of the net. Tap a set to see its path.</p>
-      <svg class="netsvg" id="netS" viewBox="30 10 940 480" aria-label="Front row sets diagram"></svg>
-      <div class="setchips" id="setchips"></div>
-      <div class="cue" id="setcue"></div>
-    </div>
-    <div class="card">
-      <div class="prompt">
-        <div><div class="big">Name the set</div><div class="sub">One path is shown. Which call is it?</div></div>
-        <div class="score"><strong id="sscore">0/0</strong>streak <span id="sstreak">0</span></div>
-      </div>
-      <svg class="netsvg" id="netQ" viewBox="30 10 940 480" aria-label="Which set is this?"></svg>
-      <div class="setchips" id="setanswers"></div>
-      <div class="fb" id="sfb"><p class="hint">Pick the name of the highlighted set.</p></div>
-      <div class="row"><button class="btn primary" id="snext" hidden>Next set</button></div>
-    </div>
-  </section>
+      // ---------- state ----------
+      const store = {
+        get(k, d) {
+          try {
+            const v = localStorage.getItem("ksv51:" + k);
+            return v ? JSON.parse(v) : d;
+          } catch (e) {
+            return d;
+          }
+        },
+        set(k, v) {
+          try {
+            localStorage.setItem("ksv51:" + k, JSON.stringify(v));
+          } catch (e) {}
+        },
+      };
+      let role = store.get("role", "MB1");
+      if (!ROLES.includes(role)) role = "MB1";
+      let ri = 0,
+        phase = "rec",
+        stats = store.get("stats2", {});
 
-  <div class="card" style="margin-top:16px">
-    <h2>Printable cheat sheets</h2>
-    <div class="dl">
-      <button class="btn" data-dl="schema">Rotation schema (PDF) <small>all 6 rotations</small></button>
-      <button class="btn" data-dl="sets">Front row sets (PDF) <small>set calls</small></button>
-    </div>
-    <p class="hint" id="dlmsg" style="margin-top:8px"></p>
-  </div>
-</div>
+      function renderRoles() {
+        $("roles").innerHTML = ROLES.map(
+          (r) =>
+            `<button class="role" aria-pressed="${r === role}" data-r="${r}"><i style="background:${COLORS[r]}"></i>${NAMES[r]}</button>`,
+        ).join("");
+        $("roles")
+          .querySelectorAll(".role")
+          .forEach(
+            (b) =>
+              (b.onclick = () => {
+                role = b.dataset.r;
+                store.set("role", role);
+                renderRoles();
+                renderRefLabels();
+                review = null;
+                renderLearn();
+                if (!$("drill").hidden) newQuestion();
+                else cur = null;
+                if (typeof gRenderSetup === "function") {
+                  if (G && !G.mp) {
+                    G = null;
+                    gView("gSetup");
+                  }
+                  if (!G) gRenderSetup();
+                }
+              }),
+          );
+      }
+      function setTab(t) {
+        ["Learn", "Drill", "Game", "Sets"].forEach((n) => {
+          const k = n.toLowerCase();
+          $("tab" + n).setAttribute("aria-selected", t === k);
+          $(k).hidden = t !== k;
+        });
+        $("roles").style.display = t === "sets" ? "none" : "";
+        $("roles").previousElementSibling.style.display = t === "sets" ? "none" : "";
+        if (t === "drill" && !cur) newQuestion();
+        if (t === "sets" && !sq) newSetQ();
+      }
+      $("tabLearn").onclick = () => setTab("learn");
+      $("tabDrill").onclick = () => setTab("drill");
+      $("tabSets").onclick = () => setTab("sets");
+      $("tabGame").onclick = () => setTab("game");
 
-<script>
-(function(){
-const DATA=__DATA__;
-const ROWS=DATA.rows.map(r=>({...r,short:r.name,name:`${r.name} (S${r.setter})`})), AL=DATA.attackLine, SETS=DATA.sets, SETTER_X=DATA.setterX;
-const PDF={schema:{name:'KSV_5-1_rotation_schema.pdf',b64:'__PDF_SCHEMA__'},sets:{name:'KSV_front_row_sets.pdf',b64:'__PDF_SETS__'}};
-
-const COLORS={S:'var(--s)',OP:'var(--op)',MB1:'var(--mb)',MB2:'var(--mb)',OH1:'var(--oh)',OH2:'var(--oh)',L:'var(--l)'};
-const NAMES={S:'Setter',OP:'Opposite',MB1:'Middle 1',MB2:'Middle 2',OH1:'Outside 1',OH2:'Outside 2',L:'Libero'};
-const ROLES=['MB1','MB2','OH1','OH2','OP','S','L'];
-const PHASES=[['start','Rotation'],['rec','Reception'],['ar','After rec.'],['serve','Serve']];
-const FULL={start:'Rotation',rec:'Reception',ar:'After reception',serve:'Serve'};
-const ZONES={4:[0,0],3:[1,0],2:[2,0],5:[0,1],6:[1,1],1:[2,1]};
-const ORDER=[4,3,2,5,6,1];
-const XS=[.17,.5,.83], FY=.21, BY=.71;
-const $=id=>document.getElementById(id);
-
-function players(ri,phase){
-  const r=ROWS[ri];
-  const grid=(f,b)=>[...f.map((p,i)=>({p,x:XS[i],y:FY})),...b.map((p,i)=>({p,x:XS[i],y:BY}))];
-  if(phase==='start') return grid(r.front,r.back);
-  if(phase==='rec') return r.rec.map(([p,x,y])=>({p,x,y}));
-  if(phase==='serve'){const sv=serveLineup(ri);return grid(sv[0],sv[1]);}
-  return r.ar.map(([p,x,y,k])=>({p,x,y,kind:k}));
-}
-let rulesMode=(()=>{try{return JSON.parse(localStorage.getItem('ksv51:rulesMode'))||'official'}catch(e){return 'official'}})();
-const MID_SERVER={2:'MB1',5:'MB2'}; // rotations where a middle is in zone 1 when we serve
-function serveLineup(ri){
-  const r=ROWS[ri];
-  if(rulesMode==='drill'&&MID_SERVER[ri]){const m=MID_SERVER[ri];return [r.serve[0],['L',...r.serve[1].filter(p=>p!==m)]];}
-  return r.serve;
-}
-function zoneOf(ri,role){const r=ROWS[ri];const i=[...r.front,...r.back].indexOf(role);return i<0?null:ORDER[i];}
-function isFront(ri,role){return ROWS[ri].front.includes(role);}
-function cap(s){return s[0].toUpperCase()+s.slice(1)}
-
-function describe(ri,phase,role){
-  const r=ROWS[ri]; const pl=players(ri,phase); const me=pl.find(o=>o.p===role); const z=zoneOf(ri,role);
-  if(!me){
-    if(role==='L'){const m=MID_SERVER[ri];return {t:'Off court',d:`${m} is in zone 1, so ${m} has to serve. Under the official rules (FIVB, used in Denmark) the libero may never serve, so you are off while ${m} is serving. If we win the rally, ${m} serves again and you stay off. When we lose the serve, you come back in for ${m} after that rally.`};}
-    if(phase==='serve'&&rulesMode==='drill'&&MID_SERVER[ri]===role) return {t:'Off court',d:'Drill rules: the libero stays on and serves from zone 1 for you. Under the official rules you would serve here yourself.'};
-    if(phase==='serve') return {t:'Off court',d:'The libero is in for you while your team serves.'};
-    return {t:'Off court (libero in)',d:`You are back row in ${r.name}. The libero takes your zone ${zoneOf(ri,'L')}. You come back on when you rotate to the front.`};
-  }
-  let near=null,dmin=9; pl.forEach(o=>{if(o===me)return;const d=Math.hypot(o.x-me.x,(o.y-me.y)*.67);if(d<dmin){dmin=d;near=o.p}});
-  const side=me.x<=.09?'at the left sideline':me.x>=.91?'at the right sideline':me.x<.34?'left':me.x<.67?'middle':'right';
-  const depth=me.y<.2?'close to the net':me.y<AL-.03?'front court':me.y<AL+.08?'on the 3 m line':me.y<.84?'on the receiving line':'deep, near the end line';
-  if(phase==='start') return {t:`Zone ${z}, ${isFront(ri,role)?'front row':'back row'}`,d:relation(ri,role)};
-  if(phase==='rec'){
-    const nb=dmin<.26?` next to ${near}`:'';
-    const recv=['OH1','OH2','L'].includes(role);
-    const d=recv?`You receive${nb}.`:role==='S'?`Stay out of the passing lanes${nb}, ready to run to your setting spot.`:`Stay out of the receivers' way${nb}. Keep your zone ${z} order for overlap.`;
-    return {t:`${cap(side)}, ${depth}`,d};
-  }
-  if(phase==='ar'){
-    const rp=ROWS[ri].rec.find(x=>x[0]===role);
-    const moved=rp&&Math.hypot(rp[1]-me.x,rp[2]-me.y)>.07;
-    if(me.kind==='set') return {t:'Setting spot',d:moved?'Move to the net, right of the middle, and set.':'You are already at the net. Set from here.'};
-    if(me.kind==='back') return {t:'Zone 1, back-row attack',d:'Go straight to zone 1. Take off behind the 3 m line.'};
-    if(me.kind==='front'){const lane=me.x<.34?'left (zone 4)':me.x<.67?'middle':'right (zone 2)';return {t:`Attack ${lane}`,d:'Get to the 3 m line, then approach.'}}
-    return {t:`Cover ${me.x<.34?'left back (zone 5)':'middle back (zone 6)'}`,d:'Cover the attack, then defend from here.'};
-  }
-  const zz=({0:{0:4,1:3,2:2},1:{0:5,1:6,2:1}})[me.y<AL?0:1][XS.indexOf(me.x)];
-  let d=zoneOf(ri,role)===1?(zz===1?'You serve, then defend in zone 1.':`You serve from zone 1, then run to zone ${zz}.`):'Switch to your spot right after the serve.';
-  if(rulesMode==='official'&&MID_SERVER[ri]===role) d='You are in zone 1, so you serve. The libero may not serve under the official rules, so you stay on court and defend zone 6. If we win the rally, you serve again. When we lose the serve, the libero comes back in for you.';
-  if(rulesMode==='drill'&&role==='L'&&MID_SERVER[ri]) d=`Drill rules: you stay on and serve for ${MID_SERVER[ri]} from zone 1, then run to zone 5. Under the official rules the libero may not serve.`;
-  return {t:`Switch to zone ${zz}`,d};
-}
-
-// ---------- court drawing ----------
-const W=300,H=200;
-const DEFS=`<defs>${['bad','muted','move','good'].map(c=>`<marker id="m-${c}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="var(--${c})"/></marker>`).join('')}</defs>`;
-function courtBase(){
-  let s=`<rect x="0" y="0" width="${W}" height="${H}" rx="3" fill="var(--floor)" stroke="var(--floor-line)" stroke-width="2"/>`;
-  s+=`<line x1="0" y1="${H*AL}" x2="${W}" y2="${H*AL}" stroke="var(--floor-line)" stroke-width="1.5" stroke-dasharray="6 5"/>`;
-  s+=`<line x1="-14" y1="0" x2="${W+14}" y2="0" stroke="var(--net)" stroke-width="6" stroke-linecap="round"/>`;
-  s+=`<text x="${W/2}" y="-12" text-anchor="middle" font-size="12" font-weight="600" fill="var(--muted)" font-family="Barlow,sans-serif">net</text>`;
-  for(const z in ZONES){const [c,r]=ZONES[z];s+=`<text x="${(c+1)*W/3-7}" y="${r?H-7:H*AL-6}" text-anchor="end" font-size="20" font-weight="800" fill="var(--ink)" opacity=".13" font-family="Barlow Condensed,sans-serif">${z}</text>`}
-  return s;
-}
-function chip(o,{me=false,dim=false}={}){
-  const X=o.x*W,Y=o.y*H,w=o.p.length>1?42:30,h=24, fg=o.p==='S'?'#16283D':'#fff';
-  let s=`<g opacity="${dim?.4:1}">`;
-  if(me) s+=`<circle cx="${X}" cy="${Y}" r="26" fill="none" stroke="var(--orange)" stroke-width="4"/><circle class="pulse" cx="${X}" cy="${Y}" r="14" fill="none" stroke="var(--orange)" stroke-width="3" opacity="0"/>`;
-  if(o.kind==='set'&&!me) s+=`<circle cx="${X}" cy="${Y}" r="20" fill="none" stroke="var(--good)" stroke-width="2.5"/>`;
-  s+=`<rect x="${X-w/2}" y="${Y-h/2}" width="${w}" height="${h}" rx="6" fill="${COLORS[o.p]}" stroke="#fff" stroke-width="1.5"/>`;
-  return s+`<text x="${X}" y="${Y+4.5}" text-anchor="middle" font-size="13" font-weight="700" fill="${fg}" font-family="Barlow,sans-serif">${o.p}</text></g>`;
-}
-function line(x1,y1,x2,y2,c,{dash='',w=2,op=1}={}){return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--${c})" stroke-width="${w}" ${dash?`stroke-dasharray="${dash}"`:''} opacity="${op}" marker-end="url(#m-${c})"/>`}
-function shorten(x1,y1,x2,y2,a=15,b=17){const L=Math.hypot(x2-x1,y2-y1)||1,ux=(x2-x1)/L,uy=(y2-y1)/L;return [x1+ux*a,y1+uy*a,x2-ux*b,y2-uy*b]}
-function arLayer(ri,pl,role){
-  let s='';
-  const rec=Object.fromEntries(ROWS[ri].rec.map(([p,x,y])=>[p,[x,y]]));
-  pl.forEach(o=>{const r=rec[o.p]; if(!r) return; if(Math.hypot(r[0]-o.x,r[1]-o.y)<.07) return;
-    const mine=o.p===role; const [a,b,c,d]=shorten(r[0]*W,r[1]*H,o.x*W,o.y*H);
-    s+=`<circle cx="${r[0]*W}" cy="${r[1]*H}" r="3.5" fill="var(--${o.kind==='set'?'good':'move'})" opacity="${mine?.8:.35}"/>`;
-    s+=line(a,b,c,d,o.kind==='set'?'good':'move',{w:mine?2.6:1.6,op:mine?.95:.4});});
-  pl.forEach(o=>{ if(o.kind!=='front'&&o.kind!=='back') return; const mine=o.p===role;
-    s+=line(o.x*W,o.y*H-15,o.x*W,o.kind==='back'?H*AL+5:8,'bad',{dash:'5 4',w:2.4,op:mine?.95:.35});});
-  return s;
-}
-function rotArrows(){
-  return [[.27,FY,.39,FY],[.61,FY,.73,FY],[.83,.31,.83,.6],[.73,BY,.61,BY],[.39,BY,.27,BY],[.17,.6,.17,.31]]
-    .map(([a,b,c,d])=>line(a*W,b*H,c*W,d*H,'muted',{op:.45})).join('');
-}
-
-// ---------- state ----------
-const store={get(k,d){try{const v=localStorage.getItem('ksv51:'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('ksv51:'+k,JSON.stringify(v))}catch(e){}}};
-let role=store.get('role','MB1'); if(!ROLES.includes(role)) role='MB1';
-let ri=0, phase='rec', stats=store.get('stats2',{});
-
-function renderRoles(){
-  $('roles').innerHTML=ROLES.map(r=>`<button class="role" aria-pressed="${r===role}" data-r="${r}"><i style="background:${COLORS[r]}"></i>${NAMES[r]}</button>`).join('');
-  $('roles').querySelectorAll('.role').forEach(b=>b.onclick=()=>{role=b.dataset.r;store.set('role',role);renderRoles();renderRefLabels();review=null;renderLearn();if(!$('drill').hidden)newQuestion();else cur=null;if(typeof gRenderSetup==='function'){if(G&&!G.mp){G=null;gView('gSetup');}if(!G)gRenderSetup();}});
-}
-function setTab(t){
-  ['Learn','Drill','Game','Sets'].forEach(n=>{const k=n.toLowerCase();$('tab'+n).setAttribute('aria-selected',t===k);$(k).hidden=t!==k;});
-  $('roles').style.display=t==='sets'?'none':'';$('roles').previousElementSibling.style.display=t==='sets'?'none':'';
-  if(t==='drill'&&!cur) newQuestion();
-  if(t==='sets'&&!sq) newSetQ();
-}
-$('tabLearn').onclick=()=>setTab('learn');$('tabDrill').onclick=()=>setTab('drill');$('tabSets').onclick=()=>setTab('sets');$('tabGame').onclick=()=>setTab('game');
-
-// ---------- Learn ----------
-function renderLearn(){
-  $('rots').innerHTML=ROWS.map((r,i)=>`<button class="rot" aria-pressed="${i===ri}" data-i="${i}">${r.short}<small>S${r.setter}</small></button>`).join('');
-  $('rots').querySelectorAll('.rot').forEach(b=>b.onclick=()=>{ri=+b.dataset.i;renderLearn()});
-  $('phases').innerHTML=PHASES.map(([k,l])=>`<button class="ph" aria-pressed="${k===phase}" data-k="${k}">${l}</button>`).join('');
-  $('phases').querySelectorAll('.ph').forEach(b=>b.onclick=()=>{phase=b.dataset.k;renderLearn()});
-  const pl=players(ri,phase);
-  let s=DEFS+courtBase();
-  if(phase==='start') s+=rotArrows();
-  if(phase==='ar') s+=arLayer(ri,pl,role);
-  pl.filter(o=>o.p!==role).forEach(o=>s+=chip(o,{dim:true}));
-  const me=pl.find(o=>o.p===role);
-  if(me) s+=chip(me,{me:true});
-  else s+=`<text x="${W/2}" y="${H+22}" text-anchor="middle" font-size="14" font-weight="700" fill="var(--bad)" font-family="Barlow,sans-serif">${NAMES[role]} is off court here</text>`;
-  $('courtL').innerHTML=s;
-  const d=describe(ri,phase,role);
-  const guide=(phase==='rec'||phase==='ar')?`<p class="guide">Guide: ${ROWS[ri].note}</p>`:phase==='serve'?`<p class="guide">Not in the guide: this is our base defence after switching.</p>`:'';
-  $('cue').innerHTML=`<b>${ROWS[ri].name} · ${FULL[phase]}: ${d.t}</b><p>${d.d}</p>${guide}`;
-  renderSheet();
-}
-document.addEventListener('keydown',e=>{
-  if($('learn').hidden||e.target.tagName==='INPUT') return;
-  if(e.key==='ArrowRight'){ri=(ri+1)%6;renderLearn()} if(e.key==='ArrowLeft'){ri=(ri+5)%6;renderLearn()}
-});
-const RULES={
- S:['R1, R2, R3: you are back row. Stay out of the passing lanes, then run to the net.',
-    'R4, R5, R6: you are front row and start at the net. In R4 you run along the net from zone 4.',
-    'After reception: your setting spot is at the net, right of the middle.',
-    'Serving: back row → zone 1, front row → zone 2.'],
- OP:['Front row in R1, R2, R3 (setter back row). R1: at the left sideline, attack left. R2: at the net in the middle. R3: at the right sideline.',
-     'Back row in R4, R5, R6: stand deep behind the receivers, then go straight to zone 1 for the back-row attack.',
-     'Except R1, you attack from the right.',
-     'Serving: front row → zone 2, back row → zone 1.'],
- MB1:['Front row in R1, R2, R6: start at the net (R6 far left, R2 right of the setter), get to the 3 m line and attack in the middle.',
-      'R3, R4, R5: you are off, the libero is in for you.',
-      '@MB1SERVE',
-      'Serving while front row: always zone 3, you block the middle.'],
- MB2:['Front row in R3, R4, R5: start at the net (R3 and R4 on the left, R5 on the right), get to the 3 m line and attack in the middle.',
-      'R6, R1, R2: you are off, the libero is in for you.',
-      '@MB2SERVE',
-      'Serving while front row: always zone 3, you block the middle.'],
- OH1:['You receive in every rotation, with the libero and the other outside.',
-      'Front row in R1, R5, R6: attack left (zone 4). R1 is the exception: the setter is in 1, you receive on the right and attack right.',
-      'Back row in R2, R3, R4: after reception cover middle back (zone 6); the libero covers left back.',
-      '@OHSERVE'],
-  L:['You replace the back-row middle: MB2 in R1, R2 and R6, MB1 in R3, R4 and R5. You are never in the front row.',
-     'You receive in every rotation: in the middle of the line in R1, R2 and R5, on the right in R3, R4 and R6.',
-     'After reception: cover the hitter, then move to left back (zone 5).',
-     '@LSERVE'],
- OH2:['You receive in every rotation, with the libero and the other outside.',
-      'Front row in R2, R3, R4: attack left (zone 4).',
-      'Back row in R1, R5, R6: after reception cover middle back (zone 6); the libero covers left back.',
-      '@OHSERVE'],
-};
-const THUMB=[
- {t:'Three players receive',roles:['OH1','OH2','MB1','MB2','OP','S','L'],d:'The two outside hitters and the libero pass the serve. Everyone else stays out of the passing lanes so the setter can set, the middle can run the quick and the opposite can attack.'},
- {t:'The front-row outside hitter starts left',roles:['OH1','OH2','OP'],d:'They attack from zone 4, so starting left is the shortest route to the approach. Exception R1, setter in position 1: outside hitter 1 is in zone 2, receives on the right and attacks right, while the opposite takes the left.'},
- {t:'Back-row movement still follows the attack',roles:['OH1','OH2','L'],d:'The arrows show where back-row players end up (libero zone 5, outside zone 6). Cover the hitter first, then finish the movement after the attack.'},
- {t:'The opposite moves directly to position 1',roles:['OP'],d:'In R4 to R6 the opposite goes straight to zone 1 after the pass for the back-row attack. Take off behind the 3 m line.'},
-];
-const RLAB=ROWS.map(r=>r.name);
-function lab(t){return t.replace(/\bR([1-6])\b(?! \(S)/g,(m,n)=>RLAB[n-1]);}
-Object.keys(RULES).forEach(k=>RULES[k]=RULES[k].map(lab));
-THUMB.forEach(t=>t.d=lab(t.d));
-function ruleText(x){
-  const off=rulesMode==='official';
-  const T={
-   '@MB1SERVE': off?'Exception: in R3 you are in zone 1, so you serve. The libero may not serve, so you stay on in zone 6 until your team loses the serve.':'Drill rules: in R3 the libero serves for you, so you are off. (Official rules: you serve.)',
-   '@MB2SERVE': off?'Exception: in R6 you are in zone 1, so you serve. The libero may not serve, so you stay on in zone 6 until your team loses the serve.':'Drill rules: in R6 the libero serves for you, so you are off. (Official rules: you serve.)',
-   '@LSERVE': off?'When we serve: zone 5. Exception: in R3 and R6 the back-row middle is in zone 1 and must serve, because the libero may never serve (FIVB rules). You are off until your team loses the serve.':'When we serve: zone 5. Drill rules: in R3 and R6 you serve from zone 1 for the middle, then run to zone 5.',
-   '@OHSERVE': off?'Serving: front → zone 4; back → zone 6 (zone 5 in R3 and R6, when a middle serves).':'Serving: front → zone 4; back → zone 6.'};
-  return lab(T[x]||x);
-}
-function renderSheet(){
-  const rows=ROWS.map((r,i)=>{
-    const z=zoneOf(i,role);
-    return `<tr><td class="r">${r.name}</td><td>${z?'Zone '+z:'Off (libero in zone '+zoneOf(i,'L')+')'}</td>${['rec','ar','serve'].map(ph=>`<td>${describe(i,ph,role).t}</td>`).join('')}</tr>`;
-  }).join('');
-  const thumbs=THUMB.map((t,i)=>`<li${t.roles.includes(role)?' class="mine"':''}><b>${t.t}</b>${t.roles.includes(role)?' <span class="tag">your rule</span>':''}<br>${t.d}</li>`).join('');
-  $('sheet').innerHTML=`<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role].map(x=>`<li>${ruleText(x)}</li>`).join('')}</ul>
+      // ---------- Learn ----------
+      function renderLearn() {
+        $("rots").innerHTML = ROWS.map(
+          (r, i) =>
+            `<button class="rot" aria-pressed="${i === ri}" data-i="${i}">${r.short}<small>S${r.setter}</small></button>`,
+        ).join("");
+        $("rots")
+          .querySelectorAll(".rot")
+          .forEach(
+            (b) =>
+              (b.onclick = () => {
+                ri = +b.dataset.i;
+                renderLearn();
+              }),
+          );
+        $("phases").innerHTML = PHASES.map(
+          ([k, l]) =>
+            `<button class="ph" aria-pressed="${k === phase}" data-k="${k}">${l}</button>`,
+        ).join("");
+        $("phases")
+          .querySelectorAll(".ph")
+          .forEach(
+            (b) =>
+              (b.onclick = () => {
+                phase = b.dataset.k;
+                renderLearn();
+              }),
+          );
+        const pl = players(ri, phase);
+        let s = DEFS + courtBase();
+        if (phase === "start") s += rotArrows();
+        if (phase === "ar") s += arLayer(ri, pl, role);
+        pl.filter((o) => o.p !== role).forEach((o) => (s += chip(o, { dim: true })));
+        const me = pl.find((o) => o.p === role);
+        if (me) s += chip(me, { me: true });
+        else
+          s += `<text x="${W / 2}" y="${H + 22}" text-anchor="middle" font-size="14" font-weight="700" fill="var(--bad)" font-family="Barlow,sans-serif">${NAMES[role]} is off court here</text>`;
+        $("courtL").innerHTML = s;
+        const d = describe(ri, phase, role);
+        const guide =
+          phase === "rec" || phase === "ar"
+            ? `<p class="guide">Guide: ${ROWS[ri].note}</p>`
+            : phase === "serve"
+              ? `<p class="guide">Not in the guide: this is our base defence after switching.</p>`
+              : "";
+        $("cue").innerHTML =
+          `<b>${ROWS[ri].name} · ${FULL[phase]}: ${d.t}</b><p>${d.d}</p>${guide}`;
+        renderSheet();
+      }
+      document.addEventListener("keydown", (e) => {
+        if ($("learn").hidden || e.target.tagName === "INPUT") return;
+        if (e.key === "ArrowRight") {
+          ri = (ri + 1) % 6;
+          renderLearn();
+        }
+        if (e.key === "ArrowLeft") {
+          ri = (ri + 5) % 6;
+          renderLearn();
+        }
+      });
+      const RULES = {
+        S: [
+          "R1, R2, R3: you are back row. Stay out of the passing lanes, then run to the net.",
+          "R4, R5, R6: you are front row and start at the net. In R4 you run along the net from zone 4.",
+          "After reception: your setting spot is at the net, right of the middle.",
+          "Serving: back row → zone 1, front row → zone 2.",
+        ],
+        OP: [
+          "Front row in R1, R2, R3 (setter back row). R1: at the left sideline, attack left. R2: at the net in the middle. R3: at the right sideline.",
+          "Back row in R4, R5, R6: stand deep behind the receivers, then go straight to zone 1 for the back-row attack.",
+          "Except R1, you attack from the right.",
+          "Serving: front row → zone 2, back row → zone 1.",
+        ],
+        MB1: [
+          "Front row in R1, R2, R6: start at the net (R6 far left, R2 right of the setter), get to the 3 m line and attack in the middle.",
+          "R3, R4, R5: you are off, the libero is in for you.",
+          "@MB1SERVE",
+          "Serving while front row: always zone 3, you block the middle.",
+        ],
+        MB2: [
+          "Front row in R3, R4, R5: start at the net (R3 and R4 on the left, R5 on the right), get to the 3 m line and attack in the middle.",
+          "R6, R1, R2: you are off, the libero is in for you.",
+          "@MB2SERVE",
+          "Serving while front row: always zone 3, you block the middle.",
+        ],
+        OH1: [
+          "You receive in every rotation, with the libero and the other outside.",
+          "Front row in R1, R5, R6: attack left (zone 4). R1 is the exception: the setter is in 1, you receive on the right and attack right.",
+          "Back row in R2, R3, R4: after reception cover middle back (zone 6); the libero covers left back.",
+          "@OHSERVE",
+        ],
+        L: [
+          "You replace the back-row middle: MB2 in R1, R2 and R6, MB1 in R3, R4 and R5. You are never in the front row.",
+          "You receive in every rotation: in the middle of the line in R1, R2 and R5, on the right in R3, R4 and R6.",
+          "After reception: cover the hitter, then move to left back (zone 5).",
+          "@LSERVE",
+        ],
+        OH2: [
+          "You receive in every rotation, with the libero and the other outside.",
+          "Front row in R2, R3, R4: attack left (zone 4).",
+          "Back row in R1, R5, R6: after reception cover middle back (zone 6); the libero covers left back.",
+          "@OHSERVE",
+        ],
+      };
+      const THUMB = [
+        {
+          t: "Three players receive",
+          roles: ["OH1", "OH2", "MB1", "MB2", "OP", "S", "L"],
+          d: "The two outside hitters and the libero pass the serve. Everyone else stays out of the passing lanes so the setter can set, the middle can run the quick and the opposite can attack.",
+        },
+        {
+          t: "The front-row outside hitter starts left",
+          roles: ["OH1", "OH2", "OP"],
+          d: "They attack from zone 4, so starting left is the shortest route to the approach. Exception R1, setter in position 1: outside hitter 1 is in zone 2, receives on the right and attacks right, while the opposite takes the left.",
+        },
+        {
+          t: "Back-row movement still follows the attack",
+          roles: ["OH1", "OH2", "L"],
+          d: "The arrows show where back-row players end up (libero zone 5, outside zone 6). Cover the hitter first, then finish the movement after the attack.",
+        },
+        {
+          t: "The opposite moves directly to position 1",
+          roles: ["OP"],
+          d: "In R4 to R6 the opposite goes straight to zone 1 after the pass for the back-row attack. Take off behind the 3 m line.",
+        },
+      ];
+      const RLAB = ROWS.map((r) => r.name);
+      function lab(t) {
+        return t.replace(/\bR([1-6])\b(?! \(S)/g, (m, n) => RLAB[n - 1]);
+      }
+      Object.keys(RULES).forEach((k) => (RULES[k] = RULES[k].map(lab)));
+      THUMB.forEach((t) => (t.d = lab(t.d)));
+      function ruleText(x) {
+        const off = rulesMode === "official";
+        const T = {
+          "@MB1SERVE": off
+            ? "Exception: in R3 you are in zone 1, so you serve. The libero may not serve, so you stay on in zone 6 until your team loses the serve."
+            : "Drill rules: in R3 the libero serves for you, so you are off. (Official rules: you serve.)",
+          "@MB2SERVE": off
+            ? "Exception: in R6 you are in zone 1, so you serve. The libero may not serve, so you stay on in zone 6 until your team loses the serve."
+            : "Drill rules: in R6 the libero serves for you, so you are off. (Official rules: you serve.)",
+          "@LSERVE": off
+            ? "When we serve: zone 5. Exception: in R3 and R6 the back-row middle is in zone 1 and must serve, because the libero may never serve (FIVB rules). You are off until your team loses the serve."
+            : "When we serve: zone 5. Drill rules: in R3 and R6 you serve from zone 1 for the middle, then run to zone 5.",
+          "@OHSERVE": off
+            ? "Serving: front → zone 4; back → zone 6 (zone 5 in R3 and R6, when a middle serves)."
+            : "Serving: front → zone 4; back → zone 6.",
+        };
+        return lab(T[x] || x);
+      }
+      function renderSheet() {
+        const rows = ROWS.map((r, i) => {
+          const z = zoneOf(i, role);
+          return `<tr><td class="r">${r.name}</td><td>${z ? "Zone " + z : "Off (libero in zone " + zoneOf(i, "L") + ")"}</td>${["rec", "ar", "serve"].map((ph) => `<td>${describe(i, ph, role).t}</td>`).join("")}</tr>`;
+        }).join("");
+        const thumbs = THUMB.map(
+          (t, i) =>
+            `<li${t.roles.includes(role) ? ' class="mine"' : ""}><b>${t.t}</b>${t.roles.includes(role) ? ' <span class="tag">your rule</span>' : ""}<br>${t.d}</li>`,
+        ).join("");
+        $("sheet").innerHTML =
+          `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role].map((x) => `<li>${ruleText(x)}</li>`).join("")}</ul>
   <div class="table"><table><thead><tr><th></th><th>Rotation</th><th>Reception</th><th>After reception</th><th>Serve</th></tr></thead><tbody>${rows}</tbody></table></div>
   <h3 class="thumbh">Rules of thumb from the guide</h3><ol class="thumbs">${thumbs}</ol>`;
-}
+      }
 
-// ---------- Reference points & neighbours ----------
-const LINEUP=['S','OH1','MB1','OP','OH2','MB2']; // serving order, as in R1 (S1) zones 1..6
-function refOf(r){return r==='S'?'OP':'S';}
-function visible(vis,pl,me){ if(vis==='all') return pl.filter(o=>o.p!==me); if(vis==='ref') return pl.filter(o=>o.p===refOf(me)); return []; }
-function relation(ri,r){
-  const sz=zoneOf(ri,'S'), k=LINEUP.indexOf(r);
-  if(r==='S') return `You are the setter: the name ${ROWS[ri].name} tells you your zone.`;
-  if(r==='L') return `You replace the back-row middle, ${ROWS[ri].liberofor}, so you take ${ROWS[ri].liberofor}'s zone ${zoneOf(ri,'L')}.`;
-  if(k===3) return `The setter is in zone ${sz}. You are always directly opposite the setter, three zones away.`;
-  return `The setter is in zone ${sz}. In the serving order you come ${k} after the setter, so count ${k} zone${k>1?'s':''} on from the setter's zone (1→2→3→4→5→6).`;
-}
-function drawVis(key,v){
-  document.querySelectorAll(`.vis[data-vis="${key}"] button`).forEach(b=>b.setAttribute('aria-checked',b.dataset.v===v));
-}
-function renderRefLabels(){document.querySelectorAll('.refbtn').forEach(b=>b.textContent=role==='S'?'Opposite':'Setter');
-  if($('gVisSub')) gVisText();}
-let visDrill=store.get('visDrill','none'), visGame=store.get('visGame','none');
-function gVisText(){const ref=role==='S'?'the opposite':'the setter';
-  $('gVisSub').textContent={none:'Nobody: only the net and the court. Hardest, closest to a real match.',ref:`Only ${ref}: find ${ref}, then work out your own spot. The way coaches teach it.`,all:'Everyone: see where all teammates stand. Easiest.'}[visGame];}
-function setVisDrill(v){visDrill=v;store.set('visDrill',v);drawVis('drill',v);if(cur)drawDrill(lastTap);}
-function setVisGame(v){visGame=v;store.set('visGame',v);drawVis('game',v);gVisText();if(G&&!G.answered)gDraw();}
-document.querySelectorAll('.vis').forEach(g=>g.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;(g.dataset.vis==='drill'?setVisDrill:setVisGame)(b.dataset.v);}));
-function neighbourQ(ri,r){
-  const z=zoneOf(ri,r); if(!z) return null;
-  const all=[...ROWS[ri].front,...ROWS[ri].back]; const zp={}; all.forEach((p,i)=>zp[ORDER[i]]=p);
-  const col={4:5,3:6,2:1,5:4,6:3,1:2}, rows=[[4,3,2],[5,6,1]];
-  const qs=[];
-  if([4,3,2].includes(z)) qs.push({q:'Who must stay behind you at the serve?',a:zp[col[z]]});
-  else qs.push({q:'Who must you stay behind at the serve?',a:zp[col[z]]});
-  const row=rows.find(x=>x.includes(z)), i=row.indexOf(z);
-  if(i>0) qs.push({q:'Who must stay on your left at the serve?',a:zp[row[i-1]]});
-  if(i<2) qs.push({q:'Who must stay on your right at the serve?',a:zp[row[i+1]]});
-  const pick=qs[Math.floor(Math.random()*qs.length)];
-  return {...pick,opts:all.filter(p=>p!==r)};
-}
-function nbLock(id,on){const b=$(id); b.hidden=false; b.disabled=false;}
-function nbLayer(pl,me,partner){
-  const a=pl.find(o=>o.p===me), b=pl.find(o=>o.p===partner); if(!a||!b) return '';
-  return `<line x1="${a.x*W}" y1="${a.y*H}" x2="${b.x*W}" y2="${b.y*H}" stroke="var(--orange)" stroke-width="4" stroke-dasharray="2 6" stroke-linecap="round"/>`;
-}
-function nbHtml(nq,id){return `<div class="nbq" id="${id}"><b>Neighbour check</b> <span class="hint">optional bonus: answer, or just press Continue</span><p style="margin:2px 0 0">${nq.q}</p><div class="opts">${nq.opts.map(p=>`<button type="button" data-p="${p}">${p}</button>`).join('')}</div></div>`;}
-function nbMark(id,nq,choice){const box=$(id);box.querySelectorAll('button').forEach(b=>{b.disabled=true;if(b.dataset.skip)b.remove();else if(b.dataset.p===nq.a)b.classList.add('right');else if(b.dataset.p===choice)b.classList.add('wrong');});
-  box.insertAdjacentHTML('beforeend',`<p class="hint" style="margin-top:6px">${choice===nq.a?'Correct.':(choice?'':'Skipped. ')+'It is '+nq.a+'.'} Keep that order until the serve is made, then move.</p>`);}
+      // ---------- Reference points & neighbours ----------
+      const LINEUP = ["S", "OH1", "MB1", "OP", "OH2", "MB2"]; // serving order, as in R1 (S1) zones 1..6
+      function refOf(r) {
+        return r === "S" ? "OP" : "S";
+      }
+      function visible(vis, pl, me) {
+        if (vis === "all") return pl.filter((o) => o.p !== me);
+        if (vis === "ref") return pl.filter((o) => o.p === refOf(me));
+        return [];
+      }
+      function relation(ri, r) {
+        const sz = zoneOf(ri, "S"),
+          k = LINEUP.indexOf(r);
+        if (r === "S") return `You are the setter: the name ${ROWS[ri].name} tells you your zone.`;
+        if (r === "L")
+          return `You replace the back-row middle, ${ROWS[ri].liberofor}, so you take ${ROWS[ri].liberofor}'s zone ${zoneOf(ri, "L")}.`;
+        if (k === 3)
+          return `The setter is in zone ${sz}. You are always directly opposite the setter, three zones away.`;
+        return `The setter is in zone ${sz}. In the serving order you come ${k} after the setter, so count ${k} zone${k > 1 ? "s" : ""} on from the setter's zone (1→2→3→4→5→6).`;
+      }
+      function drawVis(key, v) {
+        document
+          .querySelectorAll(`.vis[data-vis="${key}"] button`)
+          .forEach((b) => b.setAttribute("aria-checked", b.dataset.v === v));
+      }
+      function renderRefLabels() {
+        document
+          .querySelectorAll(".refbtn")
+          .forEach((b) => (b.textContent = role === "S" ? "Opposite" : "Setter"));
+        if ($("gVisSub")) gVisText();
+      }
+      let visDrill = store.get("visDrill", "none"),
+        visGame = store.get("visGame", "none");
+      function gVisText() {
+        const ref = role === "S" ? "the opposite" : "the setter";
+        $("gVisSub").textContent = {
+          none: "Nobody: only the net and the court. Hardest, closest to a real match.",
+          ref: `Only ${ref}: find ${ref}, then work out your own spot. The way coaches teach it.`,
+          all: "Everyone: see where all teammates stand. Easiest.",
+        }[visGame];
+      }
+      function setVisDrill(v) {
+        visDrill = v;
+        store.set("visDrill", v);
+        drawVis("drill", v);
+        if (cur) drawDrill(lastTap);
+      }
+      function setVisGame(v) {
+        visGame = v;
+        store.set("visGame", v);
+        drawVis("game", v);
+        gVisText();
+        if (G && !G.answered) gDraw();
+      }
+      document.querySelectorAll(".vis").forEach((g) =>
+        g.addEventListener("click", (e) => {
+          const b = e.target.closest("button");
+          if (!b) return;
+          (g.dataset.vis === "drill" ? setVisDrill : setVisGame)(b.dataset.v);
+        }),
+      );
+      function neighbourQ(ri, r) {
+        const z = zoneOf(ri, r);
+        if (!z) return null;
+        const all = [...ROWS[ri].front, ...ROWS[ri].back];
+        const zp = {};
+        all.forEach((p, i) => (zp[ORDER[i]] = p));
+        const col = { 4: 5, 3: 6, 2: 1, 5: 4, 6: 3, 1: 2 },
+          rows = [
+            [4, 3, 2],
+            [5, 6, 1],
+          ];
+        const qs = [];
+        if ([4, 3, 2].includes(z))
+          qs.push({ q: "Who must stay behind you at the serve?", a: zp[col[z]] });
+        else qs.push({ q: "Who must you stay behind at the serve?", a: zp[col[z]] });
+        const row = rows.find((x) => x.includes(z)),
+          i = row.indexOf(z);
+        if (i > 0) qs.push({ q: "Who must stay on your left at the serve?", a: zp[row[i - 1]] });
+        if (i < 2) qs.push({ q: "Who must stay on your right at the serve?", a: zp[row[i + 1]] });
+        const pick = qs[Math.floor(Math.random() * qs.length)];
+        return { ...pick, opts: all.filter((p) => p !== r) };
+      }
+      function nbLock(id, on) {
+        const b = $(id);
+        b.hidden = false;
+        b.disabled = false;
+      }
+      function nbLayer(pl, me, partner) {
+        const a = pl.find((o) => o.p === me),
+          b = pl.find((o) => o.p === partner);
+        if (!a || !b) return "";
+        return `<line x1="${a.x * W}" y1="${a.y * H}" x2="${b.x * W}" y2="${b.y * H}" stroke="var(--orange)" stroke-width="4" stroke-dasharray="2 6" stroke-linecap="round"/>`;
+      }
+      function nbHtml(nq, id) {
+        return `<div class="nbq" id="${id}"><b>Neighbour check</b> <span class="hint">optional bonus: answer, or just press Continue</span><p style="margin:2px 0 0">${nq.q}</p><div class="opts">${nq.opts.map((p) => `<button type="button" data-p="${p}">${p}</button>`).join("")}</div></div>`;
+      }
+      function nbMark(id, nq, choice) {
+        const box = $(id);
+        box.querySelectorAll("button").forEach((b) => {
+          b.disabled = true;
+          if (b.dataset.skip) b.remove();
+          else if (b.dataset.p === nq.a) b.classList.add("right");
+          else if (b.dataset.p === choice) b.classList.add("wrong");
+        });
+        box.insertAdjacentHTML(
+          "beforeend",
+          `<p class="hint" style="margin-top:6px">${choice === nq.a ? "Correct." : (choice ? "" : "Skipped. ") + "It is " + nq.a + "."} Keep that order until the serve is made, then move.</p>`,
+        );
+      }
 
-// ---------- Drill ----------
-let cur=null, answered=false, score=store.get('score2',{ok:0,n:0}), streak=0, lastTap=null, review=null, dNb=null;
-$('nbDrill').checked=store.get('nbDrill',true);$('nbDrill').onchange=()=>store.set('nbDrill',$('nbDrill').checked);
-const HINT='<p class="hint">Tap the court where you stand. If the libero is in for you, press “I\'m off court”.</p>';
-function weakKeys(){const out=[];for(const k in stats){const [r]=k.split('|');if(r!==role)continue;const st=stats[k];if(st.miss>st.ok)out.push(k);}return out;}
-function startReview(){
-  const ks=weakKeys().sort(()=>Math.random()-.5).slice(0,8); if(!ks.length) return;
-  review={queue:ks.map(k=>{const [r,i,ph]=k.split('|');return {ri:+i,phase:ph,role:r}}),i:-1,ok:0};
-  cur=null; newQuestion();
-}
-function newQuestion(){
-  lastTap=null; dNb=null; $('dNbBox').innerHTML=''; $('nextBtn').disabled=false; delete $('nextBtn').dataset.label;
-  if(review){
-    review.i++;
-    if(review.i>=review.queue.length){
-      const n=review.queue.length, ok=review.ok; review=null;
-      $('dq').textContent='Review done';$('dsub').textContent='';
-      $('courtD').innerHTML=DEFS+courtBase(); $('offBtn').disabled=true; $('nextBtn').hidden=false; $('nextBtn').textContent='Back to drill';
-      $('fb').className='fb good';$('fb').innerHTML=`<b>${ok} of ${n} right</b><p style="margin:2px 0 0">${weakKeys().length?'Some spots still need work. Come back to them tomorrow.':'No weak spots left. Great work.'}</p>`;
-      cur=null; updateScore(); return;
-    }
-    cur=review.queue[review.i];
-  } else {
-  let pool=[];
-  for(let i=0;i<6;i++) for(const [ph] of PHASES){
-    const st=stats[`${role}|${i}|${ph}`]||{ok:0,miss:0};
-    pool.push({ri:i,phase:ph,role,w:Math.max(1,1+st.miss*3-st.ok)*(ph==='start'?.6:1)});
-  }
-  if(cur) pool=pool.filter(p=>!(p.ri===cur.ri&&p.phase===cur.phase));
-  let t=Math.random()*pool.reduce((a,b)=>a+b.w,0);
-  cur=pool.find(p=>(t-=p.w)<=0)||pool[0];
-  }
-  answered=false; $('nextBtn').hidden=true; $('nextBtn').textContent='Next'; $('offBtn').disabled=false;
-  $('dq').textContent=`${review?`Review ${review.i+1}/${review.queue.length} · `:''}${ROWS[cur.ri].name} · ${FULL[cur.phase]}`;
-  $('dsub').textContent=`${cur.phase==='start'?'Which zone are you in?':cur.phase==='ar'?'Where do you go after the pass?':'Where do you stand?'}`;
-  $('fb').className='fb';$('fb').innerHTML=HINT;
-  drawDrill();updateScore();
-}
-function drawDrill(tap){
-  const pl=players(cur.ri,cur.phase);
-  let s=DEFS+courtBase();
-  if(answered&&cur.phase==='start') s+=rotArrows();
-  if(answered&&cur.phase==='ar') s+=arLayer(cur.ri,pl,cur.role);
-  (answered?pl.filter(o=>o.p!==cur.role):visible(visDrill,pl,cur.role)).forEach(o=>s+=chip(o,{dim:answered||visDrill==='all'}));
-  if(answered&&dNb&&dNb.done) s+=nbLayer(pl,cur.role,dNb.a);
-  if(answered){
-    const me=pl.find(o=>o.p===cur.role);
-    if(tap&&me) s+=`<line x1="${tap.x*W}" y1="${tap.y*H}" x2="${me.x*W}" y2="${me.y*H}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="3 3" opacity=".6"/>`;
-    if(tap) s+=`<circle cx="${tap.x*W}" cy="${tap.y*H}" r="7" fill="var(--ink)" opacity=".7"/>`;
-    if(me) s+=chip(me,{me:true});
-  }
-  $('courtD').innerHTML=s;
-}
-function record(ok){
-  const k=`${cur.role}|${cur.ri}|${cur.phase}`;const st=stats[k]||{ok:0,miss:0};ok?st.ok++:st.miss++;stats[k]=st;store.set('stats2',stats);
-  score.n++;if(ok){score.ok++;streak++}else streak=0;store.set('score2',score);
-  if(review&&ok) review.ok++;
-  store.set('lastPractice',Date.now());
-  answered=true;$('nextBtn').hidden=false;$('offBtn').disabled=true;$('nextBtn').focus({preventScroll:true});updateScore();
-}
-function feedback(cls,title){const d=describe(cur.ri,cur.phase,cur.role);$('fb').className='fb '+cls;$('fb').innerHTML=`<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
-  if(cur.phase==='rec'&&$('nbDrill').checked){const nq=neighbourQ(cur.ri,cur.role); if(nq){dNb=nq; nbLock('nextBtn',true);
-    $('dNbBox').innerHTML=nbHtml(nq,'dnb'); $('dnb').scrollIntoView({block:'nearest',behavior:'smooth'});
-    $('dnb').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(dNb.done)return;dNb.done=true;nbMark('dnb',nq,b.dataset.skip?null:b.dataset.p);drawDrill(lastTap);nbLock('nextBtn',false);$('nextBtn').focus({preventScroll:true});});}}}
-function svgPoint(svg,e){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;return pt.matrixTransform(svg.getScreenCTM().inverse());}
-$('courtD').addEventListener('pointerup',e=>{
-  if(answered||!cur) return;
-  const p=svgPoint($('courtD'),e); const tap={x:p.x/W,y:p.y/H}; lastTap=tap;
-  const me=players(cur.ri,cur.phase).find(o=>o.p===cur.role);
-  if(!me){record(false);drawDrill(tap);feedback('bad','Not this time: you are off court');return}
-  let dist=Math.hypot(tap.x-me.x,(tap.y-me.y)*.67);
-  if(cur.phase==='start'){const zx=Math.min(2,Math.max(0,Math.floor(tap.x*3))),zy=tap.y<AL?0:1;const [c,r]=ZONES[zoneOf(cur.ri,cur.role)];dist=(zx===c&&zy===r)?0:1}
-  if(dist<.14){record(true);drawDrill(tap);feedback('good','Spot on')}
-  else if(dist<.24){record(true);drawDrill(tap);feedback('close','Close enough, fine-tune it')}
-  else{record(false);drawDrill(tap);feedback('bad','Not there')}
-});
-$('offBtn').onclick=()=>{
-  if(answered) return;
-  const me=players(cur.ri,cur.phase).find(o=>o.p===cur.role);
-  if(!me){record(true);drawDrill();feedback('good','Right, you are off')} else {record(false);drawDrill();feedback('bad','No, you are on court')}
-};
-$('nextBtn').onclick=newQuestion;
-$('reviewBtn').onclick=startReview;
-$('resetBtn').onclick=()=>{stats={};score={ok:0,n:0};streak=0;store.set('stats2',stats);store.set('score2',score);newQuestion()};
-function updateScore(){
-  $('dscore').textContent=`${score.ok}/${score.n}`;$('dstreak').textContent=streak;
-  const weak=[];for(const k in stats){const [r,i,ph]=k.split('|');if(r!==role)continue;const st=stats[k];if(st.miss>st.ok)weak.push(`${ROWS[i].name} ${FULL[ph].toLowerCase()}`)}
-  const last=store.get('lastPractice',0), days=last?Math.floor((Date.now()-last)/864e5):0;
-  $('weak').textContent=(weak.length?`Needs practice (${NAMES[role]}): ${weak.join(', ')}. These come up more often.`:'')+(days>=2?` Your last practice was ${days} days ago. A short review now helps you remember.`:'');
-  $('reviewBtn').hidden=!weak.length||!!review; $('reviewBtn').textContent=`Review weak spots (${Math.min(weak.length,8)})`;
-}
+      // ---------- Drill ----------
+      let cur = null,
+        answered = false,
+        score = store.get("score2", { ok: 0, n: 0 }),
+        streak = 0,
+        lastTap = null,
+        review = null,
+        dNb = null;
+      $("nbDrill").checked = store.get("nbDrill", true);
+      $("nbDrill").onchange = () => store.set("nbDrill", $("nbDrill").checked);
+      const HINT =
+        '<p class="hint">Tap the court where you stand. If the libero is in for you, press “I\'m off court”.</p>';
+      function weakKeys() {
+        const out = [];
+        for (const k in stats) {
+          const [r] = k.split("|");
+          if (r !== role) continue;
+          const st = stats[k];
+          if (st.miss > st.ok) out.push(k);
+        }
+        return out;
+      }
+      function startReview() {
+        const ks = weakKeys()
+          .sort(() => Math.random() - 0.5)
+          .slice(0, 8);
+        if (!ks.length) return;
+        review = {
+          queue: ks.map((k) => {
+            const [r, i, ph] = k.split("|");
+            return { ri: +i, phase: ph, role: r };
+          }),
+          i: -1,
+          ok: 0,
+        };
+        cur = null;
+        newQuestion();
+      }
+      function newQuestion() {
+        lastTap = null;
+        dNb = null;
+        $("dNbBox").innerHTML = "";
+        $("nextBtn").disabled = false;
+        delete $("nextBtn").dataset.label;
+        if (review) {
+          review.i++;
+          if (review.i >= review.queue.length) {
+            const n = review.queue.length,
+              ok = review.ok;
+            review = null;
+            $("dq").textContent = "Review done";
+            $("dsub").textContent = "";
+            $("courtD").innerHTML = DEFS + courtBase();
+            $("offBtn").disabled = true;
+            $("nextBtn").hidden = false;
+            $("nextBtn").textContent = "Back to drill";
+            $("fb").className = "fb good";
+            $("fb").innerHTML =
+              `<b>${ok} of ${n} right</b><p style="margin:2px 0 0">${weakKeys().length ? "Some spots still need work. Come back to them tomorrow." : "No weak spots left. Great work."}</p>`;
+            cur = null;
+            updateScore();
+            return;
+          }
+          cur = review.queue[review.i];
+        } else {
+          let pool = [];
+          for (let i = 0; i < 6; i++)
+            for (const [ph] of PHASES) {
+              const st = stats[`${role}|${i}|${ph}`] || { ok: 0, miss: 0 };
+              pool.push({
+                ri: i,
+                phase: ph,
+                role,
+                w: Math.max(1, 1 + st.miss * 3 - st.ok) * (ph === "start" ? 0.6 : 1),
+              });
+            }
+          if (cur) pool = pool.filter((p) => !(p.ri === cur.ri && p.phase === cur.phase));
+          let t = Math.random() * pool.reduce((a, b) => a + b.w, 0);
+          cur = pool.find((p) => (t -= p.w) <= 0) || pool[0];
+        }
+        answered = false;
+        $("nextBtn").hidden = true;
+        $("nextBtn").textContent = "Next";
+        $("offBtn").disabled = false;
+        $("dq").textContent =
+          `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${ROWS[cur.ri].name} · ${FULL[cur.phase]}`;
+        $("dsub").textContent =
+          `${cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? "Where do you go after the pass?" : "Where do you stand?"}`;
+        $("fb").className = "fb";
+        $("fb").innerHTML = HINT;
+        drawDrill();
+        updateScore();
+      }
+      function drawDrill(tap) {
+        const pl = players(cur.ri, cur.phase);
+        let s = DEFS + courtBase();
+        if (answered && cur.phase === "start") s += rotArrows();
+        if (answered && cur.phase === "ar") s += arLayer(cur.ri, pl, cur.role);
+        (answered ? pl.filter((o) => o.p !== cur.role) : visible(visDrill, pl, cur.role)).forEach(
+          (o) => (s += chip(o, { dim: answered || visDrill === "all" })),
+        );
+        if (answered && dNb && dNb.done) s += nbLayer(pl, cur.role, dNb.a);
+        if (answered) {
+          const me = pl.find((o) => o.p === cur.role);
+          if (tap && me)
+            s += `<line x1="${tap.x * W}" y1="${tap.y * H}" x2="${me.x * W}" y2="${me.y * H}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="3 3" opacity=".6"/>`;
+          if (tap)
+            s += `<circle cx="${tap.x * W}" cy="${tap.y * H}" r="7" fill="var(--ink)" opacity=".7"/>`;
+          if (me) s += chip(me, { me: true });
+        }
+        $("courtD").innerHTML = s;
+      }
+      function record(ok) {
+        const k = `${cur.role}|${cur.ri}|${cur.phase}`;
+        const st = stats[k] || { ok: 0, miss: 0 };
+        ok ? st.ok++ : st.miss++;
+        stats[k] = st;
+        store.set("stats2", stats);
+        score.n++;
+        if (ok) {
+          score.ok++;
+          streak++;
+        } else streak = 0;
+        store.set("score2", score);
+        if (review && ok) review.ok++;
+        store.set("lastPractice", Date.now());
+        answered = true;
+        $("nextBtn").hidden = false;
+        $("offBtn").disabled = true;
+        $("nextBtn").focus({ preventScroll: true });
+        updateScore();
+      }
+      function feedback(cls, title) {
+        const d = describe(cur.ri, cur.phase, cur.role);
+        $("fb").className = "fb " + cls;
+        $("fb").innerHTML = `<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
+        if (cur.phase === "rec" && $("nbDrill").checked) {
+          const nq = neighbourQ(cur.ri, cur.role);
+          if (nq) {
+            dNb = nq;
+            nbLock("nextBtn", true);
+            $("dNbBox").innerHTML = nbHtml(nq, "dnb");
+            $("dnb").scrollIntoView({ block: "nearest", behavior: "smooth" });
+            $("dnb")
+              .querySelectorAll("button")
+              .forEach(
+                (b) =>
+                  (b.onclick = () => {
+                    if (dNb.done) return;
+                    dNb.done = true;
+                    nbMark("dnb", nq, b.dataset.skip ? null : b.dataset.p);
+                    drawDrill(lastTap);
+                    nbLock("nextBtn", false);
+                    $("nextBtn").focus({ preventScroll: true });
+                  }),
+              );
+          }
+        }
+      }
+      function svgPoint(svg, e) {
+        const pt = svg.createSVGPoint();
+        pt.x = e.clientX;
+        pt.y = e.clientY;
+        return pt.matrixTransform(svg.getScreenCTM().inverse());
+      }
+      $("courtD").addEventListener("pointerup", (e) => {
+        if (answered || !cur) return;
+        const p = svgPoint($("courtD"), e);
+        const tap = { x: p.x / W, y: p.y / H };
+        lastTap = tap;
+        const me = players(cur.ri, cur.phase).find((o) => o.p === cur.role);
+        if (!me) {
+          record(false);
+          drawDrill(tap);
+          feedback("bad", "Not this time: you are off court");
+          return;
+        }
+        let dist = Math.hypot(tap.x - me.x, (tap.y - me.y) * 0.67);
+        if (cur.phase === "start") {
+          const zx = Math.min(2, Math.max(0, Math.floor(tap.x * 3))),
+            zy = tap.y < AL ? 0 : 1;
+          const [c, r] = ZONES[zoneOf(cur.ri, cur.role)];
+          dist = zx === c && zy === r ? 0 : 1;
+        }
+        if (dist < 0.14) {
+          record(true);
+          drawDrill(tap);
+          feedback("good", "Spot on");
+        } else if (dist < 0.24) {
+          record(true);
+          drawDrill(tap);
+          feedback("close", "Close enough, fine-tune it");
+        } else {
+          record(false);
+          drawDrill(tap);
+          feedback("bad", "Not there");
+        }
+      });
+      $("offBtn").onclick = () => {
+        if (answered) return;
+        const me = players(cur.ri, cur.phase).find((o) => o.p === cur.role);
+        if (!me) {
+          record(true);
+          drawDrill();
+          feedback("good", "Right, you are off");
+        } else {
+          record(false);
+          drawDrill();
+          feedback("bad", "No, you are on court");
+        }
+      };
+      $("nextBtn").onclick = newQuestion;
+      $("reviewBtn").onclick = startReview;
+      $("resetBtn").onclick = () => {
+        stats = {};
+        score = { ok: 0, n: 0 };
+        streak = 0;
+        store.set("stats2", stats);
+        store.set("score2", score);
+        newQuestion();
+      };
+      function updateScore() {
+        $("dscore").textContent = `${score.ok}/${score.n}`;
+        $("dstreak").textContent = streak;
+        const weak = [];
+        for (const k in stats) {
+          const [r, i, ph] = k.split("|");
+          if (r !== role) continue;
+          const st = stats[k];
+          if (st.miss > st.ok) weak.push(`${ROWS[i].name} ${FULL[ph].toLowerCase()}`);
+        }
+        const last = store.get("lastPractice", 0),
+          days = last ? Math.floor((Date.now() - last) / 864e5) : 0;
+        $("weak").textContent =
+          (weak.length
+            ? `Needs practice (${NAMES[role]}): ${weak.join(", ")}. These come up more often.`
+            : "") +
+          (days >= 2
+            ? ` Your last practice was ${days} days ago. A short review now helps you remember.`
+            : "");
+        $("reviewBtn").hidden = !weak.length || !!review;
+        $("reviewBtn").textContent = `Review weak spots (${Math.min(weak.length, 8)})`;
+      }
 
-// ---------- Sets ----------
-const NL=80,NR=920,SY=330,NT=362,PH=290;
-const FAMCOL={left:'var(--set-left)',mid:'var(--set-mid)',right:'var(--set-right)'};
-const FAMNAME={left:'Left side',mid:'Middle, in front of the setter',right:'Behind the setter / right side'};
-const PX=x=>NL+x*(NR-NL);
-function setPath(s){const sx=PX(SETTER_X),ex=PX(s[1]);return {sx,ex,cx:(sx+ex)/2,cy:SY-2*s[2]*PH,d:`M${sx},${SY} Q${(sx+ex)/2},${SY-2*s[2]*PH} ${ex},${SY+10}`}}
-function netSvg(visible,hi,{labels=true}={}){
-  let s=`<rect x="${NL-24}" y="${NT}" width="${NR-NL+48}" height="70" rx="2" fill="none" stroke="var(--netmesh)" stroke-width="6"/>`;
-  for(let i=1;i<30;i++){const x=NL-24+i*(NR-NL+48)/30;s+=`<line x1="${x}" y1="${NT}" x2="${x}" y2="${NT+70}" stroke="var(--netmesh)" stroke-width="1" opacity=".3"/>`}
-  for(let j=1;j<4;j++) s+=`<line x1="${NL-24}" y1="${NT+j*17.5}" x2="${NR+24}" y2="${NT+j*17.5}" stroke="var(--netmesh)" stroke-width="1" opacity=".3"/>`;
-  [NL,NR].forEach(x=>s+=`<line x1="${x}" y1="${NT-90}" x2="${x}" y2="${NT+74}" stroke="var(--bad)" stroke-width="5" stroke-dasharray="8 6"/>`);
-  ['zone 4','zone 3','zone 2'].forEach((z,i)=>s+=`<text x="${NL+(i+.5)*(NR-NL)/3}" y="${NT+100}" text-anchor="middle" font-size="28" fill="var(--muted)" font-family="Barlow,sans-serif">${z}</text>`);
-  SETS.forEach(st=>{ if(!visible.includes(st[0])) return;
-    const p=setPath(st), on=!hi||hi===st[0], col=FAMCOL[st[3]];
-    s+=`<path d="${p.d}" fill="none" stroke="${col}" stroke-width="${on&&hi?10:5.5}" opacity="${on?1:.18}"/>`;
-    s+=`<circle cx="${p.ex}" cy="${SY+10}" r="${on&&hi?12:8}" fill="${col}" opacity="${on?1:.18}"/>`;
-  });
-  if(labels) SETS.forEach(st=>{ if(!visible.includes(st[0])) return;
-    const p=setPath(st), on=!hi||hi===st[0]; if(!on&&hi) return;
-    const t=['1','6','4','7','0','Po'].includes(st[0])?.5:.72;
-    const x=(1-t)**2*p.sx+2*(1-t)*t*p.cx+t*t*p.ex, y=(1-t)**2*SY+2*(1-t)*t*p.cy+t*t*(SY+10);
-    const w=40+19*st[0].length;
-    s+=`<g><rect x="${x-w/2}" y="${y-24}" width="${w}" height="46" rx="9" fill="var(--panel)" stroke="${FAMCOL[st[3]]}" stroke-width="4"/><text x="${x}" y="${y+10}" text-anchor="middle" font-size="30" font-weight="800" fill="${FAMCOL[st[3]]}" font-family="Barlow Condensed,sans-serif">${st[0]}</text></g>`;
-  });
-  const sx=PX(SETTER_X);
-  s+=`<circle cx="${sx}" cy="${SY}" r="24" fill="var(--s)" stroke="#fff" stroke-width="4"/><text x="${sx}" y="${SY+9}" text-anchor="middle" font-size="26" font-weight="800" fill="#16283D" font-family="Barlow,sans-serif">S</text>`;
-  return s;
-}
-let selSet=null;
-function renderSets(){
-  $('netS').innerHTML=netSvg(SETS.map(s=>s[0]),selSet);
-  $('setchips').innerHTML=SETS.map(s=>`<button class="setchip ${s[3]}" aria-pressed="${selSet===s[0]}" data-s="${s[0]}"><span>${s[0]}</span></button>`).join('');
-  $('setchips').querySelectorAll('button').forEach(b=>b.onclick=()=>{selSet=selSet===b.dataset.s?null:b.dataset.s;renderSets()});
-  const st=SETS.find(s=>s[0]===selSet);
-  $('setcue').innerHTML=st?`<b>${st[0]} · ${FAMNAME[st[3]]}</b><p>${st[4]}</p>`:`<b>Lower arc = faster tempo</b><p>Left-side calls are 1, 0 and 2. Middle calls are Shoot, 4 and Po. Behind the setter: Til, 7 and 6.</p>`;
-}
-let sq=null, sAns=false, sScore={ok:0,n:0}, sStreak=0;
-function newSetQ(){
-  const opts=SETS.filter(s=>!sq||s[0]!==sq[0]); sq=opts[Math.floor(Math.random()*opts.length)]; sAns=false;
-  $('netQ').innerHTML=netSvg([sq[0]],null,{labels:false});
-  $('setanswers').innerHTML=SETS.map(s=>`<button class="setchip ${s[3]}" data-s="${s[0]}"><span>${s[0]}</span></button>`).join('');
-  $('setanswers').querySelectorAll('button').forEach(b=>b.onclick=()=>answerSet(b.dataset.s));
-  $('sfb').className='fb';$('sfb').innerHTML='<p class="hint">Pick the name of the highlighted set.</p>';$('snext').hidden=true;
-  $('sscore').textContent=`${sScore.ok}/${sScore.n}`;$('sstreak').textContent=sStreak;
-}
-function answerSet(name){
-  if(sAns) return; sAns=true; const ok=name===sq[0]; sScore.n++; if(ok){sScore.ok++;sStreak++}else sStreak=0;
-  $('netQ').innerHTML=netSvg(ok?[sq[0]]:[sq[0],name],sq[0]);
-  $('setanswers').querySelectorAll('button').forEach(b=>{if(b.dataset.s===sq[0]) b.setAttribute('aria-pressed','true'); b.disabled=true;});
-  $('sfb').className='fb '+(ok?'good':'bad');
-  $('sfb').innerHTML=`<b>${ok?'Correct':'It was '+sq[0]}</b><p style="margin:2px 0 0">${sq[4]}</p>`;
-  $('snext').hidden=false;$('snext').focus({preventScroll:true});
-  $('sscore').textContent=`${sScore.ok}/${sScore.n}`;$('sstreak').textContent=sStreak;
-}
-$('snext').onclick=newSetQ;
+      // ---------- Sets ----------
+      const NL = 80,
+        NR = 920,
+        SY = 330,
+        NT = 362,
+        PH = 290;
+      const FAMCOL = { left: "var(--set-left)", mid: "var(--set-mid)", right: "var(--set-right)" };
+      const FAMNAME = {
+        left: "Left side",
+        mid: "Middle, in front of the setter",
+        right: "Behind the setter / right side",
+      };
+      const PX = (x) => NL + x * (NR - NL);
+      function setPath(s) {
+        const sx = PX(SETTER_X),
+          ex = PX(s[1]);
+        return {
+          sx,
+          ex,
+          cx: (sx + ex) / 2,
+          cy: SY - 2 * s[2] * PH,
+          d: `M${sx},${SY} Q${(sx + ex) / 2},${SY - 2 * s[2] * PH} ${ex},${SY + 10}`,
+        };
+      }
+      function netSvg(visible, hi, { labels = true } = {}) {
+        let s = `<rect x="${NL - 24}" y="${NT}" width="${NR - NL + 48}" height="70" rx="2" fill="none" stroke="var(--netmesh)" stroke-width="6"/>`;
+        for (let i = 1; i < 30; i++) {
+          const x = NL - 24 + (i * (NR - NL + 48)) / 30;
+          s += `<line x1="${x}" y1="${NT}" x2="${x}" y2="${NT + 70}" stroke="var(--netmesh)" stroke-width="1" opacity=".3"/>`;
+        }
+        for (let j = 1; j < 4; j++)
+          s += `<line x1="${NL - 24}" y1="${NT + j * 17.5}" x2="${NR + 24}" y2="${NT + j * 17.5}" stroke="var(--netmesh)" stroke-width="1" opacity=".3"/>`;
+        [NL, NR].forEach(
+          (x) =>
+            (s += `<line x1="${x}" y1="${NT - 90}" x2="${x}" y2="${NT + 74}" stroke="var(--bad)" stroke-width="5" stroke-dasharray="8 6"/>`),
+        );
+        ["zone 4", "zone 3", "zone 2"].forEach(
+          (z, i) =>
+            (s += `<text x="${NL + ((i + 0.5) * (NR - NL)) / 3}" y="${NT + 100}" text-anchor="middle" font-size="28" fill="var(--muted)" font-family="Barlow,sans-serif">${z}</text>`),
+        );
+        SETS.forEach((st) => {
+          if (!visible.includes(st[0])) return;
+          const p = setPath(st),
+            on = !hi || hi === st[0],
+            col = FAMCOL[st[3]];
+          s += `<path d="${p.d}" fill="none" stroke="${col}" stroke-width="${on && hi ? 10 : 5.5}" opacity="${on ? 1 : 0.18}"/>`;
+          s += `<circle cx="${p.ex}" cy="${SY + 10}" r="${on && hi ? 12 : 8}" fill="${col}" opacity="${on ? 1 : 0.18}"/>`;
+        });
+        if (labels)
+          SETS.forEach((st) => {
+            if (!visible.includes(st[0])) return;
+            const p = setPath(st),
+              on = !hi || hi === st[0];
+            if (!on && hi) return;
+            const t = ["1", "6", "4", "7", "0", "Po"].includes(st[0]) ? 0.5 : 0.72;
+            const x = (1 - t) ** 2 * p.sx + 2 * (1 - t) * t * p.cx + t * t * p.ex,
+              y = (1 - t) ** 2 * SY + 2 * (1 - t) * t * p.cy + t * t * (SY + 10);
+            const w = 40 + 19 * st[0].length;
+            s += `<g><rect x="${x - w / 2}" y="${y - 24}" width="${w}" height="46" rx="9" fill="var(--panel)" stroke="${FAMCOL[st[3]]}" stroke-width="4"/><text x="${x}" y="${y + 10}" text-anchor="middle" font-size="30" font-weight="800" fill="${FAMCOL[st[3]]}" font-family="Barlow Condensed,sans-serif">${st[0]}</text></g>`;
+          });
+        const sx = PX(SETTER_X);
+        s += `<circle cx="${sx}" cy="${SY}" r="24" fill="var(--s)" stroke="#fff" stroke-width="4"/><text x="${sx}" y="${SY + 9}" text-anchor="middle" font-size="26" font-weight="800" fill="#16283D" font-family="Barlow,sans-serif">S</text>`;
+        return s;
+      }
+      let selSet = null;
+      function renderSets() {
+        $("netS").innerHTML = netSvg(
+          SETS.map((s) => s[0]),
+          selSet,
+        );
+        $("setchips").innerHTML = SETS.map(
+          (s) =>
+            `<button class="setchip ${s[3]}" aria-pressed="${selSet === s[0]}" data-s="${s[0]}"><span>${s[0]}</span></button>`,
+        ).join("");
+        $("setchips")
+          .querySelectorAll("button")
+          .forEach(
+            (b) =>
+              (b.onclick = () => {
+                selSet = selSet === b.dataset.s ? null : b.dataset.s;
+                renderSets();
+              }),
+          );
+        const st = SETS.find((s) => s[0] === selSet);
+        $("setcue").innerHTML = st
+          ? `<b>${st[0]} · ${FAMNAME[st[3]]}</b><p>${st[4]}</p>`
+          : `<b>Lower arc = faster tempo</b><p>Left-side calls are 1, 0 and 2. Middle calls are Shoot, 4 and Po. Behind the setter: Til, 7 and 6.</p>`;
+      }
+      let sq = null,
+        sAns = false,
+        sScore = { ok: 0, n: 0 },
+        sStreak = 0;
+      function newSetQ() {
+        const opts = SETS.filter((s) => !sq || s[0] !== sq[0]);
+        sq = opts[Math.floor(Math.random() * opts.length)];
+        sAns = false;
+        $("netQ").innerHTML = netSvg([sq[0]], null, { labels: false });
+        $("setanswers").innerHTML = SETS.map(
+          (s) => `<button class="setchip ${s[3]}" data-s="${s[0]}"><span>${s[0]}</span></button>`,
+        ).join("");
+        $("setanswers")
+          .querySelectorAll("button")
+          .forEach((b) => (b.onclick = () => answerSet(b.dataset.s)));
+        $("sfb").className = "fb";
+        $("sfb").innerHTML = '<p class="hint">Pick the name of the highlighted set.</p>';
+        $("snext").hidden = true;
+        $("sscore").textContent = `${sScore.ok}/${sScore.n}`;
+        $("sstreak").textContent = sStreak;
+      }
+      function answerSet(name) {
+        if (sAns) return;
+        sAns = true;
+        const ok = name === sq[0];
+        sScore.n++;
+        if (ok) {
+          sScore.ok++;
+          sStreak++;
+        } else sStreak = 0;
+        $("netQ").innerHTML = netSvg(ok ? [sq[0]] : [sq[0], name], sq[0]);
+        $("setanswers")
+          .querySelectorAll("button")
+          .forEach((b) => {
+            if (b.dataset.s === sq[0]) b.setAttribute("aria-pressed", "true");
+            b.disabled = true;
+          });
+        $("sfb").className = "fb " + (ok ? "good" : "bad");
+        $("sfb").innerHTML =
+          `<b>${ok ? "Correct" : "It was " + sq[0]}</b><p style="margin:2px 0 0">${sq[4]}</p>`;
+        $("snext").hidden = false;
+        $("snext").focus({ preventScroll: true });
+        $("sscore").textContent = `${sScore.ok}/${sScore.n}`;
+        $("sstreak").textContent = sStreak;
+      }
+      $("snext").onclick = newSetQ;
 
-// ---------- Match mode ----------
-const STEP_ORDER=['start','rec','ar','serve'];
-const STEP_SHORT={start:'Rotate',rec:'Receive',ar:'After pass',serve:'Serve'};
-let G=null;
-const gSettings=store.get('gameSteps',{start:true,rec:true,ar:true,serve:true});
-STEP_ORDER.forEach(k=>{$('gs-'+k).checked=gSettings[k]!==false; $('gs-'+k).onchange=gCheckSteps;});
-$('nbGame').checked=store.get('nbGame',true);$('nbGame').onchange=()=>store.set('nbGame',$('nbGame').checked);
-function gOrder(){const r=document.querySelector('input[name="gOrder"]:checked');return r?r.value:'order';}
-document.querySelector(`input[name="gOrder"][value="${store.get('gameOrder','order')}"]`).checked=true;
-document.querySelectorAll('input[name="gOrder"]').forEach(r=>r.onchange=()=>{store.set('gameOrder',gOrder());gRenderSetup();});
-function gSteps(){return STEP_ORDER.filter(k=>$('gs-'+k).checked)}
-function gKey(){return role+'|'+gSteps().join(',')+(gOrder()==='mixed'?'|mixed':'')+(rulesMode==='drill'?'|drill':'')}
-function gCheckSteps(){
-  const s=gSteps(); STEP_ORDER.forEach(k=>gSettings[k]=$('gs-'+k).checked); store.set('gameSteps',gSettings);
-  $('gStart').disabled=!s.length;
-  $('gStepsMsg').textContent=s.length?`${s.length*6} moments in this match.`:'Pick at least one step.';
-  gRenderSetup();
-}
-function gRenderSetup(){
-  const mp=gPlayersMode()==='mp';
-  $('gRole').textContent=mp?'the role each player picks':NAMES[role];
-  $('mpBox').hidden=!mp; if(mp) renderMp();
-  const best=mp?null:store.get('gameBest',{})[gKey()];
-  $('gBest').textContent=best?`Your best with these settings: ${best} points.`:'';
-}
-function gView(v){['gSetup','gPass','gReveal','gPlay','gEnd'].forEach(id=>$(id).hidden=id!==v);}
-function gStart(queue,replay=false,mp=null){
-  G={queue,i:0,score:0,streak:0,perfect:0,close:0,helps:0,misses:[],results:[],replay,role,help:0,answered:false,t0:0,key:gKey(),mixed:gOrder()==='mixed',nbOk:0,nbN:0,nb:null,mp:null};
-  if(mp){G.mp={players:mp.map((p,k)=>({name:(p.name||'').trim()||`Player ${k+1}`,role:p.role,color:PCOL[k],score:0,streak:0,perfect:0,close:0,helps:0,misses:[],results:[],nbOk:0,nbN:0,taps:[]})),order:[],turn:0}; mpMomentStart(); return;}
-  gView('gPlay'); gShow();
-}
-function gNewMatch(){const q=[];let order=[0,1,2,3,4,5];if(gOrder()==='mixed'){for(let i=5;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}}
-  order.forEach(i=>gSteps().forEach(k=>q.push({ri:i,phase:k})));gStart(q,false,gPlayersMode()==='mp'?mpPlayers:null);}
-function gStory(st,prev){
-  const R=ROWS[st.ri].name, newRot=!prev||prev.ri!==st.ri;
-  const call=`Coach calls ${R}: setter in ${ROWS[st.ri].setter}.`;
-  const pre=(newRot&&st.phase!=='start'&&!G.replay)?(G.mixed?call+' ':`Now in ${R}. `):'';
-  if(G.replay) return {start:`Where is your rotational spot in ${R}?`,rec:`${R}: the opponent is about to serve. Take your reception spot.`,ar:`${R}: good pass, the ball goes to the setter. Where do you go?`,serve:`${R}: we serve. Where do you switch to after the serve?`}[st.phase];
-  if(st.phase==='start') return G.mixed?`${call} Where is your rotational spot?`:(G.i===0?`First rally of the set. You line up in ${R}. Where are you?`:`We won the rally. Rotate one zone clockwise. Where are you in ${R}?`);
-  if(st.phase==='rec') return pre+'The opponent is about to serve. Take your reception spot.';
-  if(st.phase==='ar') return pre+'Good pass! The ball goes to the setter. Where do you go now?';
-  return pre+`We win the point and serve in ${R}. Where do you switch to after the serve?`;
-}
-function gShow(){
-  const st=G.queue[G.i]; G.help=0; G.answered=false; G.tap=null; G.nb=null; $('gNbBox').innerHTML=''; $('gNext').disabled=false; delete $('gNext').dataset.label;
-  const r=ROWS[st.ri];
-  $('gTitle').textContent=r.name;
-  if(G.mp){const p=mpCur();$('gWho').hidden=false;$('gWho').innerHTML=`<i style="background:${p.color}"></i>${esc(p.name)} · ${NAMES[p.role]}`;} else $('gWho').hidden=true;
-  $('gStepName').textContent=`${FULL[st.phase]} · moment ${G.i+1} of ${G.queue.length}`;
-  $('gBar').style.width=(G.i/G.queue.length*100)+'%';
-  const inRot=G.queue.map((q,j)=>({...q,j})).filter(q=>q.ri===st.ri);
-  $('gTrack').innerHTML=inRot.map(q=>{const res=G.results[q.j];return `<span class="${q.j===G.i?'now':res?(res.q==='miss'?'bad':'ok'):''}">${STEP_SHORT[q.phase]}</span>`}).join('');
-  $('gStory').textContent=gStory(st,G.queue[G.i-1]);
-  $('gScore').textContent=G.score; $('gStreak').textContent=G.streak;
-  $('gOff').disabled=false; $('gHelp').disabled=false; $('gHelp').textContent='Help'; $('gNext').hidden=true;
-  $('gFb').className='fb'; $('gFb').innerHTML='<p class="hint">Tap the court where you stand. If the libero is in for you, press “I\'m off court”.</p>';
-  gDraw(); G.t0=performance.now();
-}
-function gDraw(){
-  const st=G.queue[G.i], pl=players(st.ri,st.phase), me=pl.find(o=>o.p===G.role);
-  let s=DEFS+courtBase();
-  if(G.answered&&st.phase==='start') s+=rotArrows();
-  if(G.answered&&st.phase==='ar') s+=arLayer(st.ri,pl,G.role);
-  if(!G.answered&&G.help>=2&&me){
-    const jx=me.x+(G.jit?G.jit[0]:0), jy=me.y+(G.jit?G.jit[1]:0);
-    s+=`<circle cx="${jx*W}" cy="${jy*H}" r="46" fill="var(--orange)" opacity=".16" stroke="var(--orange)" stroke-width="2" stroke-dasharray="5 4"/>`;
-  }
-  (G.answered?pl.filter(o=>o.p!==G.role):visible(visGame,pl,G.role)).forEach(o=>s+=chip(o,{dim:G.answered||visGame==='all'}));
-  if(G.answered&&G.nb&&G.nb.done) s+=nbLayer(pl,G.role,G.nb.a);
-  if(G.answered){
-    if(G.tap&&me) s+=`<line x1="${G.tap.x*W}" y1="${G.tap.y*H}" x2="${me.x*W}" y2="${me.y*H}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="3 3" opacity=".6"/>`;
-    if(G.tap) s+=`<circle cx="${G.tap.x*W}" cy="${G.tap.y*H}" r="7" fill="var(--ink)" opacity=".7"/>`;
-    if(me) s+=chip(me,{me:true});
-  }
-  $('courtG').innerHTML=s;
-}
-function gHint(level){
-  const st=G.queue[G.i], pl=players(st.ri,st.phase), me=pl.find(o=>o.p===G.role), z=zoneOf(st.ri,G.role);
-  if(level===2){
-    if(!me) return 'You are not on court at this moment.';
-    return `Look inside the orange area. ${describe(st.ri,st.phase,G.role).t}.`;
-  }
-  if(!me&&G.role==='L') return 'Who is in zone 1 when we serve? Remember: under the official rules the libero may never serve.';
-  if(!me) return st.phase==='serve'?'Who does the libero replace while we serve? And who is serving from zone 1?':`Who does the libero replace in ${ROWS[st.ri].name}? Is your middle in the back row?`;
-  if(st.phase==='start'){
-    if(G.role==='L') return relation(st.ri,'L')+' Find the back-row middle first.';
-    const pz=zoneOf((st.ri+5)%6,G.role);
-    if(G.mixed||G.replay) return relation(st.ri,G.role);
-    return pz?`In the previous rotation you were in zone ${pz}. Everyone moves one zone clockwise: 2→1→6→5→4→3→2.`:`You were off court in the previous rotation. You come back on in the front row, zone 4.`;
-  }
-  if(st.phase==='rec'){
-    const row=isFront(st.ri,G.role)?'front':'back';
-    const job=['OH1','OH2','L'].includes(G.role)?'You receive, so you stand on the receiving line.':G.role==='S'?'You don\'t receive. Stay near your zone, out of the passing lanes, ready to run to the net.':'You don\'t receive. Stay out of the passing lanes.';
-    return `${relation(st.ri,G.role)} That makes your rotational spot zone ${z} (${row} row). ${job} Keep your overlap order.`;
-  }
-  if(st.phase==='ar'){
-    if(me.kind==='set') return 'You are the setter: where do you set from?';
-    if(me.kind==='back') return 'You are the back-row opposite. Remember rule 4.';
-    if(me.kind==='front') return G.role.startsWith('MB')?'You are front-row middle: you attack. Which lane?':'You attack. Remember rule 2: the front-row outside starts left, except when the setter is in 1.';
-    return G.role==='L'?'You don\'t attack: cover the hitter, then take your defensive spot. Remember rule 3.':'You are back row and don\'t attack now: cover the attack. The libero takes left back.';
-  }
-  return `After the serve everyone switches to their specialist spot. You are ${isFront(st.ri,G.role)?'front':'back'} row in this rotation.`;
-}
-$('gHelp').onclick=()=>{
-  if(!G||G.answered||G.help>=2) return;
-  G.help++; G.helps++;
-  if(G.help===2) G.jit=[(Math.random()-.5)*.12,(Math.random()-.5)*.12];
-  $('gHelp').textContent=G.help===1?'More help':'No more help'; $('gHelp').disabled=G.help>=2;
-  $('gFb').className='fb close'; $('gFb').innerHTML=`<b>${G.help===1?'Hint':'More help'}</b><p style="margin:2px 0 0">${gHint(G.help)}</p>`;
-  gDraw();
-};
-function gAnswer(q){
-  const st=G.queue[G.i]; G.answered=true;
-  const secs=(performance.now()-G.t0)/1000;
-  const base={perfect:100,close:60,miss:0}[q];
-  const mult=[1,.6,.3][G.help];
-  const speed=(q!=='miss'&&G.help===0)?Math.max(0,Math.min(20,Math.round(20-(secs-2)*5))):0;
-  if(q==='perfect'&&G.help===0) G.streak++; else G.streak=0;
-  const streakB=G.streak>1?Math.min(G.streak-1,5)*10:0;
-  const pts=Math.round(base*mult)+speed+streakB;
-  G.score+=pts; if(q==='perfect')G.perfect++; if(q==='close')G.close++;
-  G.results[G.i]={q,pts};
-  if(q==='miss') G.misses.push(st);
-  const d=describe(st.ri,st.phase,G.role);
-  const title={perfect:'Spot on',close:'Close enough',miss:'Not there'}[q];
-  const parts=[]; if(base) parts.push(`${Math.round(base*mult)} position`); if(speed) parts.push(`+${speed} speed`); if(streakB) parts.push(`+${streakB} streak`);
-  $('gFb').className='fb '+({perfect:'good',close:'close',miss:'bad'}[q]);
-  $('gFb').innerHTML=`<span class="pts">+${pts}</span><b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>${parts.length?`<p class="hint" style="margin-top:4px">${parts.join(' · ')}</p>`:''}`;
-  $('gScore').textContent=G.score; $('gStreak').textContent=G.streak;
-  $('gOff').disabled=true; $('gHelp').disabled=true; $('gNext').hidden=false;
-  $('gNext').textContent=G.mp?(G.mp.turn<G.mp.players.length-1?'Next player':'Show everyone\'s answers'):(G.i===G.queue.length-1?'See results':'Continue');
-  $('gNext').focus({preventScroll:true});
-  if(st.phase==='rec'&&$('nbGame').checked){const nq=neighbourQ(st.ri,G.role); if(nq){G.nb=nq; nbLock('gNext',true);
-    $('gNbBox').innerHTML=nbHtml(nq,'gnb'); $('gnb').scrollIntoView({block:'nearest',behavior:'smooth'});
-    $('gnb').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(G.nb.done)return;G.nb.done=true;G.nbN++;const ok=!b.dataset.skip&&b.dataset.p===nq.a;
-      if(ok){G.nbOk++;G.score+=30;G.results[G.i].pts+=30;$('gScore').textContent=G.score;$('gFb').querySelector('.pts').textContent='+'+G.results[G.i].pts;}
-      nbMark('gnb',nq,b.dataset.skip?null:b.dataset.p);gDraw();nbLock('gNext',false);$('gNext').focus({preventScroll:true});});}}
-  gDraw();
-}
-$('courtG').addEventListener('pointerup',e=>{
-  if(!G||G.answered) return;
-  const p=svgPoint($('courtG'),e); G.tap={x:p.x/W,y:p.y/H};
-  const st=G.queue[G.i]; const me=players(st.ri,st.phase).find(o=>o.p===G.role);
-  if(!me) return gAnswer('miss');
-  let dist=Math.hypot(G.tap.x-me.x,(G.tap.y-me.y)*.67);
-  if(st.phase==='start'){const zx=Math.min(2,Math.max(0,Math.floor(G.tap.x*3))),zy=G.tap.y<AL?0:1;const [c,r]=ZONES[zoneOf(st.ri,G.role)];dist=(zx===c&&zy===r)?0:1}
-  gAnswer(dist<.14?'perfect':dist<.24?'close':'miss');
-});
-$('gOff').onclick=()=>{
-  if(!G||G.answered) return;
-  const st=G.queue[G.i]; const me=players(st.ri,st.phase).find(o=>o.p===G.role);
-  gAnswer(me?'miss':'perfect');
-};
-$('gNext').onclick=()=>{ if(G.mp) return mpAfterTurn(); if(G.i<G.queue.length-1){G.i++;gShow();} else gFinish(); };
-$('gQuit').onclick=()=>{G=null;gRenderSetup();gView('gSetup');};
-function gFinish(){
-  if(G.mp) return mpFinish();
-  const n=G.queue.length, acc=Math.round((G.perfect+G.close)/n*100);
-  let best=false;
-  if(!G.replay){const all=store.get('gameBest',{});const k=G.key;if(!all[k]||G.score>all[k]){best=true;all[k]=G.score;store.set('gameBest',all);}}
-  store.set('lastPractice',Date.now());
-  $('gEndTitle').textContent=G.replay?'Mistakes replayed':(acc===100?'Perfect match!':'Match finished');
-  $('gStats').innerHTML=`<div><strong>${G.score}</strong><span>points${best&&!G.replay?' · new best':''}</span></div><div><strong>${acc}%</strong><span>right or close</span></div><div><strong>${G.perfect}/${n}</strong><span>spot on</span></div><div><strong>${G.helps}</strong><span>help used</span></div>${G.nbN?`<div class="wide"><strong>${G.nbOk}/${G.nbN}</strong><span>neighbour checks right</span></div>`:''}`;
-  $('gMist').innerHTML=G.misses.length?`<h2 style="font-size:20px;margin-top:4px">Where you should have been</h2><ul class="mist">${G.misses.map(m=>{const d=describe(m.ri,m.phase,G.role);return `<li><b>${ROWS[m.ri].name} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`}).join('')}</ul>`:'<p>No mistakes. '+(visGame!=='none'||!G.mixed?'Next step: mixed order and show nobody.':'You know your spots. Keep it fresh with a short match every few days.')+'</p>';
-  $('gReplay').hidden=!G.misses.length; $('gAgain').textContent='Play again';
-  $('gBar').style.width='100%';
-  gView('gEnd');
-}
-$('gReplay').onclick=()=>gStart(G.misses.slice(),true);
-$('gAgain').onclick=()=>{ if(!gSteps().length) return gView('gSetup'); gNewMatch(); };
-$('gSettings').onclick=()=>{G=null;gRenderSetup();gView('gSetup');};
-$('gStart').onclick=gNewMatch;
-gCheckSteps();
+      // ---------- Match mode ----------
+      const STEP_ORDER = ["start", "rec", "ar", "serve"];
+      const STEP_SHORT = { start: "Rotate", rec: "Receive", ar: "After pass", serve: "Serve" };
+      let G = null;
+      const gSettings = store.get("gameSteps", { start: true, rec: true, ar: true, serve: true });
+      STEP_ORDER.forEach((k) => {
+        $("gs-" + k).checked = gSettings[k] !== false;
+        $("gs-" + k).onchange = gCheckSteps;
+      });
+      $("nbGame").checked = store.get("nbGame", true);
+      $("nbGame").onchange = () => store.set("nbGame", $("nbGame").checked);
+      function gOrder() {
+        const r = document.querySelector('input[name="gOrder"]:checked');
+        return r ? r.value : "order";
+      }
+      document.querySelector(
+        `input[name="gOrder"][value="${store.get("gameOrder", "order")}"]`,
+      ).checked = true;
+      document.querySelectorAll('input[name="gOrder"]').forEach(
+        (r) =>
+          (r.onchange = () => {
+            store.set("gameOrder", gOrder());
+            gRenderSetup();
+          }),
+      );
+      function gSteps() {
+        return STEP_ORDER.filter((k) => $("gs-" + k).checked);
+      }
+      function gKey() {
+        return (
+          role +
+          "|" +
+          gSteps().join(",") +
+          (gOrder() === "mixed" ? "|mixed" : "") +
+          (rulesMode === "drill" ? "|drill" : "")
+        );
+      }
+      function gCheckSteps() {
+        const s = gSteps();
+        STEP_ORDER.forEach((k) => (gSettings[k] = $("gs-" + k).checked));
+        store.set("gameSteps", gSettings);
+        $("gStart").disabled = !s.length;
+        $("gStepsMsg").textContent = s.length
+          ? `${s.length * 6} moments in this match.`
+          : "Pick at least one step.";
+        gRenderSetup();
+      }
+      function gRenderSetup() {
+        const mp = gPlayersMode() === "mp";
+        $("gRole").textContent = mp ? "the role each player picks" : NAMES[role];
+        $("mpBox").hidden = !mp;
+        if (mp) renderMp();
+        const best = mp ? null : store.get("gameBest", {})[gKey()];
+        $("gBest").textContent = best ? `Your best with these settings: ${best} points.` : "";
+      }
+      function gView(v) {
+        ["gSetup", "gPass", "gReveal", "gPlay", "gEnd"].forEach((id) => ($(id).hidden = id !== v));
+      }
+      function gStart(queue, replay = false, mp = null) {
+        G = {
+          queue,
+          i: 0,
+          score: 0,
+          streak: 0,
+          perfect: 0,
+          close: 0,
+          helps: 0,
+          misses: [],
+          results: [],
+          replay,
+          role,
+          help: 0,
+          answered: false,
+          t0: 0,
+          key: gKey(),
+          mixed: gOrder() === "mixed",
+          nbOk: 0,
+          nbN: 0,
+          nb: null,
+          mp: null,
+        };
+        if (mp) {
+          G.mp = {
+            players: mp.map((p, k) => ({
+              name: (p.name || "").trim() || `Player ${k + 1}`,
+              role: p.role,
+              color: PCOL[k],
+              score: 0,
+              streak: 0,
+              perfect: 0,
+              close: 0,
+              helps: 0,
+              misses: [],
+              results: [],
+              nbOk: 0,
+              nbN: 0,
+              taps: [],
+            })),
+            order: [],
+            turn: 0,
+          };
+          mpMomentStart();
+          return;
+        }
+        gView("gPlay");
+        gShow();
+      }
+      function gNewMatch() {
+        const q = [];
+        let order = [0, 1, 2, 3, 4, 5];
+        if (gOrder() === "mixed") {
+          for (let i = 5; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [order[i], order[j]] = [order[j], order[i]];
+          }
+        }
+        order.forEach((i) => gSteps().forEach((k) => q.push({ ri: i, phase: k })));
+        gStart(q, false, gPlayersMode() === "mp" ? mpPlayers : null);
+      }
+      function gStory(st, prev) {
+        const R = ROWS[st.ri].name,
+          newRot = !prev || prev.ri !== st.ri;
+        const call = `Coach calls ${R}: setter in ${ROWS[st.ri].setter}.`;
+        const pre =
+          newRot && st.phase !== "start" && !G.replay
+            ? G.mixed
+              ? call + " "
+              : `Now in ${R}. `
+            : "";
+        if (G.replay)
+          return {
+            start: `Where is your rotational spot in ${R}?`,
+            rec: `${R}: the opponent is about to serve. Take your reception spot.`,
+            ar: `${R}: good pass, the ball goes to the setter. Where do you go?`,
+            serve: `${R}: we serve. Where do you switch to after the serve?`,
+          }[st.phase];
+        if (st.phase === "start")
+          return G.mixed
+            ? `${call} Where is your rotational spot?`
+            : G.i === 0
+              ? `First rally of the set. You line up in ${R}. Where are you?`
+              : `We won the rally. Rotate one zone clockwise. Where are you in ${R}?`;
+        if (st.phase === "rec")
+          return pre + "The opponent is about to serve. Take your reception spot.";
+        if (st.phase === "ar")
+          return pre + "Good pass! The ball goes to the setter. Where do you go now?";
+        return pre + `We win the point and serve in ${R}. Where do you switch to after the serve?`;
+      }
+      function gShow() {
+        const st = G.queue[G.i];
+        G.help = 0;
+        G.answered = false;
+        G.tap = null;
+        G.nb = null;
+        $("gNbBox").innerHTML = "";
+        $("gNext").disabled = false;
+        delete $("gNext").dataset.label;
+        const r = ROWS[st.ri];
+        $("gTitle").textContent = r.name;
+        if (G.mp) {
+          const p = mpCur();
+          $("gWho").hidden = false;
+          $("gWho").innerHTML =
+            `<i style="background:${p.color}"></i>${esc(p.name)} · ${NAMES[p.role]}`;
+        } else $("gWho").hidden = true;
+        $("gStepName").textContent = `${FULL[st.phase]} · moment ${G.i + 1} of ${G.queue.length}`;
+        $("gBar").style.width = (G.i / G.queue.length) * 100 + "%";
+        const inRot = G.queue.map((q, j) => ({ ...q, j })).filter((q) => q.ri === st.ri);
+        $("gTrack").innerHTML = inRot
+          .map((q) => {
+            const res = G.results[q.j];
+            return `<span class="${q.j === G.i ? "now" : res ? (res.q === "miss" ? "bad" : "ok") : ""}">${STEP_SHORT[q.phase]}</span>`;
+          })
+          .join("");
+        $("gStory").textContent = gStory(st, G.queue[G.i - 1]);
+        $("gScore").textContent = G.score;
+        $("gStreak").textContent = G.streak;
+        $("gOff").disabled = false;
+        $("gHelp").disabled = false;
+        $("gHelp").textContent = "Help";
+        $("gNext").hidden = true;
+        $("gFb").className = "fb";
+        $("gFb").innerHTML =
+          '<p class="hint">Tap the court where you stand. If the libero is in for you, press “I\'m off court”.</p>';
+        gDraw();
+        G.t0 = performance.now();
+      }
+      function gDraw() {
+        const st = G.queue[G.i],
+          pl = players(st.ri, st.phase),
+          me = pl.find((o) => o.p === G.role);
+        let s = DEFS + courtBase();
+        if (G.answered && st.phase === "start") s += rotArrows();
+        if (G.answered && st.phase === "ar") s += arLayer(st.ri, pl, G.role);
+        if (!G.answered && G.help >= 2 && me) {
+          const jx = me.x + (G.jit ? G.jit[0] : 0),
+            jy = me.y + (G.jit ? G.jit[1] : 0);
+          s += `<circle cx="${jx * W}" cy="${jy * H}" r="46" fill="var(--orange)" opacity=".16" stroke="var(--orange)" stroke-width="2" stroke-dasharray="5 4"/>`;
+        }
+        (G.answered ? pl.filter((o) => o.p !== G.role) : visible(visGame, pl, G.role)).forEach(
+          (o) => (s += chip(o, { dim: G.answered || visGame === "all" })),
+        );
+        if (G.answered && G.nb && G.nb.done) s += nbLayer(pl, G.role, G.nb.a);
+        if (G.answered) {
+          if (G.tap && me)
+            s += `<line x1="${G.tap.x * W}" y1="${G.tap.y * H}" x2="${me.x * W}" y2="${me.y * H}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="3 3" opacity=".6"/>`;
+          if (G.tap)
+            s += `<circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="7" fill="var(--ink)" opacity=".7"/>`;
+          if (me) s += chip(me, { me: true });
+        }
+        $("courtG").innerHTML = s;
+      }
+      function gHint(level) {
+        const st = G.queue[G.i],
+          pl = players(st.ri, st.phase),
+          me = pl.find((o) => o.p === G.role),
+          z = zoneOf(st.ri, G.role);
+        if (level === 2) {
+          if (!me) return "You are not on court at this moment.";
+          return `Look inside the orange area. ${describe(st.ri, st.phase, G.role).t}.`;
+        }
+        if (!me && G.role === "L")
+          return "Who is in zone 1 when we serve? Remember: under the official rules the libero may never serve.";
+        if (!me)
+          return st.phase === "serve"
+            ? "Who does the libero replace while we serve? And who is serving from zone 1?"
+            : `Who does the libero replace in ${ROWS[st.ri].name}? Is your middle in the back row?`;
+        if (st.phase === "start") {
+          if (G.role === "L") return relation(st.ri, "L") + " Find the back-row middle first.";
+          const pz = zoneOf((st.ri + 5) % 6, G.role);
+          if (G.mixed || G.replay) return relation(st.ri, G.role);
+          return pz
+            ? `In the previous rotation you were in zone ${pz}. Everyone moves one zone clockwise: 2→1→6→5→4→3→2.`
+            : `You were off court in the previous rotation. You come back on in the front row, zone 4.`;
+        }
+        if (st.phase === "rec") {
+          const row = isFront(st.ri, G.role) ? "front" : "back";
+          const job = ["OH1", "OH2", "L"].includes(G.role)
+            ? "You receive, so you stand on the receiving line."
+            : G.role === "S"
+              ? "You don't receive. Stay near your zone, out of the passing lanes, ready to run to the net."
+              : "You don't receive. Stay out of the passing lanes.";
+          return `${relation(st.ri, G.role)} That makes your rotational spot zone ${z} (${row} row). ${job} Keep your overlap order.`;
+        }
+        if (st.phase === "ar") {
+          if (me.kind === "set") return "You are the setter: where do you set from?";
+          if (me.kind === "back") return "You are the back-row opposite. Remember rule 4.";
+          if (me.kind === "front")
+            return G.role.startsWith("MB")
+              ? "You are front-row middle: you attack. Which lane?"
+              : "You attack. Remember rule 2: the front-row outside starts left, except when the setter is in 1.";
+          return G.role === "L"
+            ? "You don't attack: cover the hitter, then take your defensive spot. Remember rule 3."
+            : "You are back row and don't attack now: cover the attack. The libero takes left back.";
+        }
+        return `After the serve everyone switches to their specialist spot. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;
+      }
+      $("gHelp").onclick = () => {
+        if (!G || G.answered || G.help >= 2) return;
+        G.help++;
+        G.helps++;
+        if (G.help === 2) G.jit = [(Math.random() - 0.5) * 0.12, (Math.random() - 0.5) * 0.12];
+        $("gHelp").textContent = G.help === 1 ? "More help" : "No more help";
+        $("gHelp").disabled = G.help >= 2;
+        $("gFb").className = "fb close";
+        $("gFb").innerHTML =
+          `<b>${G.help === 1 ? "Hint" : "More help"}</b><p style="margin:2px 0 0">${gHint(G.help)}</p>`;
+        gDraw();
+      };
+      function gAnswer(q) {
+        const st = G.queue[G.i];
+        G.answered = true;
+        const secs = (performance.now() - G.t0) / 1000;
+        const base = { perfect: 100, close: 60, miss: 0 }[q];
+        const mult = [1, 0.6, 0.3][G.help];
+        const speed =
+          q !== "miss" && G.help === 0
+            ? Math.max(0, Math.min(20, Math.round(20 - (secs - 2) * 5)))
+            : 0;
+        if (q === "perfect" && G.help === 0) G.streak++;
+        else G.streak = 0;
+        const streakB = G.streak > 1 ? Math.min(G.streak - 1, 5) * 10 : 0;
+        const pts = Math.round(base * mult) + speed + streakB;
+        G.score += pts;
+        if (q === "perfect") G.perfect++;
+        if (q === "close") G.close++;
+        G.results[G.i] = { q, pts };
+        if (q === "miss") G.misses.push(st);
+        const d = describe(st.ri, st.phase, G.role);
+        const title = { perfect: "Spot on", close: "Close enough", miss: "Not there" }[q];
+        const parts = [];
+        if (base) parts.push(`${Math.round(base * mult)} position`);
+        if (speed) parts.push(`+${speed} speed`);
+        if (streakB) parts.push(`+${streakB} streak`);
+        $("gFb").className = "fb " + { perfect: "good", close: "close", miss: "bad" }[q];
+        $("gFb").innerHTML =
+          `<span class="pts">+${pts}</span><b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>${parts.length ? `<p class="hint" style="margin-top:4px">${parts.join(" · ")}</p>` : ""}`;
+        $("gScore").textContent = G.score;
+        $("gStreak").textContent = G.streak;
+        $("gOff").disabled = true;
+        $("gHelp").disabled = true;
+        $("gNext").hidden = false;
+        $("gNext").textContent = G.mp
+          ? G.mp.turn < G.mp.players.length - 1
+            ? "Next player"
+            : "Show everyone's answers"
+          : G.i === G.queue.length - 1
+            ? "See results"
+            : "Continue";
+        $("gNext").focus({ preventScroll: true });
+        if (st.phase === "rec" && $("nbGame").checked) {
+          const nq = neighbourQ(st.ri, G.role);
+          if (nq) {
+            G.nb = nq;
+            nbLock("gNext", true);
+            $("gNbBox").innerHTML = nbHtml(nq, "gnb");
+            $("gnb").scrollIntoView({ block: "nearest", behavior: "smooth" });
+            $("gnb")
+              .querySelectorAll("button")
+              .forEach(
+                (b) =>
+                  (b.onclick = () => {
+                    if (G.nb.done) return;
+                    G.nb.done = true;
+                    G.nbN++;
+                    const ok = !b.dataset.skip && b.dataset.p === nq.a;
+                    if (ok) {
+                      G.nbOk++;
+                      G.score += 30;
+                      G.results[G.i].pts += 30;
+                      $("gScore").textContent = G.score;
+                      $("gFb").querySelector(".pts").textContent = "+" + G.results[G.i].pts;
+                    }
+                    nbMark("gnb", nq, b.dataset.skip ? null : b.dataset.p);
+                    gDraw();
+                    nbLock("gNext", false);
+                    $("gNext").focus({ preventScroll: true });
+                  }),
+              );
+          }
+        }
+        gDraw();
+      }
+      $("courtG").addEventListener("pointerup", (e) => {
+        if (!G || G.answered) return;
+        const p = svgPoint($("courtG"), e);
+        G.tap = { x: p.x / W, y: p.y / H };
+        const st = G.queue[G.i];
+        const me = players(st.ri, st.phase).find((o) => o.p === G.role);
+        if (!me) return gAnswer("miss");
+        let dist = Math.hypot(G.tap.x - me.x, (G.tap.y - me.y) * 0.67);
+        if (st.phase === "start") {
+          const zx = Math.min(2, Math.max(0, Math.floor(G.tap.x * 3))),
+            zy = G.tap.y < AL ? 0 : 1;
+          const [c, r] = ZONES[zoneOf(st.ri, G.role)];
+          dist = zx === c && zy === r ? 0 : 1;
+        }
+        gAnswer(dist < 0.14 ? "perfect" : dist < 0.24 ? "close" : "miss");
+      });
+      $("gOff").onclick = () => {
+        if (!G || G.answered) return;
+        const st = G.queue[G.i];
+        const me = players(st.ri, st.phase).find((o) => o.p === G.role);
+        gAnswer(me ? "miss" : "perfect");
+      };
+      $("gNext").onclick = () => {
+        if (G.mp) return mpAfterTurn();
+        if (G.i < G.queue.length - 1) {
+          G.i++;
+          gShow();
+        } else gFinish();
+      };
+      $("gQuit").onclick = () => {
+        G = null;
+        gRenderSetup();
+        gView("gSetup");
+      };
+      function gFinish() {
+        if (G.mp) return mpFinish();
+        const n = G.queue.length,
+          acc = Math.round(((G.perfect + G.close) / n) * 100);
+        let best = false;
+        if (!G.replay) {
+          const all = store.get("gameBest", {});
+          const k = G.key;
+          if (!all[k] || G.score > all[k]) {
+            best = true;
+            all[k] = G.score;
+            store.set("gameBest", all);
+          }
+        }
+        store.set("lastPractice", Date.now());
+        $("gEndTitle").textContent = G.replay
+          ? "Mistakes replayed"
+          : acc === 100
+            ? "Perfect match!"
+            : "Match finished";
+        $("gStats").innerHTML =
+          `<div><strong>${G.score}</strong><span>points${best && !G.replay ? " · new best" : ""}</span></div><div><strong>${acc}%</strong><span>right or close</span></div><div><strong>${G.perfect}/${n}</strong><span>spot on</span></div><div><strong>${G.helps}</strong><span>help used</span></div>${G.nbN ? `<div class="wide"><strong>${G.nbOk}/${G.nbN}</strong><span>neighbour checks right</span></div>` : ""}`;
+        $("gMist").innerHTML = G.misses.length
+          ? `<h2 style="font-size:20px;margin-top:4px">Where you should have been</h2><ul class="mist">${G.misses
+              .map((m) => {
+                const d = describe(m.ri, m.phase, G.role);
+                return `<li><b>${ROWS[m.ri].name} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`;
+              })
+              .join("")}</ul>`
+          : "<p>No mistakes. " +
+            (visGame !== "none" || !G.mixed
+              ? "Next step: mixed order and show nobody."
+              : "You know your spots. Keep it fresh with a short match every few days.") +
+            "</p>";
+        $("gReplay").hidden = !G.misses.length;
+        $("gAgain").textContent = "Play again";
+        $("gBar").style.width = "100%";
+        gView("gEnd");
+      }
+      $("gReplay").onclick = () => gStart(G.misses.slice(), true);
+      $("gAgain").onclick = () => {
+        if (!gSteps().length) return gView("gSetup");
+        gNewMatch();
+      };
+      $("gSettings").onclick = () => {
+        G = null;
+        gRenderSetup();
+        gView("gSetup");
+      };
+      $("gStart").onclick = gNewMatch;
+      gCheckSteps();
 
-// ---------- Multiplayer (same device) ----------
-const PCOL=['#F08A1C','#14A3A3','#8E5BD6','#1E9E5A','#D63A78','#3B7DD8'];
-function esc(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-let mpPlayers=store.get('mpPlayers',[{name:'Player 1',role:'MB1'},{name:'Player 2',role:'OP'}]);
-if(!Array.isArray(mpPlayers)||mpPlayers.length<2) mpPlayers=[{name:'Player 1',role:'MB1'},{name:'Player 2',role:'OP'}];
-function gPlayersMode(){const r=document.querySelector('input[name="gPlayers"]:checked');return r?r.value:'solo';}
-document.querySelector(`input[name="gPlayers"][value="${store.get('gPlayers','solo')==='mp'?'mp':'solo'}"]`).checked=true;
-document.querySelectorAll('input[name="gPlayers"]').forEach(r=>r.onchange=()=>{store.set('gPlayers',gPlayersMode());gRenderSetup();});
-function saveMp(){store.set('mpPlayers',mpPlayers);}
-function renderMp(){
-  $('mpList').innerHTML=mpPlayers.map((p,k)=>`<div class="mprow"><i style="background:${PCOL[k]}"></i>
-    <input type="text" maxlength="16" value="${esc(p.name)}" data-k="${k}" aria-label="Player ${k+1} name">
-    <select data-k="${k}" aria-label="Player ${k+1} role">${ROLES.map(r=>`<option value="${r}"${r===p.role?' selected':''}>${NAMES[r]}</option>`).join('')}</select>
-    <button type="button" data-rm="${k}" aria-label="Remove player ${k+1}" ${mpPlayers.length<=2?'disabled':''}>✕</button></div>`).join('');
-  $('mpList').querySelectorAll('input').forEach(el=>el.oninput=()=>{mpPlayers[+el.dataset.k].name=el.value;saveMp();});
-  $('mpList').querySelectorAll('select').forEach(el=>el.onchange=()=>{mpPlayers[+el.dataset.k].role=el.value;saveMp();});
-  $('mpList').querySelectorAll('button[data-rm]').forEach(el=>el.onclick=()=>{if(mpPlayers.length<=2)return;mpPlayers.splice(+el.dataset.rm,1);saveMp();renderMp();});
-  $('mpAdd').disabled=mpPlayers.length>=6;
-}
-$('mpAdd').onclick=()=>{if(mpPlayers.length>=6)return;const used=mpPlayers.map(p=>p.role);mpPlayers.push({name:`Player ${mpPlayers.length+1}`,role:ROLES.find(r=>!used.includes(r))||'OH1'});saveMp();renderMp();};
-const MP_KEYS=['score','streak','perfect','close','helps','misses','results','nbOk','nbN'];
-function mpCur(){return G.mp.players[G.mp.order[G.mp.turn]];}
-function swapIn(p){MP_KEYS.forEach(k=>G[k]=p[k]);G.role=p.role;}
-function swapOut(p){MP_KEYS.forEach(k=>p[k]=G[k]);p.taps[G.i]={tap:G.tap,res:G.results[G.i]};}
-function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
-function mpBoard(){return [...G.mp.players].sort((a,b)=>b.score-a.score).map(p=>`<span class="pchip"><i style="background:${p.color}"></i>${esc(p.name)} <b>${p.score}</b></span>`).join('');}
-function mpMomentStart(){G.mp.order=shuffle(G.mp.players.map((_,k)=>k));G.mp.turn=0;mpPass();}
-function mpPass(){
-  const p=mpCur(); swapIn(p);
-  const st=G.queue[G.i];
-  $('pMoment').textContent=`Moment ${G.i+1} of ${G.queue.length} · ${ROWS[st.ri].name} · ${FULL[st.phase]} · turn ${G.mp.turn+1} of ${G.mp.players.length}`;
-  $('pName').textContent=p.name; $('pName').style.color=p.color;
-  $('pRole').textContent=`plays ${NAMES[p.role]}`;
-  $('pBoard').innerHTML=mpBoard();
-  gView('gPass'); window.scrollTo({top:$('game').offsetTop-10});
-}
-$('pReady').onclick=()=>{gView('gPlay');gShow();};
-function mpAfterTurn(){const p=mpCur();swapOut(p);G.mp.turn++;if(G.mp.turn<G.mp.players.length)mpPass();else mpReveal();}
-function mpReveal(){
-  const st=G.queue[G.i], pl=players(st.ri,st.phase);
-  let s=DEFS+courtBase();
-  if(st.phase==='start') s+=rotArrows();
-  const roles=[...new Set(G.mp.players.map(p=>p.role))];
-  pl.filter(o=>!roles.includes(o.p)).forEach(o=>s+=chip(o,{dim:true}));
-  G.mp.players.forEach(p=>{const t=p.taps[G.i]; const me=pl.find(o=>o.p===p.role);
-    if(t&&t.tap&&me) s+=`<line x1="${t.tap.x*W}" y1="${t.tap.y*H}" x2="${me.x*W}" y2="${me.y*H}" stroke="${p.color}" stroke-width="2" stroke-dasharray="3 3"/>`;});
-  roles.forEach(r=>{const me=pl.find(o=>o.p===r); if(!me) return; const owners=G.mp.players.filter(p=>p.role===r);
-    s+=`<circle cx="${me.x*W}" cy="${me.y*H}" r="24" fill="none" stroke="${owners[0].color}" stroke-width="4"/>`; s+=chip(me);});
-  G.mp.players.forEach(p=>{const t=p.taps[G.i]; if(!t||!t.tap) return;
-    s+=`<circle cx="${t.tap.x*W}" cy="${t.tap.y*H}" r="9" fill="${p.color}" stroke="#fff" stroke-width="1.5"/><text x="${t.tap.x*W}" y="${t.tap.y*H+4}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="Barlow,sans-serif">${esc(p.name.trim()[0]||'?').toUpperCase()}</text>`;});
-  $('courtR').innerHTML=s;
-  $('rTitle').textContent=`${ROWS[st.ri].name} · ${FULL[st.phase]}`;
-  $('rSub').textContent=`Moment ${G.i+1} of ${G.queue.length}`;
-  const lab={perfect:'Spot on',close:'Close',miss:'Not there'};
-  $('rList').innerHTML=G.mp.players.map(p=>{const t=p.taps[G.i]||{},r=t.res||{q:'miss',pts:0};const d=describe(st.ri,st.phase,p.role);
-    return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${lab[r.q]}${t.res&&!t.tap?' (said off court)':''}<small>Correct: ${d.t}</small></div><span class="rp">+${r.pts}</span></li>`;}).join('');
-  $('rBoard').innerHTML=mpBoard();
-  $('rNext').textContent=G.i<G.queue.length-1?'Next moment':'See final results';
-  gView('gReveal');
-}
-$('rNext').onclick=()=>{if(G.i<G.queue.length-1){G.i++;mpMomentStart();}else gFinish();};
-$('rQuit').onclick=$('pQuit').onclick=()=>{G=null;gRenderSetup();gView('gSetup');};
-function mpFinish(){
-  const n=G.queue.length, ps=[...G.mp.players].sort((a,b)=>b.score-a.score);
-  const tie=ps.length>1&&ps[0].score===ps[1].score;
-  $('gEndTitle').textContent=tie?'It\'s a tie!':`${ps[0].name} wins!`;
-  let pos=0,last=null;
-  $('gStats').innerHTML=`<ol class="rank" style="grid-column:1/-1">${ps.map((p,k)=>{if(p.score!==last){pos=k+1;last=p.score;}
-    const acc=Math.round((p.perfect+p.close)/n*100);
-    return `<li><span class="pos">${pos}</span><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}<small>${acc}% right or close · ${p.perfect} spot on · ${p.helps} help${p.nbN?` · neighbours ${p.nbOk}/${p.nbN}`:''}</small></div><span class="sc">${p.score}</span></li>`;}).join('')}</ol>`;
-  $('gMist').innerHTML=G.mp.players.map(p=>p.misses.length?`<details class="pm"><summary><span style="color:${p.color}">●</span> ${esc(p.name)}: where you should have been (${p.misses.length})</summary><ul class="mist">${p.misses.map(m=>{const d=describe(m.ri,m.phase,p.role);return `<li><b>${ROWS[m.ri].name} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`}).join('')}</ul></details>`:`<p><span style="color:${p.color}">●</span> ${esc(p.name)}: no mistakes.</p>`).join('');
-  $('gReplay').hidden=true; $('gAgain').textContent='Rematch';
-  $('gBar').style.width='100%';
-  gView('gEnd');
-}
+      // ---------- Multiplayer (same device) ----------
+      const PCOL = ["#F08A1C", "#14A3A3", "#8E5BD6", "#1E9E5A", "#D63A78", "#3B7DD8"];
+      function esc(t) {
+        return String(t).replace(
+          /[&<>"']/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+        );
+      }
+      let mpPlayers = store.get("mpPlayers", [
+        { name: "Player 1", role: "MB1" },
+        { name: "Player 2", role: "OP" },
+      ]);
+      if (!Array.isArray(mpPlayers) || mpPlayers.length < 2)
+        mpPlayers = [
+          { name: "Player 1", role: "MB1" },
+          { name: "Player 2", role: "OP" },
+        ];
+      function gPlayersMode() {
+        const r = document.querySelector('input[name="gPlayers"]:checked');
+        return r ? r.value : "solo";
+      }
+      document.querySelector(
+        `input[name="gPlayers"][value="${store.get("gPlayers", "solo") === "mp" ? "mp" : "solo"}"]`,
+      ).checked = true;
+      document.querySelectorAll('input[name="gPlayers"]').forEach(
+        (r) =>
+          (r.onchange = () => {
+            store.set("gPlayers", gPlayersMode());
+            gRenderSetup();
+          }),
+      );
+      function saveMp() {
+        store.set("mpPlayers", mpPlayers);
+      }
+      function renderMp() {
+        $("mpList").innerHTML = mpPlayers
+          .map(
+            (p, k) => `<div class="mprow"><i style="background:${PCOL[k]}"></i>
+    <input type="text" maxlength="16" value="${esc(p.name)}" data-k="${k}" aria-label="Player ${k + 1} name">
+    <select data-k="${k}" aria-label="Player ${k + 1} role">${ROLES.map((r) => `<option value="${r}"${r === p.role ? " selected" : ""}>${NAMES[r]}</option>`).join("")}</select>
+    <button type="button" data-rm="${k}" aria-label="Remove player ${k + 1}" ${mpPlayers.length <= 2 ? "disabled" : ""}>✕</button></div>`,
+          )
+          .join("");
+        $("mpList")
+          .querySelectorAll("input")
+          .forEach(
+            (el) =>
+              (el.oninput = () => {
+                mpPlayers[+el.dataset.k].name = el.value;
+                saveMp();
+              }),
+          );
+        $("mpList")
+          .querySelectorAll("select")
+          .forEach(
+            (el) =>
+              (el.onchange = () => {
+                mpPlayers[+el.dataset.k].role = el.value;
+                saveMp();
+              }),
+          );
+        $("mpList")
+          .querySelectorAll("button[data-rm]")
+          .forEach(
+            (el) =>
+              (el.onclick = () => {
+                if (mpPlayers.length <= 2) return;
+                mpPlayers.splice(+el.dataset.rm, 1);
+                saveMp();
+                renderMp();
+              }),
+          );
+        $("mpAdd").disabled = mpPlayers.length >= 6;
+      }
+      $("mpAdd").onclick = () => {
+        if (mpPlayers.length >= 6) return;
+        const used = mpPlayers.map((p) => p.role);
+        mpPlayers.push({
+          name: `Player ${mpPlayers.length + 1}`,
+          role: ROLES.find((r) => !used.includes(r)) || "OH1",
+        });
+        saveMp();
+        renderMp();
+      };
+      const MP_KEYS = [
+        "score",
+        "streak",
+        "perfect",
+        "close",
+        "helps",
+        "misses",
+        "results",
+        "nbOk",
+        "nbN",
+      ];
+      function mpCur() {
+        return G.mp.players[G.mp.order[G.mp.turn]];
+      }
+      function swapIn(p) {
+        MP_KEYS.forEach((k) => (G[k] = p[k]));
+        G.role = p.role;
+      }
+      function swapOut(p) {
+        MP_KEYS.forEach((k) => (p[k] = G[k]));
+        p.taps[G.i] = { tap: G.tap, res: G.results[G.i] };
+      }
+      function shuffle(a) {
+        a = a.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      }
+      function mpBoard() {
+        return [...G.mp.players]
+          .sort((a, b) => b.score - a.score)
+          .map(
+            (p) =>
+              `<span class="pchip"><i style="background:${p.color}"></i>${esc(p.name)} <b>${p.score}</b></span>`,
+          )
+          .join("");
+      }
+      function mpMomentStart() {
+        G.mp.order = shuffle(G.mp.players.map((_, k) => k));
+        G.mp.turn = 0;
+        mpPass();
+      }
+      function mpPass() {
+        const p = mpCur();
+        swapIn(p);
+        const st = G.queue[G.i];
+        $("pMoment").textContent =
+          `Moment ${G.i + 1} of ${G.queue.length} · ${ROWS[st.ri].name} · ${FULL[st.phase]} · turn ${G.mp.turn + 1} of ${G.mp.players.length}`;
+        $("pName").textContent = p.name;
+        $("pName").style.color = p.color;
+        $("pRole").textContent = `plays ${NAMES[p.role]}`;
+        $("pBoard").innerHTML = mpBoard();
+        gView("gPass");
+        window.scrollTo({ top: $("game").offsetTop - 10 });
+      }
+      $("pReady").onclick = () => {
+        gView("gPlay");
+        gShow();
+      };
+      function mpAfterTurn() {
+        const p = mpCur();
+        swapOut(p);
+        G.mp.turn++;
+        if (G.mp.turn < G.mp.players.length) mpPass();
+        else mpReveal();
+      }
+      function mpReveal() {
+        const st = G.queue[G.i],
+          pl = players(st.ri, st.phase);
+        let s = DEFS + courtBase();
+        if (st.phase === "start") s += rotArrows();
+        const roles = [...new Set(G.mp.players.map((p) => p.role))];
+        pl.filter((o) => !roles.includes(o.p)).forEach((o) => (s += chip(o, { dim: true })));
+        G.mp.players.forEach((p) => {
+          const t = p.taps[G.i];
+          const me = pl.find((o) => o.p === p.role);
+          if (t && t.tap && me)
+            s += `<line x1="${t.tap.x * W}" y1="${t.tap.y * H}" x2="${me.x * W}" y2="${me.y * H}" stroke="${p.color}" stroke-width="2" stroke-dasharray="3 3"/>`;
+        });
+        roles.forEach((r) => {
+          const me = pl.find((o) => o.p === r);
+          if (!me) return;
+          const owners = G.mp.players.filter((p) => p.role === r);
+          s += `<circle cx="${me.x * W}" cy="${me.y * H}" r="24" fill="none" stroke="${owners[0].color}" stroke-width="4"/>`;
+          s += chip(me);
+        });
+        G.mp.players.forEach((p) => {
+          const t = p.taps[G.i];
+          if (!t || !t.tap) return;
+          s += `<circle cx="${t.tap.x * W}" cy="${t.tap.y * H}" r="9" fill="${p.color}" stroke="#fff" stroke-width="1.5"/><text x="${t.tap.x * W}" y="${t.tap.y * H + 4}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="Barlow,sans-serif">${esc(p.name.trim()[0] || "?").toUpperCase()}</text>`;
+        });
+        $("courtR").innerHTML = s;
+        $("rTitle").textContent = `${ROWS[st.ri].name} · ${FULL[st.phase]}`;
+        $("rSub").textContent = `Moment ${G.i + 1} of ${G.queue.length}`;
+        const lab = { perfect: "Spot on", close: "Close", miss: "Not there" };
+        $("rList").innerHTML = G.mp.players
+          .map((p) => {
+            const t = p.taps[G.i] || {},
+              r = t.res || { q: "miss", pts: 0 };
+            const d = describe(st.ri, st.phase, p.role);
+            return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${lab[r.q]}${t.res && !t.tap ? " (said off court)" : ""}<small>Correct: ${d.t}</small></div><span class="rp">+${r.pts}</span></li>`;
+          })
+          .join("");
+        $("rBoard").innerHTML = mpBoard();
+        $("rNext").textContent = G.i < G.queue.length - 1 ? "Next moment" : "See final results";
+        gView("gReveal");
+      }
+      $("rNext").onclick = () => {
+        if (G.i < G.queue.length - 1) {
+          G.i++;
+          mpMomentStart();
+        } else gFinish();
+      };
+      $("rQuit").onclick = $("pQuit").onclick = () => {
+        G = null;
+        gRenderSetup();
+        gView("gSetup");
+      };
+      function mpFinish() {
+        const n = G.queue.length,
+          ps = [...G.mp.players].sort((a, b) => b.score - a.score);
+        const tie = ps.length > 1 && ps[0].score === ps[1].score;
+        $("gEndTitle").textContent = tie ? "It's a tie!" : `${ps[0].name} wins!`;
+        let pos = 0,
+          last = null;
+        $("gStats").innerHTML = `<ol class="rank" style="grid-column:1/-1">${ps
+          .map((p, k) => {
+            if (p.score !== last) {
+              pos = k + 1;
+              last = p.score;
+            }
+            const acc = Math.round(((p.perfect + p.close) / n) * 100);
+            return `<li><span class="pos">${pos}</span><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}<small>${acc}% right or close · ${p.perfect} spot on · ${p.helps} help${p.nbN ? ` · neighbours ${p.nbOk}/${p.nbN}` : ""}</small></div><span class="sc">${p.score}</span></li>`;
+          })
+          .join("")}</ol>`;
+        $("gMist").innerHTML = G.mp.players
+          .map((p) =>
+            p.misses.length
+              ? `<details class="pm"><summary><span style="color:${p.color}">●</span> ${esc(p.name)}: where you should have been (${p.misses.length})</summary><ul class="mist">${p.misses
+                  .map((m) => {
+                    const d = describe(m.ri, m.phase, p.role);
+                    return `<li><b>${ROWS[m.ri].name} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`;
+                  })
+                  .join("")}</ul></details>`
+              : `<p><span style="color:${p.color}">●</span> ${esc(p.name)}: no mistakes.</p>`,
+          )
+          .join("");
+        $("gReplay").hidden = true;
+        $("gAgain").textContent = "Rematch";
+        $("gBar").style.width = "100%";
+        gView("gEnd");
+      }
 
-gRenderSetup();
+      gRenderSetup();
 
-// ---------- Rules mode ----------
-function renderRulesMode(){
-  document.querySelectorAll('[data-rm]').forEach(b=>b.setAttribute('aria-checked',b.dataset.rm===rulesMode));
-  $('rmSub').textContent=rulesMode==='official'?'Official (FIVB) rules: the libero may not serve, so in R3 and R6 the middle in zone 1 serves.':'Drill rules: the libero stays on court all the time and also serves in R3 and R6. The printable schema uses the official rules.';
-}
-document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{rulesMode=b.dataset.rm;store.set('rulesMode',rulesMode);renderRulesMode();renderLearn();
-  if(G){G=null;gView('gSetup');} gRenderSetup(); if(!$('drill').hidden&&cur) drawDrill(lastTap);});
-renderRulesMode();
+      // ---------- Rules mode ----------
+      function renderRulesMode() {
+        document
+          .querySelectorAll("[data-rm]")
+          .forEach((b) => b.setAttribute("aria-checked", b.dataset.rm === rulesMode));
+        $("rmSub").textContent =
+          rulesMode === "official"
+            ? "Official (FIVB) rules: the libero may not serve, so in R3 and R6 the middle in zone 1 serves."
+            : "Drill rules: the libero stays on court all the time and also serves in R3 and R6. The printable schema uses the official rules.";
+      }
+      document.querySelectorAll("[data-rm]").forEach(
+        (b) =>
+          (b.onclick = () => {
+            rulesMode = b.dataset.rm;
+            store.set("rulesMode", rulesMode);
+            renderRulesMode();
+            renderLearn();
+            if (G) {
+              G = null;
+              gView("gSetup");
+            }
+            gRenderSetup();
+            if (!$("drill").hidden && cur) drawDrill(lastTap);
+          }),
+      );
+      renderRulesMode();
 
-// ---------- Downloads ----------
-function b64Blob(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(0+i)&255;return new Blob([u],{type:'application/pdf'})}
-async function download(key){
-  const f=PDF[key]; const blob=b64Blob(f.b64); const msg=$('dlmsg'); msg.textContent='';
-  let dl=null;
-  if(window.claude&&typeof window.claude.use==='function'){ try{ dl=await window.claude.use('downloads'); }catch(e){} }
-  if(dl){
-    try{ await dl.save({filename:f.name,data:blob}); msg.textContent=`Saved ${f.name}.`; }
-    catch(e){ if(e&&e.code==='declined') return; msg.textContent= e&&e.code==='rate_limited'?'A save prompt is already open.':'Download is not available here.'; }
-    return;
-  }
-  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=f.name;
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
-}
-document.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>download(b.dataset.dl));
+      // ---------- Downloads ----------
+      function b64Blob(b64) {
+        const bin = atob(b64);
+        const u = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(0 + i) & 255;
+        return new Blob([u], { type: "application/pdf" });
+      }
+      async function download(key) {
+        const f = PDF[key];
+        const blob = b64Blob(f.b64);
+        const msg = $("dlmsg");
+        msg.textContent = "";
+        let dl = null;
+        if (window.claude && typeof window.claude.use === "function") {
+          try {
+            dl = await window.claude.use("downloads");
+          } catch (e) {}
+        }
+        if (dl) {
+          try {
+            await dl.save({ filename: f.name, data: blob });
+            msg.textContent = `Saved ${f.name}.`;
+          } catch (e) {
+            if (e && e.code === "declined") return;
+            msg.textContent =
+              e && e.code === "rate_limited"
+                ? "A save prompt is already open."
+                : "Download is not available here.";
+          }
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = f.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      }
+      document
+        .querySelectorAll("[data-dl]")
+        .forEach((b) => (b.onclick = () => download(b.dataset.dl)));
 
-drawVis('drill',visDrill);drawVis('game',visGame);renderRefLabels();
-$('fb').innerHTML=HINT;
-renderRoles();renderLearn();renderSets();
-})();
-</script>
-</body>
+      drawVis("drill", visDrill);
+      drawVis("game", visGame);
+      renderRefLabels();
+      $("fb").innerHTML = HINT;
+      renderRoles();
+      renderLearn();
+      renderSets();
+    })();
+    </script>
+  </body>
 </html>

@@ -1,0 +1,16 @@
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["cairosvg"]
+ignore_missing_imports = true
