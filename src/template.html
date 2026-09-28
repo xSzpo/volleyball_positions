@@ -1177,6 +1177,9 @@
       align-items: center;
       margin: 6px 0;
     }
+    .onrow[hidden] {
+      display: none;
+    }
     .onrow input {
       flex: 1;
       font:
@@ -1216,6 +1219,29 @@
     }
     .pres.on {
       color: var(--good);
+    }
+    .lroles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .lroles button {
+      border: 2px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      font:
+        700 13px Barlow,
+        sans-serif;
+      padding: 6px 8px;
+      min-width: 44px;
+      border-radius: var(--radius);
+      cursor: pointer;
+    }
+    .lroles button[aria-pressed="true"] {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: var(--panel);
     }
     .passname {
       font:
@@ -1268,6 +1294,61 @@
       font:
         800 17px "Barlow Condensed",
         sans-serif;
+    }
+    .strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin: 0 0 8px;
+    }
+    .strip[hidden] {
+      display: none;
+    }
+    .strip .pchip {
+      padding: 2px 8px;
+      font-size: 13px;
+      max-width: 100%;
+    }
+    .strip .pchip b {
+      font-size: 15px;
+    }
+    .strip .pchip.me {
+      outline: 2px solid var(--ink);
+    }
+    .strip .pchip.away {
+      opacity: 0.45;
+    }
+    .strip .pchip small {
+      color: var(--good);
+      font-weight: 700;
+    }
+    .btn[aria-pressed="true"] {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--on-accent);
+    }
+    .row.sticky {
+      position: sticky;
+      bottom: 0;
+      z-index: 2;
+      background: var(--panel);
+      padding: 8px 0;
+      margin-bottom: -8px;
+    }
+    .bd {
+      margin: 4px 0 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .bd .ok,
+    .setok {
+      color: var(--good);
+      font-weight: 700;
+    }
+    .bd .bad,
+    .setbad {
+      color: var(--bad);
+      font-weight: 700;
     }
     .rlist {
       list-style: none;
@@ -1617,6 +1698,9 @@
             <p class="hint" style="margin:4px 0 8px">
               You play as <b id="onRole"></b>. Change it at the top.
             </p>
+            <div class="onrow" id="onRejoinRow" hidden>
+              <button type="button" class="btn primary" id="onRejoin"></button>
+            </div>
             <div class="onrow">
               <button type="button" class="btn primary" id="onCreate">Create a room</button>
             </div>
@@ -1683,7 +1767,7 @@
               >
               <label class="check"
                 ><input type="checkbox" id="setGame">
-                Set call check (front row and setter) after the pass, +30 points</label
+                Set call check after the pass, +30 points</label
               >
               <p class="hint" id="setGameHint" hidden>Needs the After reception step</p>
             </div>
@@ -1727,7 +1811,15 @@
           </p>
           <p class="hint" id="lSet" style="margin:4px 0 0"></p>
           <ul class="rlist" id="lList"></ul>
+          <div id="lLast" hidden>
+            <p class="hint" style="margin:8px 0 4px">Last match</p>
+            <div class="strip" id="lLastList"></div>
+          </div>
           <p id="lWait">Waiting for the host to start.</p>
+          <div id="lLive" hidden>
+            <p><b>Match in progress.</b></p>
+            <button type="button" class="btn primary bigbtn" id="lJoinIn">Join in</button>
+          </div>
           <div class="row">
             <button type="button" class="btn primary bigbtn" id="lStart">Start match</button
             ><button type="button" class="btn quiet" id="lLeave">Leave room</button>
@@ -1772,6 +1864,7 @@
             </div>
           </div>
           <div class="progress" aria-hidden="true"><i id="gBar"></i></div>
+          <div class="strip" id="gStrip" hidden></div>
           <div class="steptrack" id="gTrack"></div>
           <div
             class="vis compact"
@@ -1796,10 +1889,10 @@
             aria-label="Tap where you stand"
           ></svg>
           <div id="gNbBox"></div>
-          <div class="row">
-            <button type="button" class="btn" id="gOff">I'm off court</button>
+          <div class="row" id="gActs">
+            <button type="button" class="btn primary" id="gNext" disabled>Check</button>
+            <button type="button" class="btn" id="gOff" aria-pressed="false">I'm off court</button>
             <button type="button" class="btn" id="gHelp">Help</button>
-            <button type="button" class="btn primary" id="gNext" hidden>Continue</button>
             <button type="button" class="btn quiet" id="gQuit">Quit</button>
           </div>
           <div class="fb" id="gFb"></div>
@@ -1814,12 +1907,14 @@
         <div class="card" id="gEnd" hidden>
           <h2 id="gEndTitle">Match finished</h2>
           <div class="stats" id="gStats"></div>
-          <div id="gMist"></div>
-          <div class="row">
+          <p id="gEndWait" hidden>The host starts the next match.</p>
+          <div class="row sticky">
+            <button type="button" class="btn primary" id="gToLobby" hidden>Back to lobby</button>
             <button type="button" class="btn primary" id="gReplay">Replay my mistakes</button>
             <button type="button" class="btn" id="gAgain">Play again</button>
             <button type="button" class="btn quiet" id="gSettings">Change settings</button>
           </div>
+          <div id="gMist"></div>
         </div>
       </section>
 
@@ -2173,6 +2268,11 @@
             localStorage.setItem(`ksv51:${k}`, JSON.stringify(v));
           } catch (e) {}
         },
+        del(k) {
+          try {
+            localStorage.removeItem(`ksv51:${k}`);
+          } catch (e) {}
+        },
       };
       const themeBtn = $("themeBtn");
       const darkQuery = matchMedia("(prefers-color-scheme: dark)");
@@ -2200,7 +2300,7 @@
       function renderRoles() {
         $("roles").innerHTML = ROLES.map(
           (r) =>
-            `<button class="role" aria-pressed="${r === role}" data-r="${r}"><i style="background:${COLORS[r]}"></i>${NAMES[r]}</button>`,
+            `<button class="role" aria-pressed="${r === role}" data-r="${r}"${ON && ON.meta.state !== "lobby" ? " disabled" : ""}><i style="background:${COLORS[r]}"></i>${NAMES[r]}</button>`,
         ).join("");
         $("roles")
           .querySelectorAll(".role")
@@ -2251,6 +2351,7 @@
         if (window.scrollY > tabsTop) window.scrollTo({ top: tabsTop });
         if (t === "drill" && !cur) newQuestion();
         if (t === "sets" && !sq) newSetQ();
+        if (t === "game" && gPlayersMode() === "online") onRejoinCheck();
       }
       $("tabLearn").onclick = () => setTab("learn");
       $("tabDrill").onclick = () => setTab("drill");
@@ -2962,9 +3063,9 @@
       }
       function setQ(ri, r) {
         const me = players(ri, "ar").find((o) => o.p === r);
-        if (!me || (me.kind !== "front" && me.kind !== "set")) return null;
-        const lane = me.x < 1 / 3 ? "left" : me.x > 2 / 3 ? "right" : "mid";
-        const pool = me.kind === "set" ? MATCH_SETS : MATCH_SETS.filter((s) => setLane(s) === lane);
+        const who = me?.kind === "front" ? "hitter" : me?.kind === "set" ? "setter" : "other";
+        const lane = me && (me.x < 1 / 3 ? "left" : me.x > 2 / 3 ? "right" : "mid");
+        const pool = who === "hitter" ? MATCH_SETS.filter((s) => setLane(s) === lane) : MATCH_SETS;
         if (!pool.length) return null;
         const ask = rnd(pool);
         const others = MATCH_SETS.filter((s) => s !== ask);
@@ -2972,10 +3073,10 @@
         const lanemates = others.filter((s) => setLane(s) === setLane(ask));
         const near = rnd(family.length ? family : lanemates.length ? lanemates : others);
         const rest = shuffle(others.filter((s) => s !== near)).slice(0, 2);
-        return { ask, opts: shuffle([ask, near, ...rest]), setter: me.kind === "set", done: false };
+        return { ask, opts: shuffle([ask, near, ...rest]), who, done: false };
       }
       function setHtml(q) {
-        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press Continue</span><p style="margin:2px 0 0">${q.setter ? "You set this ball. What is the call?" : "The setter sets this ball for you. What is the call?"}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip ${s[3]}" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
+        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press Continue</span><p style="margin:2px 0 0">${{ setter: "You set this ball. What is the call?", hitter: "The setter sets this ball for you. What is the call?", other: "The setter sets this ball. What is the call?" }[q.who]}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip ${s[3]}" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
       }
       function setMark(q, pick) {
         const ok = pick === q.ask[0];
@@ -2989,7 +3090,7 @@
           });
         $("gsc").insertAdjacentHTML(
           "beforeend",
-          `<p class="hint" style="margin-top:6px">${ok ? "Correct." : `It is ${q.ask[0]}.`} ${q.ask[4]}</p>`,
+          `<p class="hint" style="margin-top:6px"><span class="${ok ? "setok" : "setbad"}">${ok ? `Right: ${q.ask[0]}` : `Wrong: you said ${esc(pick)}, it is ${q.ask[0]}`}</span>. ${q.ask[4]}</p>`,
         );
       }
       function setAnswer(b) {
@@ -3003,6 +3104,7 @@
           G.setOk++;
           G.score += 30;
           G.results[G.i].pts += 30;
+          G.results[G.i].bd.set = 30;
         }
         if (G.mp || G.online) {
           nbSaved("gsc", b);
@@ -3010,7 +3112,7 @@
           return;
         }
         $("gScore").textContent = G.score;
-        $("gFb").querySelector(".pts").textContent = `+${G.results[G.i].pts}`;
+        gBdRender();
         setMark(q, b.dataset.s);
         $("gNext").focus({ preventScroll: true });
       }
@@ -3219,14 +3321,15 @@
         const st = G.queue[G.i];
         G.help = 0;
         G.answered = false;
+        $("gActs").classList.remove("sticky");
         G.tap = null;
+        G.off = false;
         G.nb = null;
         G.sc = null;
         G.visMax = gVis();
         $("gVisPlay").hidden = !!(G.mp || G.online);
         $("gWait").hidden = true;
         $("gNbBox").innerHTML = "";
-        $("gNext").disabled = false;
         delete $("gNext").dataset.label;
         const r = ROWS[st.ri];
         $("gTitle").textContent = r.name;
@@ -3250,12 +3353,17 @@
         $("gScore").textContent = G.score;
         $("gStreak").textContent = G.streak;
         $("gOff").disabled = false;
+        $("gOff").setAttribute("aria-pressed", "false");
         $("gHelp").disabled = false;
         $("gHelp").textContent = "Help";
-        $("gNext").hidden = true;
+        $("gNext").hidden = false;
+        $("gNext").disabled = true;
+        $("gNext").removeAttribute("aria-disabled");
+        $("gNext").textContent = "Check";
+        gStrip();
         $("gFb").className = "fb";
         $("gFb").innerHTML =
-          '<p class="hint">Tap the court where you stand. If the libero is in for you, press “I\'m off court”.</p>';
+          '<p class="hint">Tap the court where you stand, then press Check. If the libero is in for you, press “I\'m off court”.</p>';
         gDraw();
         G.t0 = performance.now();
       }
@@ -3277,6 +3385,8 @@
           s += chip(o, { dim: shown || vis === "all" });
         });
         if (shown && G.nb?.done) s += nbLayer(pl, G.role, G.nb.a);
+        if (!G.answered && G.tap)
+          s += `<g class="myspot"><circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="11" fill="var(--accent)" stroke="var(--on-accent)" stroke-width="2"/><text x="${G.tap.x * W}" y="${G.tap.y * H - 15}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink)" font-family="Barlow,sans-serif">your spot</text></g>`;
         if (G.answered && (G.mp || G.online) && G.tap)
           s += `<circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="7" fill="var(--ink)" opacity=".7"/>`;
         if (shown) {
@@ -3345,9 +3455,52 @@
           `<b>${G.help === 1 ? "Hint" : "More help"}</b><p style="margin:2px 0 0">${gHint(G.help)}</p>`;
         gDraw();
       };
+      const FULL_PTS = { perfect: 100, close: 60, miss: 0 };
+      const VERDICT_WORD = { perfect: "exact", close: "close", miss: "wrong" };
+      // The shown numbers must add up to r.pts: (base + speed + streak) × mult, rounded, + nb + set.
+      function bdHtml(r, who, reveal, pending = {}) {
+        const b = r.bd,
+          parts = [];
+        if (b) {
+          const full = FULL_PTS[r.q];
+          parts.push(
+            `Position: ${VERDICT_WORD[r.q]} ${b.base}${b.base < full ? `, help used, ${Math.round((b.base / full) * 100)}%` : ""}`,
+          );
+          if (b.speed) parts.push(`speed +${b.speed}`);
+          if (b.streak) parts.push(`streak +${b.streak}`);
+          const sub = b.base + b.speed + b.streak,
+            v = Object.keys(VIS_MULT).find((k) => VIS_MULT[k] === b.mult);
+          if (b.mult < 1 && sub)
+            parts.push(
+              `${visName(v, who)} ${Math.round(b.mult * 100)}% → ${Math.round(sub * b.mult)}`,
+            );
+        }
+        const mark = (ok, text) => `<span class="${ok ? "ok" : "bad"}">${text}</span>`;
+        if (r.set) {
+          const s = r.set;
+          parts.push(
+            `Set call: ${mark(s.ok, reveal ? (s.ok ? `${esc(s.pick)} ✓` : `${esc(s.pick)} ✗, it is ${esc(s.ask)}`) : s.ok ? "right" : "wrong")} +${b?.set ?? (s.ok ? 30 : 0)}`,
+          );
+        } else if (pending.set) parts.push("Set call: –");
+        if (r.nb) {
+          const n = r.nb;
+          parts.push(
+            `Neighbour: ${mark(n.ok, reveal ? (n.ok ? `${esc(n.pick)} ✓` : `${esc(n.pick)} ✗, it is ${esc(n.a)}`) : n.ok ? "right" : "wrong")} +${b?.nb ?? 0}`,
+          );
+        } else if (pending.nb) parts.push("Neighbour: –");
+        parts.push(`<strong>Total ${r.pts}</strong>`);
+        return parts.join(" · ");
+      }
+      function gBdRender() {
+        const r = G.results[G.i];
+        $("gFb").querySelector(".pts").textContent = `+${r.pts}`;
+        $("gBd").innerHTML = bdHtml(r, G.role, false, { nb: !!G.nb, set: !!G.sc });
+      }
       function gAnswer(q) {
         const st = G.queue[G.i];
         G.answered = true;
+        // Sticky only after the answer: while answering it would cover the court and catch taps.
+        $("gActs").classList.add("sticky");
         const secs = (performance.now() - G.t0) / 1000;
         const base = { perfect: 100, close: 60, miss: 0 }[q];
         const mult = [1, 0.6, 0.3][G.help];
@@ -3365,15 +3518,14 @@
         G.score += pts;
         if (q === "perfect") G.perfect++;
         if (q === "close") G.close++;
-        G.results[G.i] = { q, pts };
+        G.results[G.i] = {
+          q,
+          pts,
+          bd: { base: Math.round(base * mult), speed, streak: streakB, mult: vm, nb: 0, set: 0 },
+        };
         if (q === "miss") G.misses.push(st);
         const d = describe(st.ri, st.phase, G.role);
         const title = { perfect: "Spot on", close: "Close enough", miss: "Not there" }[q];
-        const parts = [];
-        if (base) parts.push(`${Math.round(base * mult)} position`);
-        if (speed) parts.push(`+${speed} speed`);
-        if (streakB) parts.push(`+${streakB} streak`);
-        if (vm < 1 && pts) parts.push(`× ${Math.round(vm * 100)}% for showing teammates`);
         if (G.mp) {
           $("gFb").className = "fb";
           $("gFb").innerHTML =
@@ -3384,13 +3536,14 @@
         } else {
           $("gFb").className = `fb ${{ perfect: "good", close: "close", miss: "bad" }[q]}`;
           $("gFb").innerHTML =
-            `<span class="pts">+${pts}</span><b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>${parts.length ? `<p class="hint" style="margin-top:4px">${parts.join(" · ")}</p>` : ""}`;
+            `<span class="pts">+${pts}</span><b>${title}</b><p class="bd" id="gBd"></p><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
           $("gScore").textContent = G.score;
           $("gStreak").textContent = G.streak;
         }
         $("gOff").disabled = true;
         $("gHelp").disabled = true;
         $("gNext").hidden = false;
+        $("gNext").disabled = false;
         $("gNext").textContent = G.mp
           ? G.mp.turn < G.mp.players.length - 1
             ? "Next player"
@@ -3422,6 +3575,7 @@
                     G.nbOk++;
                     G.score += bonus;
                     G.results[G.i].pts += bonus;
+                    G.results[G.i].bd.nb = bonus;
                   }
                   if (G.mp || G.online) {
                     nbSaved("gnb", b);
@@ -3429,7 +3583,7 @@
                     return;
                   }
                   $("gScore").textContent = G.score;
-                  $("gFb").querySelector(".pts").textContent = `+${G.results[G.i].pts}`;
+                  gBdRender();
                   nbMark("gnb", nq, b.dataset.skip ? null : b.dataset.p);
                   gDraw();
                   nbLock("gNext", false);
@@ -3451,15 +3605,36 @@
             $("gNext").parentElement.scrollIntoView({ block: "end", behavior: "smooth" });
           }
         }
+        if (!G.mp && !G.online) gBdRender();
         gDraw();
         if (G.online) onAnswered();
+      }
+      function gPick(tap) {
+        G.tap = tap;
+        G.off = !tap;
+        $("gOff").setAttribute("aria-pressed", String(G.off));
+        $("gNext").disabled = false;
+        gDraw();
       }
       $("courtG").addEventListener("pointerup", (e) => {
         if (!G || G.answered) return;
         const p = svgPoint($("courtG"), e);
-        G.tap = { x: p.x / W, y: p.y / H };
+        gPick({ x: p.x / W, y: p.y / H });
+      });
+      $("gOff").onclick = () => {
+        if (!G || G.answered) return;
+        if (G.off) {
+          G.off = false;
+          $("gOff").setAttribute("aria-pressed", "false");
+          $("gNext").disabled = !G.tap;
+          return;
+        }
+        gPick(null);
+      };
+      function gCheck() {
         const st = G.queue[G.i];
         const me = players(st.ri, st.phase).find((o) => o.p === G.role);
+        if (!G.tap) return gAnswer(me ? "miss" : "perfect");
         if (!me) return gAnswer("miss");
         let dist = Math.hypot(G.tap.x - me.x, (G.tap.y - me.y) * 0.67);
         if (st.phase === "start") {
@@ -3469,14 +3644,20 @@
           dist = zx === c && zy === r ? 0 : 1;
         }
         gAnswer(dist < 0.14 ? "perfect" : dist < 0.24 ? "close" : "miss");
-      });
-      $("gOff").onclick = () => {
-        if (!G || G.answered) return;
-        const st = G.queue[G.i];
-        const me = players(st.ri, st.phase).find((o) => o.p === G.role);
-        gAnswer(me ? "miss" : "perfect");
-      };
+      }
       $("gNext").onclick = () => {
+        if (!G) return;
+        if (!G.answered) {
+          if (G.tap || G.off) {
+            gCheck();
+            // Check and Continue share the button; a double tap on Check must not skip the feedback.
+            const next = $("gNext");
+            next.setAttribute("aria-disabled", "true");
+            setTimeout(() => next.removeAttribute("aria-disabled"), 400);
+          }
+          return;
+        }
+        if ($("gNext").hasAttribute("aria-disabled")) return;
         if (G.mp) return mpAfterTurn();
         if (G.online) return onWrite(true);
         if (G.i < G.queue.length - 1) {
@@ -3485,7 +3666,7 @@
         } else gFinish();
       };
       $("gQuit").onclick = () => {
-        if (ON) return onLeave();
+        if (ON) return onQuit();
         G = null;
         gRenderSetup();
         gView("gSetup");
@@ -3501,6 +3682,9 @@
       }
       function gFinish() {
         $("gAgain").hidden = !!G.online;
+        $("gToLobby").hidden = !G.online;
+        $("gEndWait").hidden = true;
+        $("gSettings").textContent = G.online ? "Leave room" : "Change settings";
         if (G.online) return mpFinish(onList(G.online.room, G.i));
         if (G.mp) return mpFinish();
         const n = G.queue.length,
@@ -3592,7 +3776,7 @@
         r.onchange = () => {
           store.set("gPlayers", gPlayersMode());
           gRenderSetup();
-          if (gPlayersMode() === "online") fbSdk().catch(() => {});
+          if (gPlayersMode() === "online") onRejoinCheck();
         };
       });
       function saveMp() {
@@ -3691,6 +3875,39 @@
           )
           .join("");
       }
+      function stripHtml(list) {
+        return [...list]
+          .sort((a, b) => b.score - a.score)
+          .map(
+            (p) =>
+              `<span class="pchip${p.me ? " me" : ""}${p.away ? " away" : ""}"><i style="background:${p.color}"></i>${esc(p.name)} <b>${p.score}</b>${p.done ? "<small>✓ answered</small>" : ""}</span>`,
+          )
+          .join("");
+      }
+      // Scores as they were when the moment started, so nobody learns a verdict before the reveal.
+      function gStrip() {
+        let list = null;
+        if (G.mp)
+          list = G.mp.players.map((p) => ({
+            name: p.name,
+            color: p.color,
+            score: p.score - (p.taps[G.i]?.res?.pts || 0),
+            me: p === mpCur(),
+          }));
+        else if (G.online) {
+          const ans = ON.room.answers[G.i] || {};
+          list = onList(ON.room, G.i).map((p) => ({
+            name: p.name,
+            color: p.color,
+            score: p.score - (ans[p.uid]?.pts || 0),
+            me: p.uid === ON.uid,
+            done: !!ans[p.uid],
+            away: !p.online,
+          }));
+        }
+        $("gStrip").hidden = !list;
+        if (list) $("gStrip").innerHTML = stripHtml(list);
+      }
       function mpMomentStart() {
         G.mp.order = shuffle(G.mp.players.map((_, k) => k));
         G.mp.turn = 0;
@@ -3755,13 +3972,8 @@
           .map((p) => {
             const t = p.taps[G.i] || {},
               r = t.res || { q: "miss", pts: 0 };
-            const nb = r.nb
-              ? `<small>Neighbour: ${esc(r.nb.pick)}, ${r.nb.ok ? `right (+${Math.round(30 * gVisMult())})` : `wrong (it is ${r.nb.a})`}</small>`
-              : "";
-            const sc = r.set
-              ? `<small>Set call: ${esc(r.set.pick)}, ${r.set.ok ? "right (+30)" : `wrong (it is ${esc(r.set.ask)})`}</small>`
-              : "";
-            return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${t.res ? lab[r.q] : "No answer"}${t.res && !t.tap ? " (said off court)" : ""}${nb}${sc}</div><span class="rp">+${r.pts}</span></li>`;
+            const bd = t.res ? `<small class="bd">${bdHtml(r, p.role, true)}</small>` : "";
+            return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${t.res ? lab[r.q] : "No answer"}${t.res && !t.tap ? " (said off court)" : ""}${bd}</div><span class="rp">+${r.pts}</span></li>`;
           })
           .join("");
         $("rWhy").innerHTML = roles
@@ -3784,7 +3996,7 @@
         } else gFinish();
       };
       $("rQuit").onclick = $("pQuit").onclick = () => {
-        if (ON) return onLeave();
+        if (ON) return onQuit();
         G = null;
         gRenderSetup();
         gView("gSetup");
@@ -3819,7 +4031,7 @@
           )
           .join("");
         $("gReplay").hidden = true;
-        $("gAgain").textContent = "Rematch";
+        $("gAgain").textContent = "Play again";
         $("gBar").style.width = "100%";
         gView("gEnd");
       }
@@ -3842,7 +4054,7 @@
         const [db, auth] = v.split(",");
         return { db, auth };
       })();
-      const DAY = 24 * 60 * 60 * 1000;
+      const WEEK = 7 * 24 * 60 * 60 * 1000;
       const HOST_GRACE = 10000;
       const NB_GRACE =
         (EMU && Number(new URLSearchParams(location.search).get("nbgrace"))) || 15000;
@@ -3970,6 +4182,15 @@
         const names = SETS.map((s) => s[0]);
         if (isObj(r.set) && names.includes(r.set.ask) && names.includes(r.set.pick))
           out.set = { ask: r.set.ask, pick: r.set.pick, ok: r.set.ok === true };
+        if (isObj(r.bd))
+          out.bd = {
+            base: num(r.bd.base),
+            speed: num(r.bd.speed),
+            streak: num(r.bd.streak),
+            mult: [1, 0.7, 0.3].includes(r.bd.mult) ? r.bd.mult : 1,
+            nb: num(r.bd.nb),
+            set: num(r.bd.set),
+          };
         return out;
       }
       // Everything read from the room is untrusted: whitelist, coerce and bound it here, once.
@@ -3980,6 +4201,7 @@
         const meta = {
           host: typeof m.host === "string" ? m.host : "",
           createdAt: num(m.createdAt),
+          activeAt: num(m.activeAt),
           state: ["lobby", "answering", "reveal", "done"].includes(m.state) ? m.state : "lobby",
           i: Math.min(Math.max(0, Math.floor(num(m.i))), Math.max(0, queue.length - 1)),
           steps: toList(m.steps).filter((s) => STEP_ORDER.includes(s)),
@@ -3989,7 +4211,6 @@
           sets: m.sets === true,
           rulesMode: m.rulesMode === "drill" ? "drill" : "official",
           queue,
-          hostLeft: m.hostLeft === true,
         };
         if (meta.state !== "lobby" && !queue.length) meta.state = "done";
         const players = {};
@@ -4027,7 +4248,8 @@
         return { meta, players, answers };
       }
       function stale(meta) {
-        return typeof meta.createdAt === "number" && Date.now() - meta.createdAt > DAY;
+        const at = typeof meta.activeAt === "number" ? meta.activeAt : meta.createdAt;
+        return typeof at === "number" && Date.now() - at > WEEK;
       }
       function newCode() {
         const a = new Uint32Array(1);
@@ -4042,7 +4264,7 @@
       }
       $("onName").value = store.get("onName", "");
       $("onName").oninput = () => store.set("onName", $("onName").value);
-      $("onCode").value = String(store.get("onRoom", "")).replace(/\D/g, "").slice(0, 6);
+      $("onCode").value = String(store.get("room", "")).replace(/\D/g, "").slice(0, 6);
       function onError(e) {
         $("onErr").textContent = e?.user
           ? e.message
@@ -4053,7 +4275,38 @@
         onPending = on;
         $("onCreate").disabled = on || !gSteps().length;
         $("onJoin").disabled = on;
+        $("onRejoin").disabled = on;
       }
+      let rejoinSeq = 0;
+      function onRejoinShow(code) {
+        $("onRejoinRow").hidden = !code;
+        $("onRejoin").textContent = code ? `Rejoin room ${showCode(code)}` : "";
+        $("onCreate").classList.toggle("primary", !code);
+        $("onJoin").classList.toggle("primary", !code);
+      }
+      async function onRejoinCheck() {
+        const seq = ++rejoinSeq;
+        const code = String(store.get("room", ""));
+        onRejoinShow(null);
+        $("onRejoin").dataset.checked = "";
+        try {
+          if (ON || !/^[0-9]{6}$/.test(code)) return fbSdk().catch(() => {});
+          const { db } = await fbReady();
+          const ref = db.ref(`rooms/${code}`);
+          const meta = (await withTimeout(ref.child("meta").once("value"))).val();
+          if (seq !== rejoinSeq || ON) return;
+          if (meta && stale(meta)) ref.remove().catch(() => {});
+          if (!meta || stale(meta)) return store.del("room");
+          onRejoinShow(code);
+        } catch (e) {
+        } finally {
+          if (seq === rejoinSeq) $("onRejoin").dataset.checked = "1";
+        }
+      }
+      $("onRejoin").onclick = () => {
+        $("onCode").value = String(store.get("room", ""));
+        onJoin();
+      };
       async function onCreate() {
         if (onPending || ON) return;
         $("onErr").textContent = "";
@@ -4082,6 +4335,7 @@
               meta: {
                 host: uid,
                 createdAt: now,
+                activeAt: now,
                 state: "lobby",
                 i: 0,
                 steps: gSteps(),
@@ -4124,7 +4378,6 @@
             ref.remove().catch(() => {});
             throw fail("That room has expired. Ask the host for a new one.");
           }
-          if (room.meta.state === "done") throw fail("That match has already finished.");
           const now = fb.database.ServerValue.TIMESTAMP;
           const lobby = room.meta.state === "lobby";
           const pick = (ps) => {
@@ -4175,8 +4428,9 @@
         if (e.key === "Enter") onJoin();
       };
       function onEnter(fb, ref, code, uid) {
-        store.set("onRoom", code);
+        store.set("room", code);
         $("onCode").value = code;
+        onRejoinShow(null);
         ON = {
           fb,
           ref,
@@ -4189,6 +4443,7 @@
           meta: {},
           hostSeen: null,
           hostTimer: null,
+          bench: false,
         };
         const me = ref.child(`players/${uid}/online`);
         ON.connRef = fb.database().ref(".info/connected");
@@ -4196,7 +4451,7 @@
           if (!s.val() || !ON) return;
           me.onDisconnect()
             .set(false)
-            .then(() => ON?.ref === ref && me.set(true))
+            .then(() => ON?.ref === ref && me.set(!ON.bench))
             .catch(() => {});
         });
         ref.on("value", onSync, () => onDrop("Lost the connection to the room."));
@@ -4227,20 +4482,47 @@
         gVisText();
         gRenderSetup();
         gView("gSetup");
+        renderRoles();
+        if (gPlayersMode() === "online") onRejoinCheck();
       }
       function onLeave() {
         if (!ON) return;
         const o = onDetach();
-        const state = o.meta.state;
-        const me = o.ref.child(`players/${o.uid}`);
-        const quiet = () => {};
-        if (o.isHost && state === "lobby") o.ref.remove().catch(quiet);
-        else if (o.isHost && state !== "done") {
-          o.ref.child("meta").update({ state: "done", hostLeft: true }).catch(quiet);
-          me.child("online").set(false).catch(quiet);
-        } else if (state === "lobby") me.remove().catch(quiet);
-        else me.child("online").set(false).catch(quiet);
+        store.del("room");
+        o.ref
+          .child(`players/${o.uid}`)
+          .remove()
+          .catch(() => {});
         onRestoreLocal();
+      }
+      function onQuit() {
+        if (!ON) return;
+        if (ON.isHost) return onReset();
+        ON.bench = true;
+        ON.ref
+          .child(`players/${ON.uid}/online`)
+          .set(false)
+          .catch(() => {});
+        onRender(ON.room);
+      }
+      function onClearMatch(upd) {
+        upd.answers = null;
+        Object.keys(ON.room.players || {}).forEach((uid) => {
+          MP_KEYS.forEach((k) => {
+            upd[`players/${uid}/${k}`] = null;
+          });
+        });
+        return ON.ref.update(upd);
+      }
+      function onReset() {
+        if (!ON?.isHost) return;
+        onClearMatch({
+          "meta/state": "lobby",
+          "meta/i": 0,
+          "meta/queue": null,
+          "meta/activeAt": ON.fb.database.ServerValue.TIMESTAMP,
+          "meta/hostLeft": null,
+        }).catch(() => {});
       }
       function onDrop(msg) {
         if (!ON) return;
@@ -4266,7 +4548,7 @@
               uid,
               taps: {
                 [i]: a
-                  ? { tap: a.tap, res: { q: a.q, pts: a.pts, nb: a.nb, set: a.set } }
+                  ? { tap: a.tap, res: { q: a.q, pts: a.pts, bd: a.bd, nb: a.nb, set: a.set } }
                   : undefined,
               },
             };
@@ -4277,6 +4559,19 @@
       }
       function onLobby(room) {
         const meta = room.meta;
+        const live = meta.state !== "lobby" && meta.state !== "done";
+        if (meta.state === "lobby" && ON.bench) {
+          ON.bench = false;
+          if (!room.players[ON.uid].online)
+            ON.ref
+              .child(`players/${ON.uid}/online`)
+              .set(true)
+              .catch(() => {});
+        }
+        G = null;
+        clearTimeout(ON.grace);
+        ON.revealing = -1;
+        $("gWait").hidden = true;
         if (!ON.isHost && rulesMode !== meta.rulesMode) {
           rulesMode = meta.rulesMode;
           renderLearn();
@@ -4286,6 +4581,7 @@
           ON.view = "lobby";
           gView("gLobby");
           window.scrollTo({ top: $("game").offsetTop - 10 });
+          if (meta.state === "lobby" && room.players[ON.uid].role !== role) onRole();
         }
         $("lCode").textContent = showCode(ON.code);
         const n = (meta.steps || []).length * 6;
@@ -4294,15 +4590,29 @@
         $("lList").innerHTML = onList(room, 0)
           .map(
             (p) =>
-              `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}${p.uid === meta.host ? "<small>host</small>" : ""}</div>${onPres(p)}</li>`,
+              `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}${p.uid === meta.host ? "<small>host</small>" : ""}${p.uid === ON.uid && meta.state === "lobby" ? `<span class="lroles">${ROLES.map((r) => `<button type="button" data-r="${r}" aria-pressed="${r === p.role}">${r}</button>`).join("")}</span>` : ""}</div>${p.uid === ON.uid && ON.bench ? '<span class="pres on">● in lobby</span>' : onPres(p)}</li>`,
           )
           .join("");
-        $("lStart").hidden = !ON.isHost;
-        $("lWait").hidden = ON.isHost;
+        $("lList")
+          .querySelectorAll(".lroles button")
+          .forEach((b) => {
+            b.onclick = () =>
+              document.querySelector(`#roles .role[data-r="${b.dataset.r}"]`).click();
+          });
+        $("lLive").hidden = !live;
+        $("lStart").hidden = !ON.isHost || live;
+        $("lWait").hidden = ON.isHost || live;
+        $("lWait").textContent =
+          meta.state === "done"
+            ? "The host starts the next match."
+            : "Waiting for the host to start.";
+        $("lLast").hidden = !ON.last;
+        if (ON.last) $("lLastList").innerHTML = stripHtml(ON.last);
       }
       function onInitG(meta, me) {
         const changed = rulesMode !== meta.rulesMode;
         rulesMode = meta.rulesMode;
+        ON.last = null;
         G = {
           queue: meta.queue,
           i: -1,
@@ -4335,6 +4645,7 @@
       function onSavedView(a) {
         G.answered = true;
         G.tap = a.tap;
+        $("gNext").hidden = true;
         $("gOff").disabled = true;
         $("gHelp").disabled = true;
         $("gFb").className = "fb";
@@ -4344,7 +4655,11 @@
       function onSync(snap) {
         if (!ON) return;
         const room = onClean(snap.val());
-        if (!room) return onDrop("The host closed the room.");
+        if (!room) return onDrop("The room no longer exists.");
+        onRender(room);
+        renderRoles();
+      }
+      function onRender(room) {
         const meta = room.meta;
         const me = room.players[ON.uid];
         if (!me) return onDrop("You are no longer in this room.");
@@ -4353,7 +4668,16 @@
         ON.me = me;
         ON.isHost = meta.host === ON.uid;
         onHostWatch(room);
-        if (meta.state === "lobby") return onLobby(room);
+        if (meta.state === "done") {
+          ON.last = onList(room, meta.i).map((p) => ({
+            name: p.name,
+            color: p.color,
+            score: p.score,
+            me: p.uid === ON.uid,
+          }));
+          if (ON.isHost) ON.bench = false;
+        }
+        if (meta.state === "lobby" || ON.bench) return onLobby(room);
         if (!G || G.online !== ON) onInitG(meta, me);
         if (meta.state === "answering") {
           if (G.i !== meta.i || ON.view !== "play") {
@@ -4372,17 +4696,21 @@
             window.scrollTo({ top: $("game").offsetTop - 10 });
           }
           onWaitText(room);
+          gStrip();
           if (ON.isHost) onCheckAll(room);
         } else if (meta.state === "reveal") {
           G.i = meta.i;
           if (ON.view !== `reveal${meta.i}`) window.scrollTo({ top: $("game").offsetTop - 10 });
           ON.view = `reveal${meta.i}`;
           mpReveal(onList(room, meta.i));
-        } else if (meta.state === "done" && ON.view !== "done") {
-          ON.view = "done";
-          G.i = meta.i;
-          gFinish();
-          if (meta.hostLeft && !ON.isHost) $("gEndTitle").textContent = "The host ended the match";
+        } else if (meta.state === "done") {
+          if (ON.view !== "done") {
+            ON.view = "done";
+            G.i = meta.i;
+            gFinish();
+          }
+          $("gToLobby").textContent = ON.isHost ? "New match" : "Back to lobby";
+          $("gEndWait").hidden = ON.isHost;
         }
       }
       function onNotice(msg) {
@@ -4403,7 +4731,7 @@
           );
         ON.hostSeen = meta.host;
         const away = !room.players[meta.host]?.online;
-        if (ON.isHost || meta.state === "done" || !away) {
+        if (ON.isHost || !away) {
           clearTimeout(ON.hostTimer);
           ON.hostTimer = null;
         } else if (!ON.hostTimer) ON.hostTimer = setTimeout(onTakeover, HOST_GRACE);
@@ -4412,7 +4740,7 @@
         if (!ON) return;
         ON.hostTimer = null;
         const room = ON.room;
-        if (ON.isHost || room.meta.state === "done" || room.players[room.meta.host]?.online) return;
+        if (ON.isHost || room.players[room.meta.host]?.online) return;
         const next = onList(room, 0).find((p) => p.online);
         if (next?.uid === ON.uid) {
           const old = room.meta.host,
@@ -4454,12 +4782,13 @@
       // Host writes apply only to the moment they were made for, so a double tap or a replaced host changes nothing.
       function onMeta(expect, change) {
         if (!ON?.isHost) return;
-        const uid = ON.uid;
+        const uid = ON.uid,
+          activeAt = ON.fb.database.ServerValue.TIMESTAMP;
         ON.ref
           .child("meta")
           .transaction((m) =>
             isObj(m) && m.host === uid && m.i === expect.i && m.state === expect.state
-              ? { ...m, ...change }
+              ? { ...m, ...change, activeAt, hostLeft: null }
               : undefined,
           )
           .catch(() => {});
@@ -4485,8 +4814,9 @@
         if (pending) {
           const i = G.i;
           clearTimeout(ON.grace);
+          const g = G;
           ON.grace = setTimeout(() => {
-            if (G?.online && G.i === i && gBonusPending()) onWrite(true);
+            if (G === g && G.online && G.i === i && gBonusPending()) onWrite(true);
           }, NB_GRACE);
         }
       }
@@ -4495,7 +4825,7 @@
         const i = G.i,
           res = G.results[i],
           uid = ON.uid;
-        if (!res) return;
+        if (!res || ON.meta.state === "lobby" || ON.meta.i !== i) return;
         if (done) {
           $("gNext").hidden = true;
           $("gNbBox")
@@ -4510,12 +4840,13 @@
             off: !G.tap,
             q: res.q,
             pts: res.pts,
+            bd: res.bd || null,
             nb: res.nb || null,
             set: res.set || null,
             done,
           },
           [`players/${uid}/misses`]: G.misses.map(({ ri, phase }) => ({ ri, phase })),
-          [`players/${uid}/results/${i}`]: res,
+          [`players/${uid}/results/${i}`]: { ...res, bd: null },
         };
         MP_KEYS.filter((k) => !["misses", "results"].includes(k)).forEach((k) => {
           upd[`players/${uid}/${k}`] = G[k];
@@ -4537,6 +4868,8 @@
       }
       $("lStart").onclick = () => {
         if (!ON?.isHost || !gSteps().length) return;
+        // Clears late answer writes from the last match that landed after the reset.
+        onClearMatch({}).catch(() => {});
         onMeta(
           { i: ON.meta.i, state: "lobby" },
           {
@@ -4553,6 +4886,22 @@
         );
       };
       $("lLeave").onclick = onLeave;
+      $("gToLobby").onclick = () => {
+        if (!ON) return;
+        if (ON.isHost) return onReset();
+        ON.bench = true;
+        onRender(ON.room);
+      };
+      $("lJoinIn").onclick = () => {
+        if (!ON?.bench) return;
+        ON.bench = false;
+        ON.view = null;
+        ON.ref
+          .child(`players/${ON.uid}/online`)
+          .set(true)
+          .catch(() => {});
+        onRender(ON.room);
+      };
 
       gRenderSetup();
 

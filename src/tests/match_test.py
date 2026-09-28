@@ -17,6 +17,12 @@ URL = (ROOT / "index.html").as_uri()
 FAIL: list[str] = []
 
 
+def press_next(page: Page) -> None:
+    """Presses Check or Continue and waits out the short lock that stops a double tap skipping the feedback."""
+    page.click("#gNext")
+    page.wait_for_selector("#gNext:not([aria-disabled])", state="attached")
+
+
 def fail(message: str) -> None:
     FAIL.append(message)
     print("FAIL:", message, flush=True)
@@ -53,14 +59,8 @@ def setup_match(
         page.set_checked("#setGame", sets)
 
 
-def tap_spot(page: Page, role: str, ri: int, phase: str) -> None:
-    """Taps the role's correct spot for ``phase`` in rotation ``ri``, or I'm off court if it has none."""
-    spots = [(s[0], s[1], s[2]) for s in (ROWS[ri]["ar"] if phase == "ar" else ROWS[ri]["rec"])]
-    found = next(((x, y) for p, x, y in spots if p == role), None)
-    if found is None:
-        page.click("#gOff")
-        return
-    x, y = found
+def tap_at(page: Page, x: float, y: float) -> None:
+    """Taps the match court at normalised court coordinates."""
     page.locator("#courtG").scroll_into_view_if_needed()
     cx, cy = page.evaluate(
         """([x, y]) => {
@@ -70,6 +70,36 @@ def tap_spot(page: Page, role: str, ri: int, phase: str) -> None:
         [x, y],
     )
     page.mouse.click(cx, cy)
+
+
+def tap_spot(page: Page, role: str, ri: int, phase: str, check: bool = True) -> None:
+    """Picks the role's correct spot for ``phase`` in rotation ``ri`` (or I'm off court), then presses Check."""
+    spots = [(s[0], s[1], s[2]) for s in (ROWS[ri]["ar"] if phase == "ar" else ROWS[ri]["rec"])]
+    found = next(((x, y) for p, x, y in spots if p == role), None)
+    if found is None:
+        page.click("#gOff")
+    else:
+        tap_at(page, *found)
+    if check:
+        press_next(page)
+
+
+def breakdown_total(line: str) -> tuple[int, int]:
+    """Adds up the parts of a points breakdown and returns (sum of the parts, the stated total)."""
+
+    def part(pattern: str) -> int:
+        found = re.search(pattern, line)
+        return int(found.group(1)) if found else 0
+
+    position = re.search(r"Position: \w+ (\d+)", line)
+    total = re.search(r"Total (\d+)", line)
+    assert position and total, f"breakdown without position or total: {line!r}"
+    subtotal = int(position.group(1)) + part(r"speed \+(\d+)") + part(r"streak \+(\d+)")
+    scaled = re.search(r"(\d+)% → (\d+)", line)
+    if scaled:
+        assert round(subtotal * int(scaled.group(1)) / 100) == int(scaled.group(2)), f"wrong scaling: {line!r}"
+        subtotal = int(scaled.group(2))
+    return subtotal + part(r"Set call: [^+]*\+(\d+)") + part(r"Neighbour: [^+]*\+(\d+)"), int(total.group(1))
 
 
 def first_answer_points(browser: Browser, vis: str) -> int:
@@ -89,7 +119,7 @@ def first_answer_points(browser: Browser, vis: str) -> int:
     while not page.is_visible("#gEnd"):
         if page.is_enabled("#gOff") and page.is_visible("#gOff"):
             page.click("#gOff")
-        page.click("#gNext")
+        press_next(page)
     shown = page.inner_text("#gShown")
     want = {
         "none": "Shown: Nobody (full points)",
@@ -122,7 +152,7 @@ def check_peek(browser: Browser) -> None:
     tap_spot(page, "OH1", 0, "rec")
     page.wait_for_selector("#gFb .pts")
     peeked = points(page)
-    page.click("#gNext")
+    press_next(page)
     page.wait_for_selector("#gOff:enabled")
     tap_spot(page, "OH1", 1, "rec")
     page.wait_for_selector("#gFb .pts")
@@ -135,7 +165,7 @@ def check_peek(browser: Browser) -> None:
     while not page.is_visible("#gEnd"):
         if page.is_enabled("#gOff") and page.is_visible("#gOff"):
             page.click("#gOff")
-        page.click("#gNext")
+        press_next(page)
     shown = page.inner_text("#gShown")
     if shown != "Shown: Nobody (full points) · Peeked: 1 moment":
         fail(f"end screen after one peek reads {shown!r}")
@@ -167,16 +197,22 @@ MATCH_SETS = [s for s in SETS if s[0] not in UNCONFIRMED_SETS]
 LANES = {"left": {"1", "0", "2"}, "mid": {"Shoot", "Til"}, "right": {"7", "6"}}
 
 
-def expected_sets(ri: int, role: str) -> set[str] | None:
-    """The calls a set question may ask ``role`` after reception in rotation ``ri``, or None for no question."""
+def expected_sets(ri: int, role: str) -> set[str]:
+    """The calls a set question may ask ``role`` after reception in rotation ``ri``."""
     spot = next((s for s in ROWS[ri]["ar"] if s[0] == role), None)
-    if spot is None:
-        return None
-    if spot[3] == "set":
+    if spot is None or spot[3] != "front":
         return {s[0] for s in MATCH_SETS}
-    if spot[3] != "front":
-        return None
     return LANES["left" if spot[1] < 1 / 3 else "right" if spot[1] > 2 / 3 else "mid"]
+
+
+def set_prompt(ri: int, role: str) -> str:
+    """The set question's wording for ``role`` after reception in rotation ``ri``."""
+    kind = next((s[3] for s in ROWS[ri]["ar"] if s[0] == role), None)
+    if kind == "set":
+        return "You set this ball. What is the call?"
+    if kind == "front":
+        return "The setter sets this ball for you. What is the call?"
+    return "The setter sets this ball. What is the call?"
 
 
 def asked_set(page: Page) -> str:
@@ -209,9 +245,9 @@ def play_set_calls(browser: Browser, role: str, steps: tuple[str, ...], sets: bo
             if has_question != (want is not None):
                 fail(f"{tag}: set question shown={has_question}, expected {want is not None}")
             if not has_question or want is None:
-                page.click("#gNext")
+                press_next(page)
                 continue
-            prompt = "You set this ball" if role == "S" else "The setter sets this ball for you"
+            prompt = set_prompt(ri, role)
             if prompt not in page.inner_text("#gsc"):
                 fail(f"{tag}: question text reads {page.inner_text('#gsc')!r}")
             name = asked_set(page)
@@ -224,6 +260,8 @@ def play_set_calls(browser: Browser, role: str, steps: tuple[str, ...], sets: bo
                 fail(f"{tag}: unconfirmed set among the options {options}")
             if not page.is_enabled("#gNext"):
                 fail(f"{tag}: Continue disabled during the set question")
+            if "Set call: –" not in page.inner_text("#gBd"):
+                fail(f"{tag}: breakdown before the set call reads {page.inner_text('#gBd')!r}")
             before = points(page)
             if asked == 0:
                 page.click(f'#gsc .setchip[data-s="{name}"]')
@@ -231,18 +269,22 @@ def play_set_calls(browser: Browser, role: str, steps: tuple[str, ...], sets: bo
                     fail(f"{tag}: right set call scored {points(page) - before}, expected 30")
                 if not page.inner_text("#gsc").strip().endswith(next(s[4] for s in SETS if s[0] == name)):
                     fail(f"{tag}: right answer feedback reads {page.inner_text('#gsc')!r}")
-                if "Correct." not in page.inner_text("#gsc"):
+                if f"Right: {name}" not in page.inner_text("#gsc"):
                     fail(f"{tag}: right answer not confirmed")
+                if page.locator("#gsc .setok").count() != 1 or "Set call: right +30" not in page.inner_text("#gBd"):
+                    fail(f"{tag}: right answer not marked right: {page.inner_text('#gBd')!r}")
             elif asked == 1:
                 wrong = next(o for o in options if o != name)
                 page.click(f'#gsc .setchip[data-s="{wrong}"]')
                 if points(page) != before:
                     fail(f"{tag}: wrong set call scored {points(page) - before}")
-                if f"It is {name}." not in page.inner_text("#gsc"):
+                if f"Wrong: you said {wrong}, it is {name}" not in page.inner_text("#gsc"):
                     fail(f"{tag}: wrong answer feedback reads {page.inner_text('#gsc')!r}")
+                if page.locator("#gsc .setbad").count() != 1 or "Set call: wrong +0" not in page.inner_text("#gBd"):
+                    fail(f"{tag}: wrong answer not marked wrong: {page.inner_text('#gBd')!r}")
                 page.evaluate(f"window.__missed = {name!r}")
             asked += 1
-            page.click("#gNext")
+            press_next(page)
     page.wait_for_selector("#gEnd", state="visible")
     return page
 
@@ -261,12 +303,15 @@ def check_set_calls(browser: Browser) -> None:
             fail(f"{role}: Practise in Sets does not open the Sets tab")
         page.close()
     print("set call check: front row and setter asked their own sets, +30 for a right call", flush=True)
-    for role in ("L", "OH1"):
-        page = play_set_calls(browser, role, ("ar",), sets=role != "OH1")
-        if page.locator("#gSetMiss").count() or "set calls right" in page.inner_text("#gStats"):
-            fail(f"{role}: set call stats without any question")
-        page.close()
-    print("no set question for the libero, the back row or with the option off", flush=True)
+    page = play_set_calls(browser, "L", ("ar",))
+    if "1/2 set calls right" not in page.inner_text("#gStats").replace("\n", " "):
+        fail(f"libero: end screen stats read {page.inner_text('#gStats')!r}")
+    page.close()
+    page = play_set_calls(browser, "OH1", ("ar",), sets=False)
+    if page.locator("#gSetMiss").count() or "set calls right" in page.inner_text("#gStats"):
+        fail("OH1: set call stats with the option off")
+    page.close()
+    print("set question for the libero and the back row, none with the option off", flush=True)
 
     page = new_page(browser)
     setup_match(page, "OH1", ("rec", "ar"))
@@ -287,6 +332,182 @@ def check_set_calls(browser: Browser) -> None:
     print("set call option and unconfirmed marks ok", flush=True)
 
 
+def in_view(page: Page, selector: str) -> bool:
+    """Whether the element is fully inside the phone's viewport."""
+    box = page.locator(selector).bounding_box()
+    return box is not None and box["y"] >= 0 and box["y"] + box["height"] <= 844
+
+
+def check_tap_then_check(browser: Browser) -> None:
+    """A tap only places a marker; Check scores the last tap, and off court can be undone by a tap."""
+    page = new_page(browser)
+    setup_match(page, "OH1", ("rec",))
+    page.click("#gStart")
+    page.wait_for_selector("#gOff:enabled")
+    if page.inner_text("#gNext") != "CHECK" or page.is_enabled("#gNext"):
+        fail(
+            f"before a tap the primary button reads {page.inner_text('#gNext')!r}, enabled={page.is_enabled('#gNext')}"
+        )
+    if not in_view(page, "#gNext"):
+        fail("Check is below the fold")
+    spot = next((x, y) for p, x, y in ROWS[0]["rec"] if p == "OH1")
+    tap_at(page, 0.5, 0.03)
+    if page.locator("#gFb .pts").count() or page.locator("#courtG .myspot").count() != 1:
+        fail("the first tap scored the moment or placed no marker")
+    tap_at(page, *spot)
+    if page.locator("#gFb .pts").count() or page.locator("#courtG .myspot").count() != 1:
+        fail("the second tap scored the moment or left two markers")
+    if not page.is_enabled("#gNext") or not page.is_enabled("#gHelp"):
+        fail("Check or Help not available after a tap")
+    press_next(page)
+    if "Spot on" not in page.inner_text("#gFb"):
+        fail(f"Check did not score the last tap: {page.inner_text('#gFb')!r}")
+    if page.inner_text("#gNext") != "CONTINUE":
+        fail(f"after Check the primary button reads {page.inner_text('#gNext')!r}")
+    press_next(page)
+    page.wait_for_selector("#gOff:enabled")
+    page.click("#gOff")
+    if page.get_attribute("#gOff", "aria-pressed") != "true" or not page.is_enabled("#gNext"):
+        fail("I'm off court is not selected or Check stays disabled")
+    spot = next((x, y) for p, x, y in ROWS[1]["rec"] if p == "OH1")
+    tap_at(page, *spot)
+    if page.get_attribute("#gOff", "aria-pressed") != "false":
+        fail("a court tap does not unselect I'm off court")
+    press_next(page)
+    if "Spot on" not in page.inner_text("#gFb"):
+        fail(f"off court then a tap did not score the tap: {page.inner_text('#gFb')!r}")
+    page.close()
+    print("tap then Check: marker moves, Check scores the last pick", flush=True)
+
+
+def neighbour_answer(ri: int, role: str, question: str) -> str:
+    """Works out the answer to a neighbour question from the rotational lineup."""
+    rows = [ROWS[ri]["front"], ROWS[ri]["back"]]
+    r = next(k for k, row in enumerate(rows) if role in row)
+    c = rows[r].index(role)
+    if "behind" in question:
+        return str(rows[1 - r][c])
+    return str(rows[r][c - 1] if "on your left" in question else rows[r][c + 1])
+
+
+def check_breakdown(browser: Browser) -> None:
+    """The points line adds up to the points of every moment, with help, a shown setter and both bonuses."""
+    page = new_page(browser)
+    setup_match(page, "OH1", ("rec", "ar"), vis="ref", neighbour=True)
+    page.click("#gStart")
+    lines = []
+    for ri in range(6):
+        for phase in ("rec", "ar"):
+            page.wait_for_selector("#gOff:enabled")
+            if ri == 1:
+                page.click("#gHelp")
+            tap_spot(page, "OH1", ri, phase)
+            page.wait_for_selector("#gBd")
+            right = ri % 2 == 0
+            if page.locator("#gnb").count():
+                want = neighbour_answer(ri, "OH1", page.inner_text("#gnb"))
+                page.locator(
+                    f'#gnb button[data-p="{want}"]' if right else f'#gnb button:not([data-p="{want}"])'
+                ).first.click()
+            if page.locator("#gsc").count():
+                want = asked_set(page)
+                page.locator(
+                    f'#gsc [data-s="{want}"]' if right else f'#gsc .setchip:not([data-s="{want}"])'
+                ).first.click()
+            line = page.inner_text("#gBd")
+            lines.append(line)
+            parts, total = breakdown_total(line)
+            if not parts == total == points(page):
+                fail(f"R{ri + 1} {phase}: breakdown {line!r} adds up to {parts}, total {total}, scored {points(page)}")
+            if ri == 1 and "help used, 60%" not in line:
+                fail(f"help not shown in the breakdown: {line!r}")
+            if "Setter 70% →" not in line:
+                fail(f"shown setter not in the breakdown: {line!r}")
+            if not in_view(page, "#gNext"):
+                fail(f"R{ri + 1} {phase}: Continue is below the fold")
+            press_next(page)
+    if not any("Neighbour: right" in line for line in lines) or not any("Set call: wrong" in line for line in lines):
+        fail(f"breakdowns lack a right neighbour or a wrong set call: {lines}")
+    page.wait_for_selector("#gEnd", state="visible")
+    page.close()
+    page = new_page(browser)
+    setup_match(page, "OH1", ("rec",))
+    page.click("#gStart")
+    page.wait_for_selector("#gOff:enabled")
+    tap_at(page, 0.5, 0.03)
+    press_next(page)
+    if not page.inner_text("#gBd").startswith("Position: wrong 0"):
+        fail(f"a wrong spot reads {page.inner_text('#gBd')!r}")
+    page.close()
+    print("breakdown adds up to the points", flush=True)
+
+
+def check_end_screen(browser: Browser) -> None:
+    """The solo end screen offers Replay, Play again and Change settings without scrolling, and they work."""
+    page = new_page(browser)
+    setup_match(page, "OH1", ("rec",))
+    page.click("#gStart")
+    while not page.is_visible("#gEnd"):
+        if page.is_enabled("#gOff"):
+            tap_at(page, 0.5, 0.03)
+        press_next(page)
+    for button in ("#gReplay", "#gAgain", "#gSettings"):
+        if not page.is_visible(button) or not in_view(page, button):
+            fail(f"solo end screen: {button} not visible without scrolling")
+    if page.is_visible("#gToLobby") or page.is_visible("#gEndWait"):
+        fail("solo end screen shows online buttons")
+    page.click("#gAgain")
+    if not page.is_visible("#gPlay") or page.inner_text("#gStepName") != "Reception · moment 1 of 6":
+        fail(f"Play again did not start a new match: {page.inner_text('#gStepName')!r}")
+    page.close()
+    print("solo end screen buttons ok", flush=True)
+
+
+def check_court_not_covered(browser: Browser) -> None:
+    """While answering, the buttons do not cover the court; after Check they stay in view."""
+    page = new_page(browser)
+    setup_match(page, "OH1", ("rec",))
+    if page.is_hidden("#setupPanel"):
+        page.click("#setupBar")
+    page.click("#gStart")
+    page.wait_for_selector("#gOff:enabled")
+    page.evaluate("window.scrollTo(0, 0)")
+    box = page.locator("#courtG").bounding_box()
+    if box is None or box["y"] + box["height"] <= 844:
+        fail("court is not cut by the fold, the test proves nothing")
+    else:
+        x, y = box["x"] + box["width"] / 2, 834
+        inside = page.evaluate(
+            "([x, y]) => document.getElementById('courtG').contains(document.elementFromPoint(x, y))", [x, y]
+        )
+        if not inside:
+            fail("the button row covers the court while answering")
+        page.mouse.click(x, y)
+        if not page.is_visible("#gPlay") or page.locator("#courtG .myspot").count() != 1:
+            fail("a tap on the lower court did not place a marker")
+    press_next(page)
+    if not in_view(page, "#gNext"):
+        fail("Continue is below the fold after Check")
+    page.close()
+    print("court not covered while answering", flush=True)
+
+
+def check_double_check(browser: Browser) -> None:
+    """A double tap on Check keeps the feedback on screen."""
+    page = new_page(browser)
+    setup_match(page, "OH1", ("rec",))
+    page.click("#gStart")
+    tap_spot(page, "OH1", 0, "rec", check=False)
+    page.evaluate("() => { const b = document.getElementById('gNext'); b.click(); b.click(); }")
+    if "moment 1 of" not in page.inner_text("#gStepName") or not page.locator("#gFb .pts").count():
+        fail(f"a double tap on Check skipped the feedback: {page.inner_text('#gStepName')!r}")
+    press_next(page)
+    if "moment 2 of" not in page.inner_text("#gStepName"):
+        fail("Continue does not work after the double tap lock")
+    page.close()
+    print("double tap on Check keeps the feedback", flush=True)
+
+
 def main() -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -294,6 +515,11 @@ def main() -> None:
         check_peek(browser)
         check_best_key(browser)
         check_set_calls(browser)
+        check_tap_then_check(browser)
+        check_breakdown(browser)
+        check_end_screen(browser)
+        check_court_not_covered(browser)
+        check_double_check(browser)
         browser.close()
     print("MATCH TEST:", "ok" if not FAIL else f"{len(FAIL)} failures", flush=True)
     sys.exit(1 if FAIL else 0)

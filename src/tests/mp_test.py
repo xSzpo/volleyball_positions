@@ -15,6 +15,12 @@ VERDICT = re.compile(r"Spot on|Close enough|Not there|\+\d")
 CHIPS = "#courtG g[opacity]"
 
 
+def press_next(page: Page) -> None:
+    """Presses Check or Continue and waits out the short lock that stops a double tap skipping the feedback."""
+    page.click("#gNext")
+    page.wait_for_selector("#gNext:not([aria-disabled])", state="attached")
+
+
 def check_hidden(pg: Page, chips_before: int, how: str) -> None:
     """Asserts that a player's answer reveals nothing before the reveal screen."""
     feedback = pg.inner_text("#gFb")
@@ -25,6 +31,29 @@ def check_hidden(pg: Page, chips_before: int, how: str) -> None:
         f"{how}: court shows {chips_after} chips after the answer, {chips_before} before"
     )
     assert pg.is_visible("#gNext") and pg.is_enabled("#gNext"), f"{how}: next button not available"
+
+
+def chip_scores(pg: Page, selector: str) -> dict[str, int]:
+    """Reads name and score from score chips."""
+    found = [re.fullmatch(r"\s*(.*?)\s+(\d+)\s*", c, re.S) for c in pg.locator(f"{selector} .pchip").all_inner_texts()]
+    return {m.group(1): int(m.group(2)) for m in found if m}
+
+
+def breakdown_total(line: str) -> tuple[int, int]:
+    """Adds up the parts of a points breakdown and returns (sum of the parts, the stated total)."""
+
+    def part(pattern: str) -> int:
+        found = re.search(pattern, line)
+        return int(found.group(1)) if found else 0
+
+    position = re.search(r"Position: \w+ (\d+)", line)
+    total = re.search(r"Total (\d+)", line)
+    assert position and total, f"breakdown without position or total: {line!r}"
+    subtotal = int(position.group(1)) + part(r"speed \+(\d+)") + part(r"streak \+(\d+)")
+    scaled = re.search(r"(\d+)% → (\d+)", line)
+    if scaled:
+        subtotal = int(scaled.group(2))
+    return subtotal + part(r"Set call: [^+]*\+(\d+)") + part(r"Neighbour: [^+]*\+(\d+)"), int(total.group(1))
 
 
 random.seed(3)
@@ -50,6 +79,7 @@ with sync_playwright() as p:
     chips_before = 0
     answered_by = {"tap": 0, "off": 0, "neighbour": 0, "set": 0}
     set_lines = 0
+    doubled = False
     moment_board = None
     moment_seen = None
     while n < 400:
@@ -66,17 +96,24 @@ with sync_playwright() as p:
             if shots == 0:
                 pg.locator("#gPass").screenshot(path=str(SHOTS / "mp1.png"))
             pg.click("#pReady")
+            strip = chip_scores(pg, "#gStrip")
+            assert strip == chip_scores(pg, "#pBoard"), f"strip {strip} differs from the pass screen"
+            assert pg.locator("#gStrip .pchip.me").count() == 1, "own strip entry not highlighted"
+            assert pg.evaluate("document.documentElement.scrollWidth") <= 390, "strip scrolls sideways"
             continue
         if pg.is_visible("#gReveal"):
             rows = pg.locator("#rList li").all_inner_texts()
             assert len(rows) == 3, f"reveal lists {len(rows)} players"
             for row in rows:
                 assert re.search(r"Spot on|Close enough|Not there", row), f"reveal row has no verdict: {row!r}"
-                assert re.search(r"\+\d+", row), f"reveal row has no points: {row!r}"
+                found = re.search(r"\+(\d+)\s*$", row)
+                assert found, f"reveal row has no points: {row!r}"
+                parts, total = breakdown_total(row)
+                assert parts == total == int(found.group(1)), f"reveal breakdown does not add up: {row!r}"
             assert pg.locator("#rWhy li").count() >= 1, "reveal has no explanation"
             for row in rows:
                 if "Set call:" in row:
-                    assert re.search(r"Set call: \S+, (right \(\+30\)|wrong \(it is \S+\))", row), (
+                    assert re.search(r"Set call: \S+ (✓ \+30|✗, it is \S+ \+0)", row), (
                         f"unreadable set call line: {row!r}"
                     )
                     set_lines += 1
@@ -107,20 +144,35 @@ with sync_playwright() as p:
             answered_by["set"] += 1
             continue
         if pg.is_visible("#gNext") and pg.is_enabled("#gNext"):
-            pg.click("#gNext")
+            press_next(pg)
             continue
         if pg.is_enabled("#gOff"):
             assert pg.is_hidden("#gVisPlay"), "Show on court can be changed during a multiplayer match"
             chips_before = pg.locator(CHIPS).count()
+            strip_before = pg.inner_text("#gStrip")
+            assert not pg.is_enabled("#gNext") and pg.inner_text("#gNext") == "CHECK", "Check enabled before a pick"
             if random.random() < 0.3:
                 pg.click("#gOff")
                 how = "off"
             else:
                 box = pg.locator("#courtG").bounding_box()
                 assert box is not None
-                pg.mouse.click(box["x"] + box["width"] * random.random(), box["y"] + box["height"] * random.random())
+                for _ in range(2):
+                    pg.mouse.click(
+                        box["x"] + box["width"] * random.random(), box["y"] + box["height"] * random.random()
+                    )
+                    assert pg.locator("#courtG .myspot").count() == 1, "re-tap does not move the marker"
+                    assert not VERDICT.search(pg.inner_text("#gFb")), "a tap before Check leaks the verdict"
                 how = "tap"
+            if not doubled:
+                pg.evaluate("() => { const b = document.getElementById('gNext'); b.click(); b.click(); }")
+                assert pg.is_hidden("#gPass") and pg.is_visible("#gFb"), "a double tap on Check passed the device"
+                pg.wait_for_selector("#gNext:not([aria-disabled])", state="attached")
+                doubled = True
+            else:
+                press_next(pg)
             check_hidden(pg, chips_before, how)
+            assert pg.inner_text("#gStrip") == strip_before, "strip changes before the reveal"
             answered_by[how] += 1
             continue
         print("STUCK")
@@ -128,12 +180,20 @@ with sync_playwright() as p:
     print("ended:", pg.is_visible("#gEnd"), "actions", n)
     print("answers checked:", answered_by)
     assert all(answered_by.values()), f"not every answer path was checked: {answered_by}"
+    assert doubled, "the double tap on Check was not tried"
     assert set_lines == answered_by["set"], f"{answered_by['set']} set calls answered, {set_lines} on the reveals"
     assert "sets " in pg.inner_text("#gStats"), "final ranking has no set call score"
     print("first 9 turns:", order_seen[:9])
     pg.locator("#gEnd").screenshot(path=str(SHOTS / "mp3.png"))
-    # rematch works
+    for button in ("#gAgain", "#gSettings"):
+        box = pg.locator(button).bounding_box()
+        assert pg.is_visible(button) and box and box["y"] + box["height"] <= 844, (
+            f"{button} not in view on the end screen"
+        )
+    assert pg.inner_text("#gAgain") == "PLAY AGAIN", f"end screen primary reads {pg.inner_text('#gAgain')!r}"
+    assert pg.is_hidden("#gToLobby") and pg.is_hidden("#gReplay"), "same-device end screen shows other buttons"
     pg.click("#gAgain")
+    assert pg.is_visible("#gPass"), "Play again did not start a new same-device match"
     print("rematch pass visible:", pg.is_visible("#gPass"))
     # role change at top doesn't kill mp
     pg.click("#tabLearn")

@@ -145,6 +145,9 @@ def play_match(pg: Page, ctx: str, maxsteps: int = 200) -> bool:
                 continue
             tap(pg, "#courtG")
             continue
+        if pg.is_visible("#gNext") and pg.get_attribute("#gNext", "aria-disabled"):
+            pg.wait_for_selector("#gNext:not([aria-disabled])", state="attached")
+            continue
         fail(f"{ctx}: STUCK in match at {pg.inner_text('#gTitle')} / {pg.inner_text('#gStepName')}")
         return False
     fail(f"{ctx}: match did not finish in {maxsteps} actions")
