@@ -4,6 +4,10 @@ A single-page app for learning your position in the KSV 5-1 system: receiving po
 
 Live site: https://xszpo.github.io/volleyball_positions/
 
+## For developers
+
+Source files live in `src/`; `index.html` is generated. See `CLAUDE.md` for the build, the tests and the project notes.
+
 ## Files
 
 - `index.html` – the whole app. Everything is inside this one file, including the two printable PDFs offered by the download buttons.

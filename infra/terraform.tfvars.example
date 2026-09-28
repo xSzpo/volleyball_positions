@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars and edit.
+project_id = "ksv-volleyball-7421"   # must be globally unique
+
+# Free (Spark) setup: leave these as they are and enable Anonymous sign-in once in the console.
+# billing_account = "XXXXXX-XXXXXX-XXXXXX"
+# manage_auth     = true              # fully automated, needs billing_account (Blaze)
+# budget_currency = "DKK"             # must match your billing account

@@ -1,0 +1,5 @@
+.DS_Store
+.venv/
+__pycache__/
+reference/
+src/tests/_out/
