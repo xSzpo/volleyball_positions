@@ -648,6 +648,24 @@
     .setchip.right {
       color: var(--set-right);
     }
+    .setchip.unconf span::after {
+      content: "?";
+    }
+    .setchip.faded {
+      opacity: 0.4;
+    }
+    .nbq .setchip.picked {
+      background: currentColor;
+    }
+    .nbq .setchip.picked span {
+      color: var(--panel);
+    }
+    .nbq .setq {
+      display: block;
+      width: 100%;
+      max-height: 120px;
+      margin-top: 6px;
+    }
     .dl {
       display: grid;
       gap: 8px;
@@ -948,6 +966,10 @@
       background: var(--ink);
       color: var(--panel);
     }
+    .rulesmode button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
     .rulesmode small {
       flex-basis: 100%;
       color: var(--muted);
@@ -1017,6 +1039,9 @@
     }
     .vis.compact {
       margin: 10px 0 0;
+    }
+    .vis[hidden] {
+      display: none;
     }
     .check {
       display: flex;
@@ -1138,6 +1163,59 @@
     }
     .pass {
       text-align: center;
+    }
+    .onfield {
+      display: block;
+      font:
+        700 15px Barlow,
+        sans-serif;
+      margin: 10px 0 2px;
+    }
+    .onrow {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin: 6px 0;
+    }
+    .onrow input {
+      flex: 1;
+      font:
+        500 16px Barlow,
+        sans-serif;
+      padding: 10px 12px;
+      border: 2px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--ink);
+      min-width: 0;
+    }
+    #onCode {
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      font-weight: 700;
+    }
+    .onerr {
+      color: var(--bad);
+      font-weight: 600;
+      margin: 4px 0 0;
+    }
+    .onerr:empty {
+      display: none;
+    }
+    .onnote {
+      background: var(--accent);
+      color: var(--on-accent);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      margin: 0 0 10px;
+      font-weight: 700;
+    }
+    .pres {
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .pres.on {
+      color: var(--good);
     }
     .passname {
       font:
@@ -1506,6 +1584,7 @@
       </section>
 
       <section id="game" hidden>
+        <p class="onnote" id="onNote" role="status" hidden></p>
         <div class="card" id="gSetup">
           <h2>Match mode</h2>
           <fieldset class="steps one" style="margin-bottom:10px">
@@ -1514,6 +1593,10 @@
             <label
               ><input type="radio" name="gPlayers" value="mp">
               With friends, on this device</label
+            >
+            <label
+              ><input type="radio" name="gPlayers" value="online">
+              Online room, each on their own phone</label
             >
           </fieldset>
           <div id="mpBox" hidden>
@@ -1524,6 +1607,36 @@
             <p class="tip">
               Pass the device around. In every moment the turn order is random, and each player
               answers in secret. When everyone has answered, all answers are shown together.
+            </p>
+          </div>
+          <div id="onBox" hidden>
+            <label class="onfield" for="onName">Your name</label>
+            <div class="onrow">
+              <input type="text" id="onName" maxlength="16" autocomplete="nickname">
+            </div>
+            <p class="hint" style="margin:4px 0 8px">
+              You play as <b id="onRole"></b>. Change it at the top.
+            </p>
+            <div class="onrow">
+              <button type="button" class="btn primary" id="onCreate">Create a room</button>
+            </div>
+            <label class="onfield" for="onCode">Or join a friend's room</label>
+            <div class="onrow">
+              <input
+                type="text"
+                id="onCode"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                maxlength="6"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="6 digits"
+              ><button type="button" class="btn primary" id="onJoin">Join</button>
+            </div>
+            <p class="onerr" id="onErr" role="alert"></p>
+            <p class="tip">
+              Everyone answers each moment on their own phone at the same time. The host's match
+              settings are used.
             </p>
           </div>
           <p class="hint" style="margin:10px 0 0">
@@ -1568,6 +1681,11 @@
                 ><input type="checkbox" id="nbGame">
                 Neighbour check (who stands next to you) in reception, +30 points</label
               >
+              <label class="check"
+                ><input type="checkbox" id="setGame">
+                Set call check (front row and setter) after the pass, +30 points</label
+              >
+              <p class="hint" id="setGameHint" hidden>Needs the After reception step</p>
             </div>
           </details>
           <div class="row">
@@ -1581,6 +1699,9 @@
               <li>Answer fast for up to +20 points.</li>
               <li>Each perfect answer in a row adds +10 more, up to +50.</li>
               <li>Help costs points: a hint keeps 60% of the base points, more help keeps 30%.</li>
+              <li>
+                Showing teammates costs points: Setter keeps 70% of every point, Everyone keeps 30%.
+              </li>
             </ul>
           </details>
         </div>
@@ -1595,6 +1716,21 @@
           <div class="board" id="pBoard"></div>
           <div class="row">
             <button type="button" class="btn quiet" id="pQuit">Quit match</button>
+          </div>
+        </div>
+
+        <div class="card" id="gLobby" hidden>
+          <div class="sub">Online room code</div>
+          <div class="passname" id="lCode"></div>
+          <p class="hint" style="margin:6px 0 0">
+            Others open Match, pick “Online room” and type this code.
+          </p>
+          <p class="hint" id="lSet" style="margin:4px 0 0"></p>
+          <ul class="rlist" id="lList"></ul>
+          <p id="lWait">Waiting for the host to start.</p>
+          <div class="row">
+            <button type="button" class="btn primary bigbtn" id="lStart">Start match</button
+            ><button type="button" class="btn quiet" id="lLeave">Leave room</button>
           </div>
         </div>
 
@@ -1621,6 +1757,7 @@
             <button type="button" class="btn primary" id="rNext">Next moment</button
             ><button type="button" class="btn quiet" id="rQuit">Quit</button>
           </div>
+          <p class="hint" id="rWait" hidden>Waiting for the host to go on.</p>
         </div>
 
         <div class="card" id="gPlay" hidden>
@@ -1638,6 +1775,7 @@
           <div class="steptrack" id="gTrack"></div>
           <div
             class="vis compact"
+            id="gVisPlay"
             role="radiogroup"
             aria-label="Who to show on court"
             data-vis="game"
@@ -1665,6 +1803,12 @@
             <button type="button" class="btn quiet" id="gQuit">Quit</button>
           </div>
           <div class="fb" id="gFb"></div>
+          <div id="gWait" hidden>
+            <p class="hint" id="wText"></p>
+            <div class="row">
+              <button type="button" class="btn" id="wReveal">Reveal now</button>
+            </div>
+          </div>
         </div>
 
         <div class="card" id="gEnd" hidden>
@@ -1740,7 +1884,9 @@
         })),
         AL = DATA.attackLine,
         SETS = DATA.sets,
-        SETTER_X = DATA.setterX;
+        SETTER_X = DATA.setterX,
+        UNCONFIRMED = DATA.unconfirmedSets,
+        MATCH_SETS = SETS.filter((s) => !UNCONFIRMED.includes(s[0]));
       const PDF = {
         schema: { name: "KSV_5-1_rotation_schema.pdf", b64: "__PDF_SCHEMA__" },
         sets: { name: "KSV_front_row_sets.pdf", b64: "__PDF_SETS__" },
@@ -2071,11 +2217,12 @@
               if (!$("drill").hidden) newQuestion();
               else cur = null;
               if (typeof gRenderSetup === "function") {
-                if (G && !G.mp) {
+                if (G && !G.mp && !G.online) {
                   G = null;
                   gView("gSetup");
                 }
                 if (!G) gRenderSetup();
+                onRole();
               }
             };
           });
@@ -2313,15 +2460,29 @@
       }
       let visDrill = store.get("visDrill", "none"),
         visGame = store.get("visGame", "none");
+      const VIS_MULT = { none: 1, ref: 0.7, all: 0.3 };
+      function visName(v, r) {
+        return { none: "Nobody", ref: r === "S" ? "Opposite" : "Setter", all: "Everyone" }[v];
+      }
+      const VIS_ORDER = ["none", "ref", "all"];
+      function gVis() {
+        return G?.online ? G.online.meta.vis : G?.mp ? G.vis0 : visGame;
+      }
+      // Solo scores each moment with the most revealing setting shown before the answer.
+      function gVisMult() {
+        return VIS_MULT[G && !G.mp && !G.online ? G.visMax : gVis()] ?? 1;
+      }
       function gVisText() {
         const ref = role === "S" ? "the opposite" : "the setter";
         $("gTip").textContent =
           `Too hard? Show ${ref} as a reference. When you score 80% or more, pick mixed order and show nobody.`;
-        $("gVisSub").textContent = {
-          none: "Nobody: only the net and the court. Hardest, closest to a real match.",
-          ref: `Only ${ref}: find ${ref}, then work out your own spot. The way coaches teach it.`,
-          all: "Everyone: see where all teammates stand. Easiest.",
-        }[visGame];
+        $("gVisSub").innerHTML = `${esc(
+          {
+            none: "Nobody: only the net and the court. Hardest, closest to a real match.",
+            ref: `Only ${ref}: find ${ref}, then work out your own spot. The way coaches teach it.`,
+            all: "Everyone: see where all teammates stand. Easiest.",
+          }[visGame],
+        )}<br><span id="gVisPts">Nobody: full points · ${visName("ref", role)}: 70% · Everyone: 30%</span>`;
       }
       function setVisDrill(v) {
         visDrill = v;
@@ -2330,11 +2491,15 @@
         if (cur) drawDrill(lastTap);
       }
       function setVisGame(v) {
+        if (ON) return;
         visGame = v;
         store.set("visGame", v);
         drawVis("game", v);
         gVisText();
-        if (G && !G.answered) gDraw();
+        if (G && !G.mp && !G.online && !G.answered) {
+          if (VIS_ORDER.indexOf(v) > VIS_ORDER.indexOf(G.visMax)) G.visMax = v;
+          gDraw();
+        }
       }
       document.querySelectorAll(".vis").forEach((g) => {
         g.addEventListener("click", (e) => {
@@ -2723,7 +2888,7 @@
         );
         $("setchips").innerHTML = SETS.map(
           (s) =>
-            `<button class="setchip ${s[3]}" aria-pressed="${selSet === s[0]}" data-s="${s[0]}"><span>${s[0]}</span></button>`,
+            `<button class="setchip ${s[3]}${UNCONFIRMED.includes(s[0]) ? " unconf" : ""}" aria-pressed="${selSet === s[0]}" data-s="${s[0]}"><span>${s[0]}</span></button>`,
         ).join("");
         $("setchips")
           .querySelectorAll("button")
@@ -2735,8 +2900,8 @@
           });
         const st = SETS.find((s) => s[0] === selSet);
         $("setcue").innerHTML = st
-          ? `<b>${st[0]} · ${FAMNAME[st[3]]}</b><p>${st[4]}</p>`
-          : `<b>Lower arc = faster tempo</b><p>Left-side calls are 1, 0 and 2. Middle calls are Shoot, 4 and Po. Behind the setter: Til, 7 and 6.</p>`;
+          ? `<b>${st[0]} · ${FAMNAME[st[3]]}${UNCONFIRMED.includes(st[0]) ? " (not confirmed)" : ""}</b><p>${st[4]}</p>`
+          : `<b>Lower arc = faster tempo</b><p>Left-side calls are 1, 0 and 2. Middle calls are Shoot, 4 and Po (4 and Po not confirmed). Behind the setter: Til, 7 and 6.</p>`;
       }
       let sq = null,
         sAns = false,
@@ -2748,7 +2913,8 @@
         sAns = false;
         $("netQ").innerHTML = netSvg([sq[0]], null, { labels: false });
         $("setanswers").innerHTML = SETS.map(
-          (s) => `<button class="setchip ${s[3]}" data-s="${s[0]}"><span>${s[0]}</span></button>`,
+          (s) =>
+            `<button class="setchip ${s[3]}${UNCONFIRMED.includes(s[0]) ? " unconf" : ""}" data-s="${s[0]}"><span>${s[0]}</span></button>`,
         ).join("");
         $("setanswers")
           .querySelectorAll("button")
@@ -2779,13 +2945,81 @@
           });
         $("sfb").className = `fb ${ok ? "good" : "bad"}`;
         $("sfb").innerHTML =
-          `<b>${ok ? "Correct" : `It was ${sq[0]}`}</b><p style="margin:2px 0 0">${sq[4]}</p>`;
+          `<b>${ok ? "Correct" : `It was ${sq[0]}`}</b><p style="margin:2px 0 0">${sq[4]}${UNCONFIRMED.includes(sq[0]) ? " (not confirmed)" : ""}</p>`;
         $("snext").hidden = false;
         $("snext").focus({ preventScroll: true });
         $("sscore").textContent = `${sScore.ok}/${sScore.n}`;
         $("sstreak").textContent = sStreak;
       }
       $("snext").onclick = newSetQ;
+
+      // Antenna sets belong to the pin hitters; everything else inside the antennas is the middle's.
+      function setLane(s) {
+        return s[3] === "left" ? "left" : s[1] > 0.9 ? "right" : "mid";
+      }
+      function rnd(a) {
+        return a[Math.floor(Math.random() * a.length)];
+      }
+      function setQ(ri, r) {
+        const me = players(ri, "ar").find((o) => o.p === r);
+        if (!me || (me.kind !== "front" && me.kind !== "set")) return null;
+        const lane = me.x < 1 / 3 ? "left" : me.x > 2 / 3 ? "right" : "mid";
+        const pool = me.kind === "set" ? MATCH_SETS : MATCH_SETS.filter((s) => setLane(s) === lane);
+        if (!pool.length) return null;
+        const ask = rnd(pool);
+        const others = MATCH_SETS.filter((s) => s !== ask);
+        const family = others.filter((s) => s[3] === ask[3]);
+        const lanemates = others.filter((s) => setLane(s) === setLane(ask));
+        const near = rnd(family.length ? family : lanemates.length ? lanemates : others);
+        const rest = shuffle(others.filter((s) => s !== near)).slice(0, 2);
+        return { ask, opts: shuffle([ask, near, ...rest]), setter: me.kind === "set", done: false };
+      }
+      function setHtml(q) {
+        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press Continue</span><p style="margin:2px 0 0">${q.setter ? "You set this ball. What is the call?" : "The setter sets this ball for you. What is the call?"}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip ${s[3]}" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
+      }
+      function setMark(q, pick) {
+        const ok = pick === q.ask[0];
+        $("gscNet").innerHTML = netSvg(ok ? [q.ask[0]] : [q.ask[0], pick], q.ask[0]);
+        $("gsc")
+          .querySelectorAll("button")
+          .forEach((b) => {
+            b.disabled = true;
+            if (b.dataset.s === q.ask[0]) b.setAttribute("aria-pressed", "true");
+            else if (b.dataset.s === pick) b.classList.add("faded");
+          });
+        $("gsc").insertAdjacentHTML(
+          "beforeend",
+          `<p class="hint" style="margin-top:6px">${ok ? "Correct." : `It is ${q.ask[0]}.`} ${q.ask[4]}</p>`,
+        );
+      }
+      function setAnswer(b) {
+        const q = G.sc;
+        if (!q || q.done) return;
+        q.done = true;
+        const ok = b.dataset.s === q.ask[0];
+        G.setN++;
+        G.results[G.i].set = { ask: q.ask[0], pick: b.dataset.s, ok };
+        if (ok) {
+          G.setOk++;
+          G.score += 30;
+          G.results[G.i].pts += 30;
+        }
+        if (G.mp || G.online) {
+          nbSaved("gsc", b);
+          if (G.online) onWrite(true);
+          return;
+        }
+        $("gScore").textContent = G.score;
+        $("gFb").querySelector(".pts").textContent = `+${G.results[G.i].pts}`;
+        setMark(q, b.dataset.s);
+        $("gNext").focus({ preventScroll: true });
+      }
+      function setOn() {
+        return $("setGame").checked && gSteps().includes("ar");
+      }
+      function gBonusPending() {
+        return !!((G.nb && !G.nb.done) || (G.sc && !G.sc.done));
+      }
 
       // ---------- Match mode ----------
       const STEP_ORDER = ["start", "rec", "ar", "serve"];
@@ -2796,8 +3030,16 @@
         $(`gs-${k}`).checked = gSettings[k] !== false;
         $(`gs-${k}`).onchange = gCheckSteps;
       });
+      $("setGame").checked = store.get("setGame", true) !== false;
+      $("setGame").onchange = () => {
+        store.set("setGame", $("setGame").checked);
+        gRenderSetup();
+      };
       $("nbGame").checked = store.get("nbGame", true);
-      $("nbGame").onchange = () => store.set("nbGame", $("nbGame").checked);
+      $("nbGame").onchange = () => {
+        store.set("nbGame", $("nbGame").checked);
+        gRenderSetup();
+      };
       function gOrder() {
         const r = document.querySelector('input[name="gOrder"]:checked');
         return r ? r.value : "order";
@@ -2816,11 +3058,15 @@
       }
       function gKey() {
         return (
+          "v2|" +
           role +
           "|" +
           gSteps().join(",") +
           (gOrder() === "mixed" ? "|mixed" : "") +
-          (rulesMode === "drill" ? "|drill" : "")
+          (rulesMode === "drill" ? "|drill" : "") +
+          (visGame !== "none" ? `|${visGame}` : "") +
+          ($("nbGame").checked && gSteps().includes("rec") ? "|nb" : "") +
+          (setOn() ? "|sets" : "")
         );
       }
       function gCheckSteps() {
@@ -2830,6 +3076,7 @@
         });
         store.set("gameSteps", gSettings);
         $("gStart").disabled = !s.length;
+        $("onCreate").disabled = !s.length;
         $("gStepsMsg").textContent = s.length
           ? `${s.length * 6} moments in this match.`
           : "Pick at least one step.";
@@ -2839,20 +3086,27 @@
       function gOptText() {
         const n = gSteps().length * 6;
         $("gOptSum").textContent = n
-          ? `${n} moments · ${gOrder() === "mixed" ? "mixed order" : "in order"}`
+          ? `${n} moments · ${gOrder() === "mixed" ? "mixed order" : "in order"}${setOn() ? " · set calls" : ""}`
           : "pick at least one step";
+        const ar = gSteps().includes("ar");
+        $("setGame").disabled = !ar;
+        $("setGameHint").hidden = ar;
       }
       function gRenderSetup() {
-        const mp = gPlayersMode() === "mp";
+        const mp = gPlayersMode() === "mp",
+          online = gPlayersMode() === "online";
         $("gRole").textContent = mp ? "the role each player picks" : NAMES[role];
         $("mpBox").hidden = !mp;
         if (mp) renderMp();
-        const best = mp ? null : store.get("gameBest", {})[gKey()];
+        $("onBox").hidden = !online;
+        $("onRole").textContent = NAMES[role];
+        $("gStart").hidden = online;
+        const best = mp || online ? null : store.get("gameBest", {})[gKey()];
         $("gBest").textContent = best ? `Your best with these settings: ${best} points.` : "";
         gOptText();
       }
       function gView(v) {
-        ["gSetup", "gPass", "gReveal", "gPlay", "gEnd"].forEach((id) => {
+        ["gSetup", "gPass", "gLobby", "gReveal", "gPlay", "gEnd"].forEach((id) => {
           $(id).hidden = id !== v;
         });
       }
@@ -2874,9 +3128,15 @@
           t0: 0,
           key: gKey(),
           mixed: gOrder() === "mixed",
+          vis0: visGame,
+          visMax: visGame,
+          peeks: 0,
           nbOk: 0,
           nbN: 0,
           nb: null,
+          setOk: 0,
+          setN: 0,
+          sc: null,
           mp: null,
         };
         if (mp) {
@@ -2894,6 +3154,8 @@
               results: [],
               nbOk: 0,
               nbN: 0,
+              setOk: 0,
+              setN: 0,
               taps: [],
             })),
             order: [],
@@ -2905,7 +3167,7 @@
         gView("gPlay");
         gShow();
       }
-      function gNewMatch() {
+      function gQueue() {
         const q = [];
         const order = [0, 1, 2, 3, 4, 5];
         if (gOrder() === "mixed") {
@@ -2919,7 +3181,10 @@
             q.push({ ri: i, phase: k });
           });
         });
-        gStart(q, false, gPlayersMode() === "mp" ? mpPlayers : null);
+        return q;
+      }
+      function gNewMatch() {
+        gStart(gQueue(), false, gPlayersMode() === "mp" ? mpPlayers : null);
       }
       function gStory(st, prev) {
         const R = ROWS[st.ri].name,
@@ -2956,13 +3221,18 @@
         G.answered = false;
         G.tap = null;
         G.nb = null;
+        G.sc = null;
+        G.visMax = gVis();
+        $("gVisPlay").hidden = !!(G.mp || G.online);
+        $("gWait").hidden = true;
         $("gNbBox").innerHTML = "";
         $("gNext").disabled = false;
         delete $("gNext").dataset.label;
         const r = ROWS[st.ri];
         $("gTitle").textContent = r.name;
-        if (G.mp) {
-          const p = mpCur();
+        const who = G.mp ? mpCur() : G.online ? G.online.me : null;
+        if (who) {
+          const p = who;
           $("gWho").hidden = false;
           $("gWho").innerHTML =
             `<i style="background:${p.color}"></i>${esc(p.name)} · ${NAMES[p.role]}`;
@@ -2993,7 +3263,7 @@
         const st = G.queue[G.i],
           pl = players(st.ri, st.phase),
           me = pl.find((o) => o.p === G.role),
-          shown = G.answered && !G.mp;
+          shown = G.answered && !G.mp && !G.online;
         let s = DEFS + courtBase();
         if (shown && st.phase === "start") s += rotArrows();
         if (shown && st.phase === "ar") s += arLayer(st.ri, pl, G.role);
@@ -3002,11 +3272,12 @@
             jy = me.y + (G.jit ? G.jit[1] : 0);
           s += `<circle cx="${jx * W}" cy="${jy * H}" r="46" fill="var(--accent)" fill-opacity=".25" stroke="var(--accent-ink)" stroke-width="2" stroke-dasharray="5 4"/>`;
         }
-        (shown ? pl.filter((o) => o.p !== G.role) : visible(visGame, pl, G.role)).forEach((o) => {
-          s += chip(o, { dim: shown || visGame === "all" });
+        const vis = gVis();
+        (shown ? pl.filter((o) => o.p !== G.role) : visible(vis, pl, G.role)).forEach((o) => {
+          s += chip(o, { dim: shown || vis === "all" });
         });
         if (shown && G.nb?.done) s += nbLayer(pl, G.role, G.nb.a);
-        if (G.answered && G.mp && G.tap)
+        if (G.answered && (G.mp || G.online) && G.tap)
           s += `<circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="7" fill="var(--ink)" opacity=".7"/>`;
         if (shown) {
           if (G.tap && me)
@@ -3087,7 +3358,10 @@
         if (q === "perfect" && G.help === 0) G.streak++;
         else G.streak = 0;
         const streakB = G.streak > 1 ? Math.min(G.streak - 1, 5) * 10 : 0;
-        const pts = Math.round(base * mult) + speed + streakB;
+        const vm = gVisMult();
+        if (!G.mp && !G.online && VIS_ORDER.indexOf(G.visMax) > VIS_ORDER.indexOf(G.vis0))
+          G.peeks++;
+        const pts = Math.round((Math.round(base * mult) + speed + streakB) * vm);
         G.score += pts;
         if (q === "perfect") G.perfect++;
         if (q === "close") G.close++;
@@ -3099,10 +3373,14 @@
         if (base) parts.push(`${Math.round(base * mult)} position`);
         if (speed) parts.push(`+${speed} speed`);
         if (streakB) parts.push(`+${streakB} streak`);
+        if (vm < 1 && pts) parts.push(`× ${Math.round(vm * 100)}% for showing teammates`);
         if (G.mp) {
           $("gFb").className = "fb";
           $("gFb").innerHTML =
             '<b>Answer saved</b><p style="margin:2px 0 0">Everyone sees the answers after the last player.</p>';
+        } else if (G.online) {
+          $("gFb").className = "fb";
+          $("gFb").innerHTML = ON_SAVED;
         } else {
           $("gFb").className = `fb ${{ perfect: "good", close: "close", miss: "bad" }[q]}`;
           $("gFb").innerHTML =
@@ -3117,11 +3395,13 @@
           ? G.mp.turn < G.mp.players.length - 1
             ? "Next player"
             : "Show everyone's answers"
-          : G.i === G.queue.length - 1
-            ? "See results"
-            : "Continue";
+          : G.online
+            ? "Continue"
+            : G.i === G.queue.length - 1
+              ? "See results"
+              : "Continue";
         $("gNext").focus({ preventScroll: true });
-        if (st.phase === "rec" && $("nbGame").checked) {
+        if (st.phase === "rec" && (G.online ? G.online.meta.nb : $("nbGame").checked)) {
           const nq = neighbourQ(st.ri, G.role);
           if (nq) {
             G.nb = nq;
@@ -3138,12 +3418,14 @@
                   const ok = !b.dataset.skip && b.dataset.p === nq.a;
                   G.results[G.i].nb = { pick: b.dataset.p, a: nq.a, ok };
                   if (ok) {
+                    const bonus = Math.round(30 * gVisMult());
                     G.nbOk++;
-                    G.score += 30;
-                    G.results[G.i].pts += 30;
+                    G.score += bonus;
+                    G.results[G.i].pts += bonus;
                   }
-                  if (G.mp) {
+                  if (G.mp || G.online) {
                     nbSaved("gnb", b);
+                    if (G.online) onWrite(true);
                     return;
                   }
                   $("gScore").textContent = G.score;
@@ -3156,7 +3438,21 @@
               });
           }
         }
+        if (st.phase === "ar" && (G.online ? G.online.meta.sets : setOn())) {
+          const sq = setQ(st.ri, G.role);
+          if (sq) {
+            G.sc = sq;
+            $("gNbBox").innerHTML = setHtml(sq);
+            $("gsc")
+              .querySelectorAll("button")
+              .forEach((b) => {
+                b.onclick = () => setAnswer(b);
+              });
+            $("gNext").parentElement.scrollIntoView({ block: "end", behavior: "smooth" });
+          }
+        }
         gDraw();
+        if (G.online) onAnswered();
       }
       $("courtG").addEventListener("pointerup", (e) => {
         if (!G || G.answered) return;
@@ -3182,17 +3478,30 @@
       };
       $("gNext").onclick = () => {
         if (G.mp) return mpAfterTurn();
+        if (G.online) return onWrite(true);
         if (G.i < G.queue.length - 1) {
           G.i++;
           gShow();
         } else gFinish();
       };
       $("gQuit").onclick = () => {
+        if (ON) return onLeave();
         G = null;
         gRenderSetup();
         gView("gSetup");
       };
+      function gShownHtml(r) {
+        const v = G.online ? G.online.meta.vis : G.vis0;
+        const m = VIS_MULT[v] ?? 1;
+        const peeks =
+          !G.mp && !G.online && G.peeks
+            ? ` · Peeked: ${G.peeks} moment${G.peeks > 1 ? "s" : ""}`
+            : "";
+        return `<p class="hint" id="gShown" style="grid-column:1/-1;margin:0">Shown: ${visName(v, r)} (${m < 1 ? `${Math.round(m * 100)}% points` : "full points"})${peeks}</p>`;
+      }
       function gFinish() {
+        $("gAgain").hidden = !!G.online;
+        if (G.online) return mpFinish(onList(G.online.room, G.i));
         if (G.mp) return mpFinish();
         const n = G.queue.length,
           acc = Math.round(((G.perfect + G.close) / n) * 100);
@@ -3213,7 +3522,7 @@
             ? "Perfect match!"
             : "Match finished";
         $("gStats").innerHTML =
-          `<div><strong>${G.score}</strong><span>points${best && !G.replay ? " · new best" : ""}</span></div><div><strong>${acc}%</strong><span>right or close</span></div><div><strong>${G.perfect}/${n}</strong><span>spot on</span></div><div><strong>${G.helps}</strong><span>help used</span></div>${G.nbN ? `<div class="wide"><strong>${G.nbOk}/${G.nbN}</strong><span>neighbour checks right</span></div>` : ""}`;
+          `<div><strong>${G.score}</strong><span>points${best && !G.replay ? " · new best" : ""}</span></div><div><strong>${acc}%</strong><span>right or close</span></div><div><strong>${G.perfect}/${n}</strong><span>spot on</span></div><div><strong>${G.helps}</strong><span>help used</span></div>${G.nbN ? `<div class="wide"><strong>${G.nbOk}/${G.nbN}</strong><span>neighbour checks right</span></div>` : ""}${G.setN ? `<div class="wide"><strong>${G.setOk}/${G.setN}</strong><span>set calls right</span></div>` : ""}${gShownHtml(G.role)}`;
         $("gMist").innerHTML = G.misses.length
           ? `<h2 style="font-size:20px;margin-top:4px">Where you should have been</h2><ul class="mist">${G.misses
               .map((m) => {
@@ -3222,10 +3531,20 @@
               })
               .join("")}</ul>`
           : "<p>No mistakes. " +
-            (visGame !== "none" || !G.mixed
+            (G.vis0 !== "none" || G.peeks || !G.mixed
               ? "Next step: mixed order and show nobody."
               : "You know your spots. Keep it fresh with a short match every few days.") +
             "</p>";
+        const setMiss = [
+          ...new Set(G.results.filter((r) => r?.set && !r.set.ok).map((r) => r.set.ask)),
+        ];
+        if (setMiss.length) {
+          $("gMist").insertAdjacentHTML(
+            "beforeend",
+            `<p id="gSetMiss">Set calls to practise: ${setMiss.join(", ")}</p><div class="row"><button type="button" class="btn" id="gSetPractise">Practise in Sets</button></div>`,
+          );
+          $("gSetPractise").onclick = () => $("tabSets").click();
+        }
         $("gReplay").hidden = !G.misses.length;
         $("gAgain").textContent = "Play again";
         $("gBar").style.width = "100%";
@@ -3237,6 +3556,7 @@
         gNewMatch();
       };
       $("gSettings").onclick = () => {
+        if (ON) return onLeave();
         G = null;
         gRenderSetup();
         gView("gSetup");
@@ -3266,12 +3586,13 @@
         return r ? r.value : "solo";
       }
       document.querySelector(
-        `input[name="gPlayers"][value="${store.get("gPlayers", "solo") === "mp" ? "mp" : "solo"}"]`,
+        `input[name="gPlayers"][value="${["mp", "online"].includes(store.get("gPlayers", "solo")) ? store.get("gPlayers", "solo") : "solo"}"]`,
       ).checked = true;
       document.querySelectorAll('input[name="gPlayers"]').forEach((r) => {
         r.onchange = () => {
           store.set("gPlayers", gPlayersMode());
           gRenderSetup();
+          if (gPlayersMode() === "online") fbSdk().catch(() => {});
         };
       });
       function saveMp() {
@@ -3334,6 +3655,8 @@
         "results",
         "nbOk",
         "nbN",
+        "setOk",
+        "setN",
       ];
       function mpCur() {
         return G.mp.players[G.mp.order[G.mp.turn]];
@@ -3358,9 +3681,9 @@
         }
         return a;
       }
-      function mpBoard(hideMoment = false) {
+      function mpBoard(hideMoment = false, ps = G.mp.players) {
         const score = (p) => p.score - (hideMoment ? p.taps[G.i]?.res?.pts || 0 : 0);
-        return [...G.mp.players]
+        return [...ps]
           .sort((a, b) => score(b) - score(a))
           .map(
             (p) =>
@@ -3397,16 +3720,16 @@
         if (G.mp.turn < G.mp.players.length) mpPass();
         else mpReveal();
       }
-      function mpReveal() {
+      function mpReveal(ps = G.mp.players) {
         const st = G.queue[G.i],
           pl = players(st.ri, st.phase);
         let s = DEFS + courtBase();
         if (st.phase === "start") s += rotArrows();
-        const roles = [...new Set(G.mp.players.map((p) => p.role))];
+        const roles = [...new Set(ps.map((p) => p.role))];
         pl.filter((o) => !roles.includes(o.p)).forEach((o) => {
           s += chip(o, { dim: true });
         });
-        G.mp.players.forEach((p) => {
+        ps.forEach((p) => {
           const t = p.taps[G.i];
           const me = pl.find((o) => o.p === p.role);
           if (t?.tap && me)
@@ -3415,11 +3738,11 @@
         roles.forEach((r) => {
           const me = pl.find((o) => o.p === r);
           if (!me) return;
-          const owners = G.mp.players.filter((p) => p.role === r);
+          const owners = ps.filter((p) => p.role === r);
           s += `<circle cx="${me.x * W}" cy="${me.y * H}" r="24" fill="none" stroke="${owners[0].color}" stroke-width="4"/>`;
           s += chip(me);
         });
-        G.mp.players.forEach((p) => {
+        ps.forEach((p) => {
           const t = p.taps[G.i];
           if (!t?.tap) return;
           s += `<circle cx="${t.tap.x * W}" cy="${t.tap.y * H}" r="9" fill="${p.color}" stroke="#fff" stroke-width="1.5"/><text x="${t.tap.x * W}" y="${t.tap.y * H + 4}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="Barlow,sans-serif">${esc(p.name.trim()[0] || "?").toUpperCase()}</text>`;
@@ -3428,14 +3751,17 @@
         $("rTitle").textContent = `${ROWS[st.ri].name} · ${FULL[st.phase]}`;
         $("rSub").textContent = `Moment ${G.i + 1} of ${G.queue.length}`;
         const lab = { perfect: "Spot on", close: "Close enough", miss: "Not there" };
-        $("rList").innerHTML = G.mp.players
+        $("rList").innerHTML = ps
           .map((p) => {
             const t = p.taps[G.i] || {},
               r = t.res || { q: "miss", pts: 0 };
             const nb = r.nb
-              ? `<small>Neighbour: ${esc(r.nb.pick)}, ${r.nb.ok ? "right (+30)" : `wrong (it is ${r.nb.a})`}</small>`
+              ? `<small>Neighbour: ${esc(r.nb.pick)}, ${r.nb.ok ? `right (+${Math.round(30 * gVisMult())})` : `wrong (it is ${r.nb.a})`}</small>`
               : "";
-            return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${lab[r.q]}${t.res && !t.tap ? " (said off court)" : ""}${nb}</div><span class="rp">+${r.pts}</span></li>`;
+            const sc = r.set
+              ? `<small>Set call: ${esc(r.set.pick)}, ${r.set.ok ? "right (+30)" : `wrong (it is ${esc(r.set.ask)})`}</small>`
+              : "";
+            return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${t.res ? lab[r.q] : "No answer"}${t.res && !t.tap ? " (said off court)" : ""}${nb}${sc}</div><span class="rp">+${r.pts}</span></li>`;
           })
           .join("");
         $("rWhy").innerHTML = roles
@@ -3444,24 +3770,28 @@
             return `<li><b>${NAMES[r]}</b>: ${d.t}. ${d.d}</li>`;
           })
           .join("");
-        $("rBoard").innerHTML = mpBoard();
+        $("rBoard").innerHTML = mpBoard(false, ps);
         $("rNext").textContent = G.i < G.queue.length - 1 ? "Next moment" : "See final results";
+        $("rNext").hidden = !!G.online && !G.online.isHost;
+        $("rWait").hidden = !$("rNext").hidden;
         gView("gReveal");
       }
       $("rNext").onclick = () => {
+        if (G.online) return onNext();
         if (G.i < G.queue.length - 1) {
           G.i++;
           mpMomentStart();
         } else gFinish();
       };
       $("rQuit").onclick = $("pQuit").onclick = () => {
+        if (ON) return onLeave();
         G = null;
         gRenderSetup();
         gView("gSetup");
       };
-      function mpFinish() {
+      function mpFinish(list = G.mp.players) {
         const n = G.queue.length,
-          ps = [...G.mp.players].sort((a, b) => b.score - a.score);
+          ps = [...list].sort((a, b) => b.score - a.score);
         const tie = ps.length > 1 && ps[0].score === ps[1].score;
         $("gEndTitle").textContent = tie ? "It's a tie!" : `${ps[0].name} wins!`;
         let pos = 0,
@@ -3473,10 +3803,10 @@
               last = p.score;
             }
             const acc = Math.round(((p.perfect + p.close) / n) * 100);
-            return `<li><span class="pos">${pos}</span><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}<small>${acc}% right or close · ${p.perfect} spot on · ${p.helps} help${p.nbN ? ` · neighbours ${p.nbOk}/${p.nbN}` : ""}</small></div><span class="sc">${p.score}</span></li>`;
+            return `<li><span class="pos">${pos}</span><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}<small>${acc}% right or close · ${p.perfect} spot on · ${p.helps} help${p.nbN ? ` · neighbours ${p.nbOk}/${p.nbN}` : ""}${p.setN ? ` · sets ${p.setOk}/${p.setN}` : ""}</small></div><span class="sc">${p.score}</span></li>`;
           })
-          .join("")}</ol>`;
-        $("gMist").innerHTML = G.mp.players
+          .join("")}</ol>${gShownHtml()}`;
+        $("gMist").innerHTML = list
           .map((p) =>
             p.misses.length
               ? `<details class="pm"><summary><span style="color:${p.color}">●</span> ${esc(p.name)}: where you should have been (${p.misses.length})</summary><ul class="mist">${p.misses
@@ -3494,15 +3824,748 @@
         gView("gEnd");
       }
 
+      // ---------- Multiplayer (online room) ----------
+      const FIREBASE_CONFIG = {
+        apiKey: "AIzaSyDDi1c066S5yb08chQzayk7wMi7ogDL7kE",
+        appId: "1:956176080542:web:6117a2bcd4312c755aa58f",
+        authDomain: "ksv-volleyball-xszpo.firebaseapp.com",
+        databaseURL: "https://ksv-volleyball-xszpo-default-rtdb.europe-west1.firebasedatabase.app",
+        messagingSenderId: "956176080542",
+        projectId: "ksv-volleyball-xszpo",
+        storageBucket: "ksv-volleyball-xszpo.firebasestorage.app",
+      };
+      const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/11.10.0";
+      // ?emu=<database host:port>,<auth host:port> points the app at the Firebase emulators (tests).
+      const EMU = (() => {
+        const v = new URLSearchParams(location.search).get("emu");
+        if (!v) return null;
+        const [db, auth] = v.split(",");
+        return { db, auth };
+      })();
+      const DAY = 24 * 60 * 60 * 1000;
+      const HOST_GRACE = 10000;
+      const NB_GRACE =
+        (EMU && Number(new URLSearchParams(location.search).get("nbgrace"))) || 15000;
+      const UID = /^[A-Za-z0-9]{20,40}$/;
+      const ON_SAVED =
+        '<b>Answer saved</b><p style="margin:2px 0 0">Everyone sees the answers when all players have answered.</p>';
+      let ON = null;
+      let fbInit = null;
+      const fbLoaded = new Set();
+      function fail(msg) {
+        return Object.assign(new Error(msg), { user: true });
+      }
+      function loadScript(src) {
+        if (fbLoaded.has(src)) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+          const el = document.createElement("script");
+          el.src = src;
+          el.onload = () => {
+            fbLoaded.add(src);
+            resolve();
+          };
+          el.onerror = () => {
+            el.remove();
+            reject(
+              fail("Could not load online play. Check your internet connection and try again."),
+            );
+          };
+          document.head.appendChild(el);
+        });
+      }
+      function fbSdk() {
+        if (!fbInit)
+          fbInit = (async () => {
+            for (const m of ["app", "auth", "database"])
+              await loadScript(`${FIREBASE_SDK}/firebase-${m}-compat.js`);
+            const fb = window.firebase;
+            if (!fb.apps.length) {
+              fb.initializeApp(FIREBASE_CONFIG);
+              if (EMU) {
+                fb.auth().useEmulator(`http://${EMU.auth}`);
+                const [host, port] = EMU.db.split(":");
+                fb.database().useEmulator(host, +port);
+              }
+            }
+            return fb;
+          })().catch((e) => {
+            fbInit = null;
+            throw e;
+          });
+        return fbInit;
+      }
+      function withTimeout(p, ms = 10000) {
+        return Promise.race([
+          p,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(fail("No connection to the server. Check your internet connection.")),
+              ms,
+            ),
+          ),
+        ]);
+      }
+      async function fbReady() {
+        const fb = await fbSdk();
+        const auth = fb.auth();
+        try {
+          const user = await withTimeout(
+            new Promise((resolve) => {
+              const off = auth.onAuthStateChanged((u) => {
+                off();
+                resolve(u);
+              });
+            }),
+          );
+          const uid = user ? user.uid : (await withTimeout(auth.signInAnonymously())).user.uid;
+          return { fb, db: fb.database(), uid };
+        } catch (e) {
+          throw fail(
+            "Could not sign in for online play. Check your internet connection and try again.",
+          );
+        }
+      }
+      function clean(v) {
+        return JSON.parse(JSON.stringify(v));
+      }
+      function toList(v) {
+        if (Array.isArray(v)) return v;
+        const out = [];
+        if (!v || typeof v !== "object") return out;
+        Object.keys(v).forEach((k) => {
+          if (/^[0-9]{1,3}$/.test(k)) out[+k] = v[k];
+        });
+        return out;
+      }
+      const HEX = /^#[0-9A-Fa-f]{6}$/;
+      const VERDICTS = ["perfect", "close", "miss"];
+      function num(v) {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      }
+      function isObj(v) {
+        return !!v && typeof v === "object";
+      }
+      function cleanSteps(v) {
+        return toList(v)
+          .filter(
+            (s) =>
+              isObj(s) &&
+              Number.isInteger(s.ri) &&
+              s.ri >= 0 &&
+              s.ri < ROWS.length &&
+              STEP_ORDER.includes(s.phase),
+          )
+          .map(({ ri, phase }) => ({ ri, phase }));
+      }
+      function cleanRes(r) {
+        if (!isObj(r)) return null;
+        const out = { q: VERDICTS.includes(r.q) ? r.q : "miss", pts: num(r.pts) };
+        if (isObj(r.nb))
+          out.nb = {
+            pick: ROLES.includes(r.nb.pick) ? r.nb.pick : "?",
+            a: ROLES.includes(r.nb.a) ? r.nb.a : "?",
+            ok: r.nb.ok === true,
+          };
+        const names = SETS.map((s) => s[0]);
+        if (isObj(r.set) && names.includes(r.set.ask) && names.includes(r.set.pick))
+          out.set = { ask: r.set.ask, pick: r.set.pick, ok: r.set.ok === true };
+        return out;
+      }
+      // Everything read from the room is untrusted: whitelist, coerce and bound it here, once.
+      function onClean(raw) {
+        if (!isObj(raw) || !isObj(raw.meta)) return null;
+        const m = raw.meta;
+        const queue = cleanSteps(m.queue);
+        const meta = {
+          host: typeof m.host === "string" ? m.host : "",
+          createdAt: num(m.createdAt),
+          state: ["lobby", "answering", "reveal", "done"].includes(m.state) ? m.state : "lobby",
+          i: Math.min(Math.max(0, Math.floor(num(m.i))), Math.max(0, queue.length - 1)),
+          steps: toList(m.steps).filter((s) => STEP_ORDER.includes(s)),
+          order: m.order === "mixed" ? "mixed" : "order",
+          vis: ["none", "ref", "all"].includes(m.vis) ? m.vis : "none",
+          nb: m.nb === true,
+          sets: m.sets === true,
+          rulesMode: m.rulesMode === "drill" ? "drill" : "official",
+          queue,
+          hostLeft: m.hostLeft === true,
+        };
+        if (meta.state !== "lobby" && !queue.length) meta.state = "done";
+        const players = {};
+        Object.entries(isObj(raw.players) ? raw.players : {}).forEach(([uid, p]) => {
+          if (!UID.test(uid) || !isObj(p) || !ROLES.includes(p.role)) return;
+          players[uid] = {
+            name: (typeof p.name === "string" ? p.name.slice(0, 16) : "").trim() || "Player",
+            role: p.role,
+            color: HEX.test(p.color) ? p.color : "#888888",
+            joinedAt: num(p.joinedAt),
+            online: p.online === true,
+            joining: p.online === undefined,
+            misses: cleanSteps(p.misses),
+            results: toList(p.results).map(cleanRes),
+          };
+          MP_KEYS.filter((k) => !["misses", "results"].includes(k)).forEach((k) => {
+            players[uid][k] = num(p[k]);
+          });
+        });
+        const answers = [];
+        toList(raw.answers).forEach((byUid, i) => {
+          if (!isObj(byUid)) return;
+          answers[i] = {};
+          Object.entries(byUid).forEach(([uid, a]) => {
+            const r = UID.test(uid) && cleanRes(a);
+            if (!r) return;
+            const tap = isObj(a.tap) && Number.isFinite(a.tap.x) && Number.isFinite(a.tap.y);
+            answers[i][uid] = {
+              ...r,
+              tap: tap ? { x: a.tap.x, y: a.tap.y } : null,
+              done: a.done === true,
+            };
+          });
+        });
+        return { meta, players, answers };
+      }
+      function stale(meta) {
+        return typeof meta.createdAt === "number" && Date.now() - meta.createdAt > DAY;
+      }
+      function newCode() {
+        const a = new Uint32Array(1);
+        crypto.getRandomValues(a);
+        return String(a[0] % 1000000).padStart(6, "0");
+      }
+      function showCode(code) {
+        return `${code.slice(0, 3)} ${code.slice(3)}`;
+      }
+      function onName() {
+        return $("onName").value.trim().slice(0, 16);
+      }
+      $("onName").value = store.get("onName", "");
+      $("onName").oninput = () => store.set("onName", $("onName").value);
+      $("onCode").value = String(store.get("onRoom", "")).replace(/\D/g, "").slice(0, 6);
+      function onError(e) {
+        $("onErr").textContent = e?.user
+          ? e.message
+          : "Something went wrong with online play. Check your internet connection and try again.";
+      }
+      let onPending = false;
+      function onBusy(on) {
+        onPending = on;
+        $("onCreate").disabled = on || !gSteps().length;
+        $("onJoin").disabled = on;
+      }
+      async function onCreate() {
+        if (onPending || ON) return;
+        $("onErr").textContent = "";
+        if (!onName()) return onError(fail("Type your name first."));
+        onBusy(true);
+        try {
+          const { fb, db, uid } = await fbReady();
+          let code = null;
+          for (let k = 0; k < 10 && !code; k++) {
+            const c = newCode();
+            const meta = (await withTimeout(db.ref(`rooms/${c}/meta`).once("value"))).val();
+            if (!meta) code = c;
+            else if (stale(meta))
+              await withTimeout(db.ref(`rooms/${c}`).remove()).then(
+                () => {
+                  code = c;
+                },
+                () => {},
+              );
+          }
+          if (!code) throw fail("Could not find a free room code. Try again.");
+          const ref = db.ref(`rooms/${code}`);
+          const now = fb.database.ServerValue.TIMESTAMP;
+          await withTimeout(
+            ref.update({
+              meta: {
+                host: uid,
+                createdAt: now,
+                state: "lobby",
+                i: 0,
+                steps: gSteps(),
+                order: gOrder(),
+                vis: visGame,
+                nb: $("nbGame").checked,
+                sets: setOn(),
+                rulesMode,
+              },
+              [`players/${uid}`]: {
+                name: onName(),
+                role,
+                color: PCOL[0],
+                score: 0,
+                joinedAt: now,
+              },
+            }),
+          );
+          onEnter(fb, ref, code, uid);
+        } catch (e) {
+          onError(e);
+        } finally {
+          onBusy(false);
+        }
+      }
+      async function onJoin() {
+        if (onPending || ON) return;
+        $("onErr").textContent = "";
+        const code = $("onCode").value.replace(/\D/g, "");
+        $("onCode").value = code;
+        if (!onName()) return onError(fail("Type your name first."));
+        if (!/^[0-9]{6}$/.test(code)) return onError(fail("Type the room code: 6 digits."));
+        onBusy(true);
+        try {
+          const { fb, db, uid } = await fbReady();
+          const ref = db.ref(`rooms/${code}`);
+          const room = (await withTimeout(ref.once("value"))).val();
+          if (!room?.meta) throw fail(`There is no room with the code ${showCode(code)}.`);
+          if (stale(room.meta)) {
+            ref.remove().catch(() => {});
+            throw fail("That room has expired. Ask the host for a new one.");
+          }
+          if (room.meta.state === "done") throw fail("That match has already finished.");
+          const now = fb.database.ServerValue.TIMESTAMP;
+          const lobby = room.meta.state === "lobby";
+          const pick = (ps) => {
+            const used = Object.keys(ps)
+              .filter((k) => k !== uid)
+              .map((k) => ps[k]?.color);
+            return (
+              PCOL.find((c) => !used.includes(c)) || PCOL[Object.keys(ps).length % PCOL.length]
+            );
+          };
+          const mine = ref.child(`players/${uid}`);
+          let ps = isObj(room.players) ? room.players : {};
+          const joined = await withTimeout(
+            mine.transaction((current) =>
+              isObj(current)
+                ? { ...current, name: onName(), ...(lobby ? { role } : {}) }
+                : { name: onName(), role, color: pick(ps), score: 0, joinedAt: now },
+            ),
+          );
+          if (!joined.committed) throw fail("Could not join the room. Try again.");
+          // Two phones joining at once can pick the same colour; the later joiner moves on.
+          for (let k = 0; k < PCOL.length; k++) {
+            ps = (await withTimeout(ref.child("players").once("value"))).val() || {};
+            const me = ps[uid];
+            const clash = Object.keys(ps).some(
+              (u) =>
+                u !== uid &&
+                ps[u]?.color === me?.color &&
+                (ps[u].joinedAt < me.joinedAt || (ps[u].joinedAt === me.joinedAt && u < uid)),
+            );
+            if (!clash || Object.keys(ps).length > PCOL.length) break;
+            await withTimeout(mine.child("color").set(pick(ps)));
+          }
+          onEnter(fb, ref, code, uid);
+        } catch (e) {
+          onError(e);
+        } finally {
+          onBusy(false);
+        }
+      }
+      $("onCreate").onclick = onCreate;
+      $("onJoin").onclick = onJoin;
+      $("onCode").oninput = () => {
+        const v = $("onCode").value.replace(/\D/g, "").slice(0, 6);
+        if (v !== $("onCode").value) $("onCode").value = v;
+      };
+      $("onCode").onkeydown = (e) => {
+        if (e.key === "Enter") onJoin();
+      };
+      function onEnter(fb, ref, code, uid) {
+        store.set("onRoom", code);
+        $("onCode").value = code;
+        ON = {
+          fb,
+          ref,
+          code,
+          uid,
+          isHost: false,
+          view: null,
+          revealing: -1,
+          room: null,
+          meta: {},
+          hostSeen: null,
+          hostTimer: null,
+        };
+        const me = ref.child(`players/${uid}/online`);
+        ON.connRef = fb.database().ref(".info/connected");
+        ON.conn = ON.connRef.on("value", (s) => {
+          if (!s.val() || !ON) return;
+          me.onDisconnect()
+            .set(false)
+            .then(() => ON?.ref === ref && me.set(true))
+            .catch(() => {});
+        });
+        ref.on("value", onSync, () => onDrop("Lost the connection to the room."));
+      }
+      function onDetach() {
+        const o = ON;
+        ON = null;
+        o.ref.off();
+        o.connRef.off("value", o.conn);
+        o.ref
+          .child(`players/${o.uid}/online`)
+          .onDisconnect()
+          .cancel()
+          .catch(() => {});
+        clearTimeout(o.hostTimer);
+        clearTimeout(o.grace);
+        return o;
+      }
+      function onRestoreLocal() {
+        G = null;
+        $("onNote").hidden = true;
+        $("gWait").hidden = true;
+        rulesMode = store.get("rulesMode", "official");
+        renderRulesMode();
+        renderLearn();
+        visGame = store.get("visGame", "none");
+        drawVis("game", visGame);
+        gVisText();
+        gRenderSetup();
+        gView("gSetup");
+      }
+      function onLeave() {
+        if (!ON) return;
+        const o = onDetach();
+        const state = o.meta.state;
+        const me = o.ref.child(`players/${o.uid}`);
+        const quiet = () => {};
+        if (o.isHost && state === "lobby") o.ref.remove().catch(quiet);
+        else if (o.isHost && state !== "done") {
+          o.ref.child("meta").update({ state: "done", hostLeft: true }).catch(quiet);
+          me.child("online").set(false).catch(quiet);
+        } else if (state === "lobby") me.remove().catch(quiet);
+        else me.child("online").set(false).catch(quiet);
+        onRestoreLocal();
+      }
+      function onDrop(msg) {
+        if (!ON) return;
+        onDetach();
+        onRestoreLocal();
+        $("onErr").textContent = msg;
+      }
+      function onRole() {
+        if (ON && ON.meta.state === "lobby")
+          ON.ref
+            .child(`players/${ON.uid}/role`)
+            .set(role)
+            .catch(() => {});
+      }
+      function onList(room, i) {
+        const ans = room.answers?.[i] || {};
+        return Object.entries(room.players || {})
+          .sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0))
+          .map(([uid, p]) => {
+            const a = ans[uid];
+            return {
+              ...p,
+              uid,
+              taps: {
+                [i]: a
+                  ? { tap: a.tap, res: { q: a.q, pts: a.pts, nb: a.nb, set: a.set } }
+                  : undefined,
+              },
+            };
+          });
+      }
+      function onPres(p) {
+        return `<span class="pres ${p.online ? "on" : ""}">● ${p.online ? "online" : p.joining ? "joining" : "offline"}</span>`;
+      }
+      function onLobby(room) {
+        const meta = room.meta;
+        if (!ON.isHost && rulesMode !== meta.rulesMode) {
+          rulesMode = meta.rulesMode;
+          renderLearn();
+        }
+        renderRulesMode();
+        if (ON.view !== "lobby") {
+          ON.view = "lobby";
+          gView("gLobby");
+          window.scrollTo({ top: $("game").offsetTop - 10 });
+        }
+        $("lCode").textContent = showCode(ON.code);
+        const n = (meta.steps || []).length * 6;
+        $("lSet").textContent =
+          `${n} moments · ${meta.order === "mixed" ? "mixed order" : "in order"} · ${meta.rulesMode === "drill" ? "Drill" : "Official"} rules`;
+        $("lList").innerHTML = onList(room, 0)
+          .map(
+            (p) =>
+              `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}${p.uid === meta.host ? "<small>host</small>" : ""}</div>${onPres(p)}</li>`,
+          )
+          .join("");
+        $("lStart").hidden = !ON.isHost;
+        $("lWait").hidden = ON.isHost;
+      }
+      function onInitG(meta, me) {
+        const changed = rulesMode !== meta.rulesMode;
+        rulesMode = meta.rulesMode;
+        G = {
+          queue: meta.queue,
+          i: -1,
+          score: me.score,
+          streak: me.streak,
+          perfect: me.perfect,
+          close: me.close,
+          helps: me.helps,
+          misses: me.misses,
+          results: me.results,
+          replay: false,
+          role: me.role,
+          help: 0,
+          answered: false,
+          t0: 0,
+          key: "",
+          mixed: meta.order === "mixed",
+          nbOk: me.nbOk,
+          nbN: me.nbN,
+          nb: null,
+          setOk: me.setOk,
+          setN: me.setN,
+          sc: null,
+          mp: null,
+          online: ON,
+        };
+        renderRulesMode();
+        if (changed) renderLearn();
+      }
+      function onSavedView(a) {
+        G.answered = true;
+        G.tap = a.tap;
+        $("gOff").disabled = true;
+        $("gHelp").disabled = true;
+        $("gFb").className = "fb";
+        $("gFb").innerHTML = ON_SAVED;
+        gDraw();
+      }
+      function onSync(snap) {
+        if (!ON) return;
+        const room = onClean(snap.val());
+        if (!room) return onDrop("The host closed the room.");
+        const meta = room.meta;
+        const me = room.players[ON.uid];
+        if (!me) return onDrop("You are no longer in this room.");
+        ON.room = room;
+        ON.meta = meta;
+        ON.me = me;
+        ON.isHost = meta.host === ON.uid;
+        onHostWatch(room);
+        if (meta.state === "lobby") return onLobby(room);
+        if (!G || G.online !== ON) onInitG(meta, me);
+        if (meta.state === "answering") {
+          if (G.i !== meta.i || ON.view !== "play") {
+            G.i = meta.i;
+            ON.view = "play";
+            gView("gPlay");
+            gShow();
+            $("gWait").hidden = true;
+            const a = room.answers[meta.i]?.[ON.uid];
+            if (a) onSavedView(a);
+            if (a && !a.done)
+              ON.ref
+                .child(`answers/${meta.i}/${ON.uid}/done`)
+                .set(true)
+                .catch(() => {});
+            window.scrollTo({ top: $("game").offsetTop - 10 });
+          }
+          onWaitText(room);
+          if (ON.isHost) onCheckAll(room);
+        } else if (meta.state === "reveal") {
+          G.i = meta.i;
+          if (ON.view !== `reveal${meta.i}`) window.scrollTo({ top: $("game").offsetTop - 10 });
+          ON.view = `reveal${meta.i}`;
+          mpReveal(onList(room, meta.i));
+        } else if (meta.state === "done" && ON.view !== "done") {
+          ON.view = "done";
+          G.i = meta.i;
+          gFinish();
+          if (meta.hostLeft && !ON.isHost) $("gEndTitle").textContent = "The host ended the match";
+        }
+      }
+      function onNotice(msg) {
+        $("onNote").textContent = msg;
+        $("onNote").hidden = false;
+        clearTimeout(onNotice.timer);
+        onNotice.timer = setTimeout(() => {
+          $("onNote").hidden = true;
+        }, 8000);
+      }
+      function onHostWatch(room) {
+        const meta = room.meta;
+        if (ON.hostSeen && ON.hostSeen !== meta.host)
+          onNotice(
+            ON.isHost
+              ? "You are now the host."
+              : `${room.players[meta.host]?.name || "Another player"} is now the host.`,
+          );
+        ON.hostSeen = meta.host;
+        const away = !room.players[meta.host]?.online;
+        if (ON.isHost || meta.state === "done" || !away) {
+          clearTimeout(ON.hostTimer);
+          ON.hostTimer = null;
+        } else if (!ON.hostTimer) ON.hostTimer = setTimeout(onTakeover, HOST_GRACE);
+      }
+      function onTakeover() {
+        if (!ON) return;
+        ON.hostTimer = null;
+        const room = ON.room;
+        if (ON.isHost || room.meta.state === "done" || room.players[room.meta.host]?.online) return;
+        const next = onList(room, 0).find((p) => p.online);
+        if (next?.uid === ON.uid) {
+          const old = room.meta.host,
+            uid = ON.uid;
+          ON.ref
+            .child("meta/host")
+            .transaction((current) => (current === old ? uid : undefined))
+            .catch(() => {});
+        }
+        ON.hostTimer = setTimeout(onTakeover, HOST_GRACE);
+      }
+      function onWaitText(room) {
+        if (!G.answered) {
+          $("gWait").hidden = true;
+          return;
+        }
+        const meta = room.meta,
+          ans = room.answers[meta.i] || {};
+        const others = onList(room, meta.i).filter((p) => p.uid !== ON.uid);
+        const bonus = meta.queue[meta.i]?.phase === "ar" ? "set call" : "neighbour check";
+        const waiting = others
+          .filter((p) => p.online && !ans[p.uid]?.done)
+          .map((p) => esc(p.name) + (ans[p.uid] ? ` (${bonus})` : ""));
+        const away = others.filter((p) => !p.online).map((p) => esc(p.name));
+        const host = others.find((p) => p.uid === meta.host);
+        const mine = ans[ON.uid];
+        $("wText").innerHTML =
+          (mine && !mine.done
+            ? `<b>Answer the ${bonus === "set call" ? "set call" : "neighbour"} question or press Continue.</b> The others wait for you. `
+            : "") +
+          (waiting.length ? `Waiting for ${waiting.join(", ")}.` : "Everyone has answered.") +
+          (away.length ? ` Offline, skipped: ${away.join(", ")}.` : "") +
+          (host && !host.online
+            ? " The host is offline: the next player takes over in a few seconds."
+            : "");
+        $("wReveal").hidden = !ON.isHost;
+        $("gWait").hidden = false;
+      }
+      // Host writes apply only to the moment they were made for, so a double tap or a replaced host changes nothing.
+      function onMeta(expect, change) {
+        if (!ON?.isHost) return;
+        const uid = ON.uid;
+        ON.ref
+          .child("meta")
+          .transaction((m) =>
+            isObj(m) && m.host === uid && m.i === expect.i && m.state === expect.state
+              ? { ...m, ...change }
+              : undefined,
+          )
+          .catch(() => {});
+      }
+      function onCheckAll(room) {
+        const meta = room.meta,
+          ans = room.answers[meta.i] || {};
+        if (ON.revealing === meta.i) return;
+        const online = Object.entries(room.players).filter(([, p]) => p.online);
+        if (online.length && online.every(([uid]) => ans[uid]?.done)) {
+          ON.revealing = meta.i;
+          onMeta({ i: meta.i, state: "answering" }, { state: "reveal" });
+        }
+      }
+      function onAnswered() {
+        const pending = gBonusPending();
+        $("gNext").hidden = !pending;
+        onWrite(!pending);
+        (pending ? $("gNext") : $("gWait")).scrollIntoView({
+          block: "nearest",
+          behavior: "smooth",
+        });
+        if (pending) {
+          const i = G.i;
+          clearTimeout(ON.grace);
+          ON.grace = setTimeout(() => {
+            if (G?.online && G.i === i && gBonusPending()) onWrite(true);
+          }, NB_GRACE);
+        }
+      }
+      function onWrite(done) {
+        if (!ON) return;
+        const i = G.i,
+          res = G.results[i],
+          uid = ON.uid;
+        if (!res) return;
+        if (done) {
+          $("gNext").hidden = true;
+          $("gNbBox")
+            .querySelectorAll("button")
+            .forEach((b) => {
+              b.disabled = true;
+            });
+        }
+        const upd = {
+          [`answers/${i}/${uid}`]: {
+            tap: G.tap || null,
+            off: !G.tap,
+            q: res.q,
+            pts: res.pts,
+            nb: res.nb || null,
+            set: res.set || null,
+            done,
+          },
+          [`players/${uid}/misses`]: G.misses.map(({ ri, phase }) => ({ ri, phase })),
+          [`players/${uid}/results/${i}`]: res,
+        };
+        MP_KEYS.filter((k) => !["misses", "results"].includes(k)).forEach((k) => {
+          upd[`players/${uid}/${k}`] = G[k];
+        });
+        ON.ref.update(clean(upd)).catch(() => {});
+      }
+      $("wReveal").onclick = () => {
+        if (ON) onMeta({ i: ON.meta.i, state: "answering" }, { state: "reveal" });
+      };
+      function onNext() {
+        if (!ON?.isHost) return;
+        const meta = ON.meta;
+        onMeta(
+          { i: meta.i, state: "reveal" },
+          meta.i >= meta.queue.length - 1
+            ? { state: "done" }
+            : { i: meta.i + 1, state: "answering" },
+        );
+      }
+      $("lStart").onclick = () => {
+        if (!ON?.isHost || !gSteps().length) return;
+        onMeta(
+          { i: ON.meta.i, state: "lobby" },
+          {
+            steps: gSteps(),
+            order: gOrder(),
+            vis: visGame,
+            nb: $("nbGame").checked,
+            sets: setOn(),
+            rulesMode,
+            queue: gQueue(),
+            i: 0,
+            state: "answering",
+          },
+        );
+      };
+      $("lLeave").onclick = onLeave;
+
       gRenderSetup();
 
       // ---------- Rules mode ----------
       function renderRulesMode() {
+        const locked = !!G?.online || (!!ON && !ON.isHost);
         document.querySelectorAll(".rulesmode [data-rm]").forEach((b) => {
           b.setAttribute("aria-checked", b.dataset.rm === rulesMode);
+          b.disabled = locked;
         });
-        $("rmSub").textContent =
-          rulesMode === "official"
+        $("rmSub").textContent = locked
+          ? "Set by the host for this match."
+          : rulesMode === "official"
             ? "Official (FIVB) rules: the libero may not serve, so in R3 and R6 the middle in zone 1 serves."
             : "Drill rules: the libero stays on court all the time and also serves in R3 and R6. The printable schema uses the official rules.";
         renderSetupSummary();
@@ -3511,6 +4574,11 @@
         b.onclick = () => {
           rulesMode = b.dataset.rm;
           store.set("rulesMode", rulesMode);
+          if (ON?.isHost && ON.meta.state === "lobby")
+            ON.ref
+              .child("meta/rulesMode")
+              .set(rulesMode)
+              .catch(() => {});
           renderRulesMode();
           renderLearn();
           if (G) {
