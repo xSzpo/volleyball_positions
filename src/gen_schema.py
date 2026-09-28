@@ -1,3 +1,5 @@
+"""Generate the rotation schema cheat sheet as SVG, PNG and PDF in downloads/."""
+
 import math
 from pathlib import Path
 
@@ -5,6 +7,7 @@ import cairosvg
 
 from data import ATTACK_LINE as AL
 from data import ROWS
+from pdf import svg_to_pdf
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "downloads"
@@ -324,5 +327,5 @@ a("</svg>")
 svg = "\n".join(o)
 (OUT / "KSV_5-1_rotation_schema.svg").write_text(svg)
 cairosvg.svg2png(bytestring=svg.encode(), write_to=str(OUT / "KSV_5-1_rotation_schema.png"), scale=2)
-cairosvg.svg2pdf(bytestring=svg.encode(), write_to=str(OUT / "KSV_5-1_rotation_schema.pdf"))
+svg_to_pdf(svg, OUT / "KSV_5-1_rotation_schema.pdf")
 print(W, H)

@@ -1,3 +1,5 @@
+"""Playwright end-to-end test of same-device multiplayer in index.html."""
+
 import random
 import sys
 from pathlib import Path

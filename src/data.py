@@ -1,12 +1,18 @@
-# Coordinates: x 0 = left sideline, 1 = right sideline; y 0 = net, 1 = end line.
-# 3 m line sits at y = 0.42 (as drawn in the KSV guide).
-# Reception and after-reception positions measured from KSV_M3.pdf pages 4-9.
+"""Rotation data and set calls for the KSV 5-1 trainer; the single source of truth.
+
+Coordinates: x 0 = left sideline, 1 = right sideline; y 0 = net, 1 = end line.
+The 3 m line sits at y = 0.42 (as drawn in the KSV guide). Reception and
+after-reception positions are measured from KSV_M3.pdf pages 4-9.
+"""
+
 from typing import TypedDict
 
 ATTACK_LINE = 0.42
 
 
 class Row(TypedDict):
+    """One rotation: lineup, reception, after-reception and serve positions."""
+
     name: str
     setter: int
     liberofor: str

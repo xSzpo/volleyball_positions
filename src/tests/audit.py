@@ -1,3 +1,9 @@
+"""Check the rotation data for consistency.
+
+Covers rotation order, overlap legality of every reception shape and the
+serve lineups. Prints "DATA AUDIT: no issues" on success.
+"""
+
 import sys
 from pathlib import Path
 
@@ -69,7 +75,6 @@ for i in range(6):
     # e serve
     sf, sb = r["serve"]
     server = zones(r, False)[1]
-    srv_real = r["liberofor"] if server == "L" else server
     on = set(r["front"] + r["back"])
     if server == "L":
         on = (on - {"L"}) | {r["liberofor"]}
@@ -84,3 +89,4 @@ for i in range(6):
     if "S" in sb and sb[2] != "S" or "OP" in sb and sb[2] != "OP":
         issues.append(f"{r['name']} serve: S/OP not in zone 1")
 print("\n".join(issues) if issues else "DATA AUDIT: no issues")
+sys.exit(1 if issues else 0)

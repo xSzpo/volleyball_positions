@@ -1,3 +1,9 @@
+"""Build index.html from data.py, template.html and the cheat sheet PDFs.
+
+The PDFs in downloads/ are base64-embedded so the download buttons work
+without extra files.
+"""
+
 import base64
 import json
 from pathlib import Path

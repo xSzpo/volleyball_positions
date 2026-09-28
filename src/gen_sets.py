@@ -1,8 +1,11 @@
+"""Generate the front row sets cheat sheet as SVG, PNG and PDF in downloads/."""
+
 from pathlib import Path
 
 import cairosvg
 
 from data import SETS, SETTER_X
+from pdf import svg_to_pdf
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "downloads"
@@ -139,4 +142,4 @@ a("</svg>")
 svg = "\n".join(o)
 (OUT / "KSV_front_row_sets.svg").write_text(svg)
 cairosvg.svg2png(bytestring=svg.encode(), write_to=str(OUT / "KSV_front_row_sets.png"), scale=1.5)
-cairosvg.svg2pdf(bytestring=svg.encode(), write_to=str(OUT / "KSV_front_row_sets.pdf"))
+svg_to_pdf(svg, OUT / "KSV_front_row_sets.pdf")

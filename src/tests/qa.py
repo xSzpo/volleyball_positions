@@ -1,3 +1,9 @@
+"""Playwright end-to-end sweep of index.html.
+
+Usage: python src/tests/qa.py m|d, where m is phone size in light theme and
+d is desktop size in dark theme.
+"""
+
 import itertools
 import random
 import re
@@ -50,7 +56,7 @@ def check_page(pg: Page, ctx: str) -> None:
         fail(f"{ctx}: horizontal overflow {w}px")
 
 
-def play_match(pg: Page, ctx: str, answer: str = "random", maxsteps: int = 200) -> bool:
+def play_match(pg: Page, ctx: str, maxsteps: int = 200) -> bool:
     """Play until end. At every state some forward control must exist."""
     n = 0
     while n < maxsteps:
@@ -98,8 +104,6 @@ def drill_steps(pg: Page, ctx: str, k: int = 30) -> None:
 
 with sync_playwright() as p:
     b = p.chromium.launch()
-    import sys
-
     configs: dict[str, list[tuple[ViewportSize, bool, Literal["light", "dark"]]]] = {
         "m": [({"width": 390, "height": 844}, True, "light")],
         "d": [({"width": 1280, "height": 900}, False, "dark")],

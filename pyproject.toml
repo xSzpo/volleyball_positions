@@ -4,7 +4,10 @@ line-length = 120
 src = ["src"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+select = ["E", "F", "I", "UP", "B", "SIM", "D100", "D101", "D2", "D3", "D4"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.mypy]
 python_version = "3.14"
@@ -12,5 +15,5 @@ strict = true
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["cairosvg"]
+module = ["cairosvg", "cairosvg.*", "cairocffi"]
 ignore_missing_imports = true

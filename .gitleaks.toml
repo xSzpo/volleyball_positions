@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+# The Firebase web API key is public by design; access is controlled by the RTDB rules.
+[[allowlists]]
+description = "Firebase web config"
+targetRules = ["gcp-api-key", "generic-api-key"]
+condition = "AND"
+paths = ['''^src/template\.html$''', '''^index\.html$''']
+regexTarget = "secret"
+regexes = ['''^AIza[\w-]{35}$''']
