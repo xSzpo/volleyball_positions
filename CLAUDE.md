@@ -52,7 +52,7 @@ python src/tests/qa.py m && python src/tests/qa.py d   # slow (~3-4 min each); e
 
 Order matters: the PDFs must exist before `build.py`, because it base64-embeds them into `index.html` (so the download buttons work on GitHub Pages with no extra files).
 
-Deploy = commit and push to `main`. Pages rebuilds in 1-2 minutes. Phones cache aggressively; tell the user to reload or reopen the tab.
+Deploy = open a PR to `main`; merging needs the `checks` job to pass (ruleset on `main`, no direct pushes). Merging runs checks again, then deploys; Pages updates in 1-2 minutes. Phones cache aggressively; tell the user to reload or reopen the tab.
 
 ## Conventions and hard constraints
 
