@@ -4,7 +4,7 @@ Handover notes for Claude Code. Read this first, then `src/template.html` and `s
 
 ## What this is
 
-A single-page web app that helps volleyball players at KSV (Københavns Studenter Volley, Copenhagen) learn where to stand in a **5-1 system**. The owner plays several roles (middle, outside, opposite, setter) and uses it on a phone. It is hosted on **GitHub Pages**: https://xszpo.github.io/volleyball_positions/ (repo `xSzpo/volleyball_positions`, branch **`master`**).
+A single-page web app that helps volleyball players at KSV (Københavns Studenter Volley, Copenhagen) learn where to stand in a **5-1 system**. The owner plays several roles (middle, outside, opposite, setter) and uses it on a phone. It is hosted on **GitHub Pages**: https://xszpo.github.io/volleyball_positions/ (repo `xSzpo/volleyball_positions`, branch **`main`**).
 
 The club's official guide is `reference/KSV_M3.pdf` ("Receiving positions and movements"). **The guide is the source of truth for positions.** Do not change reception or after-reception coordinates without checking it.
 
@@ -48,7 +48,7 @@ python src/tests/qa.py m && python src/tests/qa.py d   # slow (~3-4 min each); e
 
 Order matters: the PDFs must exist before `build.py`, because it base64-embeds them into `index.html` (so the download buttons work on GitHub Pages with no extra files).
 
-Deploy = commit and push to `master`. Pages rebuilds in 1-2 minutes. Phones cache aggressively; tell the user to reload or reopen the tab.
+Deploy = commit and push to `main`. Pages rebuilds in 1-2 minutes. Phones cache aggressively; tell the user to reload or reopen the tab.
 
 ## Conventions and hard constraints
 

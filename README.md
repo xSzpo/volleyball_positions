@@ -18,8 +18,8 @@ Source files live in `src/`; `index.html` is generated. See `CLAUDE.md` for the 
 
 ## Deploy on GitHub Pages
 
-1. Put these files in the root of the repository (branch `master`).
-2. Settings → Pages → Source: Deploy from a branch → Branch: `master`, folder `/ (root)` → Save.
+1. Put these files in the root of the repository (branch `main`).
+2. Settings → Pages → Source: Deploy from a branch → Branch: `main`, folder `/ (root)` → Save.
 3. After 1–2 minutes the site is live at the URL above.
 
 ## Notes
