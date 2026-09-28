@@ -83,6 +83,12 @@ with sync_playwright() as p:
         pg.is_checked('input[name="gPlayers"][value="mp"]'),
         pg.input_value('#mpList input[data-k="0"]'),
     )
+    # remove works after reload, when the list exists before the Rules switch is wired up
+    rules_before = pg.evaluate("localStorage.getItem('ksv51:rulesMode')")
+    pg.click('#mpList button[data-rm="2"]')
+    assert pg.locator("#mpList .mprow").count() == 2, "remove player did nothing"
+    assert pg.evaluate("localStorage.getItem('ksv51:rulesMode')") == rules_before, "remove player changed rulesMode"
+    print("remove after reload: ok")
     pg.check('input[name="gPlayers"][value="solo"]')
     pg.click("#gStart")
     print("solo play visible:", pg.is_visible("#gPlay"), pg.is_hidden("#gWho"))

@@ -3131,7 +3131,7 @@
 
       // ---------- Rules mode ----------
       function renderRulesMode() {
-        document.querySelectorAll("[data-rm]").forEach((b) => {
+        document.querySelectorAll(".rulesmode [data-rm]").forEach((b) => {
           b.setAttribute("aria-checked", b.dataset.rm === rulesMode);
         });
         $("rmSub").textContent =
@@ -3139,7 +3139,7 @@
             ? "Official (FIVB) rules: the libero may not serve, so in R3 and R6 the middle in zone 1 serves."
             : "Drill rules: the libero stays on court all the time and also serves in R3 and R6. The printable schema uses the official rules.";
       }
-      document.querySelectorAll("[data-rm]").forEach((b) => {
+      document.querySelectorAll(".rulesmode [data-rm]").forEach((b) => {
         b.onclick = () => {
           rulesMode = b.dataset.rm;
           store.set("rulesMode", rulesMode);
