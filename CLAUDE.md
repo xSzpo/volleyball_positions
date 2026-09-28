@@ -61,7 +61,7 @@ Deploy = open a PR to `main`; merging needs the `checks` job to pass (ruleset on
 - **localStorage** keys are prefixed `ksv51:` and always wrapped in try/catch (`store.get/set` helpers).
 - **Naming on screen:** rotations are shown as `R1 (S1)` … `R6 (S2)`; the number after S is the setter's zone. The guide calls these H1, H6, H5, H4, H3, H2 (H = Danish *hæver*, setter). The guide's "D" (diagonal) is our `OP`.
 - **Language:** UI in English, plain and short. The owner is Polish and plays in Denmark; keep wording simple.
-- **Light and dark themes** via CSS tokens on `:root` (see the top of the `<style>` block).
+- **Light and dark themes** via CSS tokens on `:root` (see the top of the `<style>` block). The lime `--accent` is a fill only; text in accent colour uses `--accent-ink`, text on an accent fill uses `--on-accent`. Radii come from `--radius`/`--radius-lg`.
 - Don't reintroduce `localStorage`-free assumptions or remove the embedded PDFs.
 
 ## Code style
