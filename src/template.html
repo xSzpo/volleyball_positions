@@ -162,9 +162,96 @@
       font:
         700 18px "Barlow Condensed",
         sans-serif;
-      padding: 10px;
+      padding: 8px 4px;
       border-radius: 9px;
       cursor: pointer;
+    }
+    .tab small {
+      display: block;
+      font:
+        500 12px Barlow,
+        sans-serif;
+      line-height: 1.15;
+      margin-top: 2px;
+    }
+    .setupbar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 48px;
+      margin-bottom: 12px;
+      padding: 8px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--ink);
+      font:
+        500 15px Barlow,
+        sans-serif;
+      text-align: left;
+      cursor: pointer;
+    }
+    .setupbar .chg {
+      font-weight: 700;
+      color: var(--orange);
+      white-space: nowrap;
+    }
+    .nudge {
+      margin: 0 0 8px;
+      font-weight: 700;
+      color: var(--orange);
+    }
+    .fold > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 48px;
+      padding: 8px 14px;
+      font:
+        800 22px "Barlow Condensed",
+        sans-serif;
+      list-style: none;
+      cursor: pointer;
+    }
+    .fold > summary::-webkit-details-marker {
+      display: none;
+    }
+    .fold > summary::after {
+      content: "+";
+      font-size: 26px;
+      line-height: 1;
+      color: var(--orange);
+    }
+    .fold[open] > summary::after {
+      content: "\2212";
+    }
+    .fold > summary small {
+      flex: 1;
+      font:
+        500 13px Barlow,
+        sans-serif;
+      color: var(--muted);
+    }
+    .card.fold {
+      padding: 0;
+    }
+    .foldbody {
+      padding: 0 14px 14px;
+    }
+    .fold.inner {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+    .fold.inner > summary {
+      font-size: 18px;
+      padding: 6px 12px;
+    }
+    .fold.inner .foldbody {
+      padding: 0 12px 12px;
     }
     .tab[aria-selected="true"] {
       background: var(--orange);
@@ -680,14 +767,6 @@
         transition: none;
       }
     }
-    .thumbh {
-      font:
-        800 20px "Barlow Condensed",
-        sans-serif;
-      margin: 18px 0 4px;
-      padding-top: 12px;
-      border-top: 1px solid var(--line);
-    }
     .thumbs {
       margin: 0;
       padding-left: 22px;
@@ -1080,29 +1159,44 @@
       </h1>
       <div class="bar"></div>
 
-      <p class="hint" style="margin-bottom:8px">I'm playing today as</p>
-      <div class="roles" id="roles"></div>
-      <div class="rulesmode" role="radiogroup" aria-label="Rules">
-        <span class="vislabel">Rules</span>
-        <button type="button" role="radio" aria-checked="false" data-rm="official">Official</button
-        ><button type="button" role="radio" aria-checked="false" data-rm="drill">
-          Drill: libero stays on
+      <div id="setup">
+        <button
+          type="button"
+          class="setupbar"
+          id="setupBar"
+          aria-expanded="false"
+          aria-controls="setupPanel"
+        >
+          <span id="setupSum"></span><span class="chg" id="setupChg">Change</span>
         </button>
-        <small id="rmSub"></small>
+        <div id="setupPanel" hidden>
+          <p class="nudge" id="setupNudge" hidden>Pick your role to start.</p>
+          <p class="hint" style="margin-bottom:8px">I'm playing today as</p>
+          <div class="roles" id="roles"></div>
+          <div class="rulesmode" role="radiogroup" aria-label="Rules">
+            <span class="vislabel">Rules</span>
+            <button type="button" role="radio" aria-checked="false" data-rm="official">
+              Official
+            </button><button type="button" role="radio" aria-checked="false" data-rm="drill">
+              Drill
+            </button>
+            <small id="rmSub"></small>
+          </div>
+        </div>
       </div>
 
-      <div class="tabs" role="tablist">
+      <div class="tabs" role="tablist" id="tabs">
         <button type="button" class="tab" role="tab" id="tabLearn" aria-selected="true">
-          Learn
+          Learn<small>study the spots</small>
         </button>
         <button type="button" class="tab" role="tab" id="tabDrill" aria-selected="false">
-          Drill
+          Drill<small>quick quiz</small>
         </button>
         <button type="button" class="tab" role="tab" id="tabGame" aria-selected="false">
-          Match
+          Match<small>full rotations in real order</small>
         </button>
         <button type="button" class="tab" role="tab" id="tabSets" aria-selected="false">
-          Sets
+          Sets<small>set calls</small>
         </button>
       </div>
 
@@ -1113,60 +1207,72 @@
           <svg class="court" id="courtL" viewBox="-26 -34 352 262" aria-label="Court diagram"></svg>
           <div class="cue" id="cue"></div>
         </div>
+        <details class="card fold" id="howTo">
+          <summary>How to learn with this app</summary>
+          <div class="foldbody">
+            <ol class="learnsteps">
+              <li>
+                <b>Study once, then stop rereading.</b>
+                Pick your role and step through R1 (S1) to R6 (S2) here in Learn. For each rotation,
+                say the four checks out loud.
+              </li>
+              <li>
+                <b>Test yourself.</b>
+                Go to Drill with the setter shown. Guess first, then look at the answer. Mistakes
+                are part of how you learn.
+              </li>
+              <li>
+                <b>Play a Match in order, then mixed.</b>
+                When you score 80% or more, switch to mixed order and show nobody. Mixing the order
+                makes you think, which helps you remember.
+              </li>
+              <li>
+                <b>Little and often.</b>
+                Five minutes on three or four days a week works better than one long session. Start
+                each session with “Review weak spots” in Drill.
+              </li>
+              <li>
+                <b>Before training or a match,</b>
+                do a two-minute review of the role you will play. If you might play several roles,
+                practise each one.
+              </li>
+              <li>
+                <b>Finish on court.</b>
+                The app gets you ready; walking through the rotations with your team makes it stick.
+                Your coach and the KSV guide have the final word.
+              </li>
+            </ol>
+          </div>
+        </details>
         <div class="card" id="sheet"></div>
-        <div class="card">
-          <h2>Before every serve</h2>
-          <p class="hint" style="margin-bottom:6px">
-            Four quick checks, in this order. Use them in the app and on court.
-          </p>
-          <ol class="check4">
-            <li><b>Where is the setter?</b> That tells you the rotation.</li>
-            <li>
-              <b>Who is in front of or behind me, and who is beside me?</b>
-              That confirms your legal spot.
-            </li>
-            <li><b>Am I on court, or is the libero in?</b> Middles, check this every time.</li>
-            <li>
-              <b>What is my job after the pass?</b>
-              Receive, attack which lane, set, or cover.
-            </li>
-          </ol>
-        </div>
-        <div class="card">
-          <h2>How to learn with this app</h2>
-          <ol class="learnsteps">
-            <li>
-              <b>Study once, then stop rereading.</b>
-              Pick your role and step through R1 (S1) to R6 (S2) here in Learn. For each rotation,
-              say the four checks out loud.
-            </li>
-            <li>
-              <b>Test yourself.</b>
-              Go to Drill with the setter shown. Guess first, then look at the answer. Mistakes are
-              part of how you learn.
-            </li>
-            <li>
-              <b>Play a Match in order, then mixed.</b>
-              When you score 80% or more, switch to mixed order and show nobody. Mixing the order
-              makes you think, which helps you remember.
-            </li>
-            <li>
-              <b>Little and often.</b>
-              Five minutes on three or four days a week works better than one long session. Start
-              each session with “Review weak spots” in Drill.
-            </li>
-            <li>
-              <b>Before training or a match,</b>
-              do a two-minute review of the role you will play. If you might play several roles,
-              practise each one.
-            </li>
-            <li>
-              <b>Finish on court.</b>
-              The app gets you ready; walking through the rotations with your team makes it stick.
-              Your coach and the KSV guide have the final word.
-            </li>
-          </ol>
-        </div>
+        <details class="card fold" id="checks">
+          <summary>Before every serve</summary>
+          <div class="foldbody">
+            <p class="hint" style="margin-bottom:6px">
+              Four quick checks, in this order. Use them in the app and on court.
+            </p>
+            <ol class="check4">
+              <li><b>Where is the setter?</b> That tells you the rotation.</li>
+              <li>
+                <b>Who is in front of or behind me, and who is beside me?</b>
+                That confirms your legal spot.
+              </li>
+              <li><b>Am I on court, or is the libero in?</b> Middles, check this every time.</li>
+              <li>
+                <b>What is my job after the pass?</b>
+                Receive, attack which lane, set, or cover.
+              </li>
+            </ol>
+          </div>
+        </details>
+        <details class="card fold" id="thumbsBox">
+          <summary>Rules of thumb from the guide</summary>
+          <div class="foldbody"><ol class="thumbs" id="thumbs"></ol></div>
+        </details>
+        <details class="card fold" id="allRots">
+          <summary>See all rotations at once</summary>
+          <div class="foldbody"><div class="table" id="rotTable"></div></div>
+        </details>
       </section>
 
       <section id="drill" hidden>
@@ -1189,10 +1295,6 @@
               Everyone
             </button>
           </div>
-          <label class="check"
-            ><input type="checkbox" id="nbDrill">
-            Neighbour check after reception</label
-          >
           <svg
             class="court"
             id="courtD"
@@ -1207,9 +1309,20 @@
           <div class="fb" id="fb"></div>
           <div class="weak" id="weak"></div>
           <div class="row">
-            <button type="button" class="btn" id="reviewBtn" hidden>Review weak spots</button
-            ><button type="button" class="btn quiet" id="resetBtn">Reset my progress</button>
+            <button type="button" class="btn" id="reviewBtn" hidden>Review weak spots</button>
           </div>
+          <details class="fold inner" id="dOpts">
+            <summary>Drill options</summary>
+            <div class="foldbody">
+              <label class="check"
+                ><input type="checkbox" id="nbDrill">
+                Neighbour check (who stands next to you) in reception</label
+              >
+              <div class="row">
+                <button type="button" class="btn quiet" id="resetBtn">Reset my progress</button>
+              </div>
+            </div>
+          </details>
         </div>
       </section>
 
@@ -1234,30 +1347,9 @@
               answers in secret. When everyone has answered, all answers are shown together.
             </p>
           </div>
-          <p class="hint" style="margin:10px 0">
-            Play all six rotations as <b id="gRole"></b>. Each rotation runs in real match order:
-            rotate, receive, move after the pass, then serve. Your mistakes show you where you
-            should have been.
+          <p class="hint" style="margin:10px 0 0">
+            Play all six rotations as <b id="gRole"></b>, step by step in real match order.
           </p>
-          <fieldset class="steps">
-            <legend>Steps to play in each rotation</legend>
-            <label><input type="checkbox" id="gs-start" checked> Rotation</label>
-            <label><input type="checkbox" id="gs-rec" checked> Reception</label>
-            <label><input type="checkbox" id="gs-ar" checked> After reception</label>
-            <label><input type="checkbox" id="gs-serve" checked> Serve</label>
-          </fieldset>
-          <p class="hint" id="gStepsMsg"></p>
-          <fieldset class="steps one">
-            <legend>Rotation order</legend>
-            <label
-              ><input type="radio" name="gOrder" value="order">
-              In order: R1 (S1) → R6 (S2)</label
-            >
-            <label
-              ><input type="radio" name="gOrder" value="mixed">
-              Mixed, like R1, R3, R5, R2, R4, R6</label
-            >
-          </fieldset>
           <div class="visbox">
             <div class="vis " role="radiogroup" aria-label="Who to show on court" data-vis="game">
               <span class="vislabel">Show on court</span>
@@ -1269,15 +1361,36 @@
               </button>
             </div>
             <small id="gVisSub"></small>
+            <p class="tip" id="gTip"></p>
           </div>
-          <label class="check"
-            ><input type="checkbox" id="nbGame">
-            Neighbour check after reception (optional, +30 points)</label
-          >
-          <p class="tip">
-            Tip: start in order with the setter shown. When you score 80% or more, switch to mixed
-            order and show nobody.
-          </p>
+          <details class="fold inner" id="gOpts">
+            <summary>Match options <small id="gOptSum"></small></summary>
+            <div class="foldbody">
+              <fieldset class="steps">
+                <legend>Steps to play in each rotation</legend>
+                <label><input type="checkbox" id="gs-start" checked> Rotation</label>
+                <label><input type="checkbox" id="gs-rec" checked> Reception</label>
+                <label><input type="checkbox" id="gs-ar" checked> After reception</label>
+                <label><input type="checkbox" id="gs-serve" checked> Serve</label>
+              </fieldset>
+              <p class="hint" id="gStepsMsg"></p>
+              <fieldset class="steps one">
+                <legend>Rotation order</legend>
+                <label
+                  ><input type="radio" name="gOrder" value="order">
+                  In order: R1 (S1) → R6 (S2)</label
+                >
+                <label
+                  ><input type="radio" name="gOrder" value="mixed">
+                  Mixed, like R1, R3, R5, R2, R4, R6</label
+                >
+              </fieldset>
+              <label class="check"
+                ><input type="checkbox" id="nbGame">
+                Neighbour check (who stands next to you) in reception, +30 points</label
+              >
+            </div>
+          </details>
           <div class="row">
             <button type="button" class="btn primary" id="gStart">Start match</button>
           </div>
@@ -1475,7 +1588,7 @@
       const PHASES = [
         ["start", "Rotation"],
         ["rec", "Reception"],
-        ["ar", "After rec."],
+        ["ar", "After reception"],
         ["serve", "Serve"],
       ];
       const FULL = { start: "Rotation", rec: "Reception", ar: "After reception", serve: "Serve" };
@@ -1735,8 +1848,8 @@
           } catch (e) {}
         },
       };
-      let role = store.get("role", "MB1");
-      if (!ROLES.includes(role)) role = "MB1";
+      const firstVisit = !ROLES.includes(store.get("role", null));
+      let role = firstVisit ? "MB1" : store.get("role", "MB1");
       let ri = 0,
         phase = "rec",
         stats = store.get("stats2", {});
@@ -1753,6 +1866,8 @@
               role = b.dataset.r;
               store.set("role", role);
               renderRoles();
+              renderSetupSummary();
+              setSetupOpen(false);
               renderRefLabels();
               review = null;
               renderLearn();
@@ -1768,14 +1883,28 @@
             };
           });
       }
+      function renderSetupSummary() {
+        $("setupSum").innerHTML =
+          `Playing as: <b>${NAMES[role]}</b> · ${rulesMode === "official" ? "Official" : "Drill"} rules`;
+      }
+      function setSetupOpen(open) {
+        $("setupPanel").hidden = !open;
+        $("setupBar").setAttribute("aria-expanded", open);
+        $("setupChg").textContent = open ? "Done" : "Change";
+        if (!open) $("setupNudge").hidden = true;
+      }
+      $("setupBar").onclick = () => setSetupOpen($("setupPanel").hidden);
+      $("setupNudge").hidden = !firstVisit;
+      setSetupOpen(firstVisit);
       function setTab(t) {
         ["Learn", "Drill", "Game", "Sets"].forEach((n) => {
           const k = n.toLowerCase();
           $(`tab${n}`).setAttribute("aria-selected", t === k);
           $(k).hidden = t !== k;
         });
-        $("roles").style.display = t === "sets" ? "none" : "";
-        $("roles").previousElementSibling.style.display = t === "sets" ? "none" : "";
+        $("setup").hidden = t === "sets";
+        const tabsTop = $("tabs").getBoundingClientRect().top + window.scrollY - 8;
+        if (window.scrollY > tabsTop) window.scrollTo({ top: tabsTop });
         if (t === "drill" && !cur) newQuestion();
         if (t === "sets" && !sq) newSetQ();
       }
@@ -1948,9 +2077,10 @@
             `<li${t.roles.includes(role) ? ' class="mine"' : ""}><b>${t.t}</b>${t.roles.includes(role) ? ' <span class="tag">your rule</span>' : ""}<br>${t.d}</li>`,
         ).join("");
         $("sheet").innerHTML =
-          `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role].map((x) => `<li>${ruleText(x)}</li>`).join("")}</ul>
-  <div class="table"><table><thead><tr><th></th><th>Rotation</th><th>Reception</th><th>After reception</th><th>Serve</th></tr></thead><tbody>${rows}</tbody></table></div>
-  <h3 class="thumbh">Rules of thumb from the guide</h3><ol class="thumbs">${thumbs}</ol>`;
+          `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role].map((x) => `<li>${ruleText(x)}</li>`).join("")}</ul>`;
+        $("rotTable").innerHTML =
+          `<table><thead><tr><th></th><th>Rotation</th><th>Reception</th><th>After reception</th><th>Serve</th></tr></thead><tbody>${rows}</tbody></table>`;
+        $("thumbs").innerHTML = thumbs;
       }
 
       // ---------- Reference points & neighbours ----------
@@ -1988,6 +2118,8 @@
         visGame = store.get("visGame", "none");
       function gVisText() {
         const ref = role === "S" ? "the opposite" : "the setter";
+        $("gTip").textContent =
+          `Too hard? Show ${ref} as a reference. When you score 80% or more, pick mixed order and show nobody.`;
         $("gVisSub").textContent = {
           none: "Nobody: only the net and the court. Hardest, closest to a real match.",
           ref: `Only ${ref}: find ${ref}, then work out your own spot. The way coaches teach it.`,
@@ -2451,7 +2583,7 @@
 
       // ---------- Match mode ----------
       const STEP_ORDER = ["start", "rec", "ar", "serve"];
-      const STEP_SHORT = { start: "Rotate", rec: "Receive", ar: "After pass", serve: "Serve" };
+      const STEP_SHORT = { start: "Rotate", rec: "Receive", ar: "After reception", serve: "Serve" };
       let G = null;
       const gSettings = store.get("gameSteps", { start: true, rec: true, ar: true, serve: true });
       STEP_ORDER.forEach((k) => {
@@ -2495,7 +2627,14 @@
         $("gStepsMsg").textContent = s.length
           ? `${s.length * 6} moments in this match.`
           : "Pick at least one step.";
+        if (!s.length) $("gOpts").open = true;
         gRenderSetup();
+      }
+      function gOptText() {
+        const n = gSteps().length * 6;
+        $("gOptSum").textContent = n
+          ? `${n} moments · ${gOrder() === "mixed" ? "mixed order" : "in order"}`
+          : "pick at least one step";
       }
       function gRenderSetup() {
         const mp = gPlayersMode() === "mp";
@@ -2504,6 +2643,7 @@
         if (mp) renderMp();
         const best = mp ? null : store.get("gameBest", {})[gKey()];
         $("gBest").textContent = best ? `Your best with these settings: ${best} points.` : "";
+        gOptText();
       }
       function gView(v) {
         ["gSetup", "gPass", "gReveal", "gPlay", "gEnd"].forEach((id) => {
@@ -3138,6 +3278,7 @@
           rulesMode === "official"
             ? "Official (FIVB) rules: the libero may not serve, so in R3 and R6 the middle in zone 1 serves."
             : "Drill rules: the libero stays on court all the time and also serves in R3 and R6. The printable schema uses the official rules.";
+        renderSetupSummary();
       }
       document.querySelectorAll(".rulesmode [data-rm]").forEach((b) => {
         b.onclick = () => {
@@ -3204,6 +3345,8 @@
       renderRefLabels();
       $("fb").innerHTML = HINT;
       renderRoles();
+      $("howTo").open = !store.get("howToSeen", false);
+      store.set("howToSeen", true);
       renderLearn();
       renderSets();
     })();

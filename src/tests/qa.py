@@ -47,6 +47,71 @@ def tap(pg: Page, svg: str, x: float | None = None, y: float | None = None) -> N
     pg.mouse.click(box["x"] + box["width"] * x, box["y"] + box["height"] * y)
 
 
+def open_setup(pg: Page) -> None:
+    if pg.locator("#setupPanel").is_hidden():
+        pg.click("#setupBar")
+
+
+def pick_role(pg: Page, role: str) -> None:
+    open_setup(pg)
+    pg.click(f'.role[data-r="{role}"]')
+
+
+def pick_rules(pg: Page, mode: str) -> None:
+    open_setup(pg)
+    pg.click(f'.rulesmode [data-rm="{mode}"]')
+
+
+def open_fold(pg: Page, sel: str) -> None:
+    if pg.get_attribute(sel, "open") is None:
+        pg.click(f"{sel} > summary")
+
+
+def check_header(pg: Page, tag: str) -> None:
+    """First visit shows the role picker open; a choice collapses it; it is remembered."""
+    if not pg.is_visible("#setupPanel") or not pg.is_visible("#setupNudge"):
+        fail(f"{tag} first visit: role picker not open with nudge")
+    if pg.get_attribute("#howTo", "open") is None:
+        fail(f"{tag} first visit: how-to not open")
+    pg.click('.role[data-r="OH1"]')
+    if pg.is_visible("#setupPanel"):
+        fail(f"{tag} role pick did not collapse the picker")
+    if "Outside 1" not in pg.inner_text("#setupSum"):
+        fail(f"{tag} summary does not show the role")
+    pg.click("#setupBar")
+    if not pg.is_visible("#setupPanel") or pg.get_attribute("#setupBar", "aria-expanded") != "true":
+        fail(f"{tag} summary tap did not expand the picker")
+    pg.click('.rulesmode [data-rm="drill"]')
+    if "Drill rules" not in pg.inner_text("#setupSum"):
+        fail(f"{tag} summary does not show the rules")
+    pg.click('.rulesmode [data-rm="official"]')
+    pg.click("#setupBar")
+    if pg.is_visible("#setupPanel"):
+        fail(f"{tag} second tap did not collapse the picker")
+    pg.reload()
+    pg.wait_for_timeout(300)
+    if pg.is_visible("#setupPanel") or pg.is_visible("#setupNudge"):
+        fail(f"{tag} returning visit: role picker open")
+    if pg.get_attribute("#howTo", "open") is not None:
+        fail(f"{tag} returning visit: how-to open")
+    pg.click("#tabSets")
+    if pg.is_visible("#setupBar"):
+        fail(f"{tag} setup bar shown on Sets")
+    pg.click("#tabLearn")
+    for sel in ["#checks", "#thumbsBox", "#allRots"]:
+        if pg.get_attribute(sel, "open") is not None:
+            fail(f"{tag} {sel} open by default")
+    open_fold(pg, "#allRots")
+    if pg.locator("#rotTable tbody tr").count() != 6:
+        fail(f"{tag} all-rotations table does not have 6 rows")
+    pg.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    pg.click("#tabDrill")
+    top = pg.evaluate("document.getElementById('drill').getBoundingClientRect().top")
+    if not 0 <= top < pg.evaluate("innerHeight") / 2:
+        fail(f"{tag} tab switch left the tab content at {top}px")
+    pg.click("#tabLearn")
+
+
 def check_page(pg: Page, ctx: str) -> None:
     t = pg.inner_text("body")
     if re.search(r"\bundefined\b|\bNaN\b|\[object|\bnull\b", t):
@@ -122,11 +187,12 @@ with sync_playwright() as p:
             print("start", flush=True)
             tag = f"[{vp['width']} {scheme}]"
             check_page(pg, tag + " initial")
+            check_header(pg, tag)
             # LEARN: every role/rotation/phase, both rules
             for rm in ["official", "drill"]:
-                pg.click(f'[data-rm="{rm}"]')
+                pick_rules(pg, rm)
                 for role in ROLES:
-                    pg.click(f'.role[data-r="{role}"]')
+                    pick_role(pg, role)
                     for i in range(6):
                         pg.click(f'.rot[data-i="{i}"]')
                         for ph in ["start", "rec", "ar", "serve"]:
@@ -145,28 +211,30 @@ with sync_playwright() as p:
             # DRILL all roles, visibility modes, neighbour on/off, rules modes
             pg.click("#tabDrill")
             for rm in ["official", "drill"]:
-                pg.click(f'[data-rm="{rm}"]')
+                pick_rules(pg, rm)
                 for role in ROLES:
-                    pg.click(f'.role[data-r="{role}"]')
+                    pick_role(pg, role)
                     for v in ["none", "ref", "all"]:
                         pg.click(f'.vis[data-vis="drill"] button[data-v="{v}"]')
                         if random.random() < 0.5:
+                            open_fold(pg, "#dOpts")
                             pg.click("#nbDrill")
                         drill_steps(pg, f"{tag} drill {rm} {role} {v}", 12)
                     check_page(pg, f"{tag} drill {role}")
             # switch role mid neighbour-check
-            pg.click('.role[data-r="OH1"]')
+            pick_role(pg, "OH1")
             for _ in range(40):
                 if "Reception" in pg.inner_text("#dq") and pg.locator("#offBtn").is_enabled():
                     break
                 drill_steps(pg, tag + " seek", 1)
             if not pg.is_checked("#nbDrill"):
+                open_fold(pg, "#dOpts")
                 pg.click("#nbDrill")
             tap(pg, "#courtD", 0.5, 0.7)
-            pg.click('.role[data-r="MB1"]')
+            pick_role(pg, "MB1")
             drill_steps(pg, f"{tag} drill after role switch mid-check", 5)
             # tab switch mid-check and back
-            pg.click('.role[data-r="OH2"]')
+            pick_role(pg, "OH2")
             for _ in range(40):
                 if "Reception" in pg.inner_text("#dq") and pg.locator("#offBtn").is_enabled():
                     break
@@ -193,6 +261,7 @@ with sync_playwright() as p:
                     drill_steps(pg, tag + " after review", 4)
             else:
                 fail(f"{tag} review button never appeared")
+            open_fold(pg, "#dOpts")
             pg.click("#resetBtn")
             drill_steps(pg, tag + " after reset", 3)
             print("# MATCH: all step combos", flush=True)
@@ -202,9 +271,10 @@ with sync_playwright() as p:
             combos = [c for r in range(1, 5) for c in itertools.combinations(steps, r)]
             for ci, combo in enumerate(combos):
                 role = ROLES[ci % 7]
-                pg.click(f'.role[data-r="{role}"]')
+                pick_role(pg, role)
                 if pg.is_visible("#gSettings"):
                     pg.click("#gSettings")
+                open_fold(pg, "#gOpts")
                 for s_ in steps:
                     if pg.is_checked(f"#gs-{s_}") != (s_ in combo):
                         pg.click(f"#gs-{s_}")
@@ -212,7 +282,7 @@ with sync_playwright() as p:
                 if random.random() < 0.5:
                     pg.click("#nbGame")
                 pg.click(f'.vis[data-vis="game"] button[data-v="{random.choice(["none", "ref", "all"])}"]')
-                pg.click(f'[data-rm="{random.choice(["official", "drill"])}"]')
+                pick_rules(pg, random.choice(["official", "drill"]))
                 if pg.is_visible("#gSettings"):
                     pg.click("#gSettings")
                 pg.click("#gStart")
@@ -238,6 +308,7 @@ with sync_playwright() as p:
                     if not pg.is_visible("#gSetup"):
                         fail(f"{tag} quit did not return to setup")
             # no steps selected -> start disabled
+            open_fold(pg, "#gOpts")
             for s_ in steps:
                 if pg.is_checked(f"#gs-{s_}"):
                     pg.click(f"#gs-{s_}")
@@ -248,11 +319,11 @@ with sync_playwright() as p:
             # role / rules change mid match
             pg.click("#gStart")
             tap(pg, "#courtG")
-            pg.click('.role[data-r="S"]')
+            pick_role(pg, "S")
             if not pg.is_visible("#gSetup"):
                 fail(f"{tag} role change mid-match didn't reset")
             pg.click("#gStart")
-            pg.click('[data-rm="drill"]')
+            pick_rules(pg, "drill")
             if not pg.is_visible("#gSetup"):
                 fail(f"{tag} rules change mid-match didn't reset")
             pg.click("#gStart")
@@ -294,8 +365,8 @@ with sync_playwright() as p:
             print("# PERSISTENCE", flush=True)
             # PERSISTENCE after reload
             pg.click("#tabLearn")
-            pg.click('.role[data-r="OP"]')
-            pg.click('[data-rm="drill"]')
+            pick_role(pg, "OP")
+            pick_rules(pg, "drill")
             pg.click("#tabDrill")
             pg.click('.vis[data-vis="drill"] button[data-v="ref"]')
             pg.reload()
@@ -306,7 +377,7 @@ with sync_playwright() as p:
                 fail(f"{tag} rules mode not remembered")
             if pg.get_attribute('.vis[data-vis="drill"] button[data-v="ref"]', "aria-checked") != "true":
                 fail(f"{tag} drill vis not remembered")
-            pg.click('[data-rm="official"]')
+            pick_rules(pg, "official")
             if errs:
                 fail(f"{tag} JS errors: {errs[:3]}")
             ctxb.close()
