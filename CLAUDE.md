@@ -61,7 +61,7 @@ Deploy = open a PR to `main`; merging needs the `checks` job to pass (ruleset on
 - **localStorage** keys are prefixed `ksv51:` and always wrapped in try/catch (`store.get/set` helpers).
 - **Naming on screen:** rotations are shown as `R1 (S1)` … `R6 (S2)`; the number after S is the setter's zone. The guide calls these H1, H6, H5, H4, H3, H2 (H = Danish *hæver*, setter). The guide's "D" (diagonal) is our `OP`.
 - **Language:** UI in English, plain and short. The owner is Polish and plays in Denmark; keep wording simple.
-- **Light and dark themes** via CSS tokens on `:root` (see the top of the `<style>` block).
+- **Light and dark themes** via CSS tokens on `:root` (see the top of the `<style>` block). The lime `--accent` is a fill only; text in accent colour uses `--accent-ink`, text on an accent fill uses `--on-accent`. Radii come from `--radius`/`--radius-lg`.
 - Don't reintroduce `localStorage`-free assumptions or remove the embedded PDFs.
 
 ## Code style
@@ -99,7 +99,9 @@ Serving order (from R1 zones 1..6): `S, OH1, MB1, OP, OH2, MB2`. The JS helper `
 
 ## App structure (src/template.html)
 
-Tabs: **Learn**, **Drill**, **Match**, **Sets**, plus printable downloads. A global role picker (`MB1 MB2 OH1 OH2 OP S L`) and a Rules switch (Official / Drill) sit at the top (hidden on Sets).
+Tabs: **Learn**, **Drill**, **Match**, **Sets** (each with a one-line caption), plus printable downloads. At the top (hidden on Sets) a one-line summary bar (`#setupBar`, "Playing as: … · Official rules") expands to the role picker (`MB1 MB2 OH1 OH2 OP S L`) and the Rules switch (Official / Drill). It is open on the first visit (no stored `role`) and collapses after a role is picked. Switching tabs scrolls back to the tab bar if you were below it.
+
+Secondary content uses native `<details class="fold">`: in Learn, "How to learn" (open only on the first visit, `howToSeen`), "Before every serve", "Rules of thumb" and the all-rotations table; "Drill options" (`#dOpts`: neighbour check, reset) and "Match options" (`#gOpts`: steps, order, neighbour check). Match setup shows only Who is playing, Show on court and Start by default. Tests open these with `open_fold()` / `open_setup()` in `tests/qa.py`.
 
 Key JS pieces (all inside one IIFE):
 
@@ -112,7 +114,7 @@ Key JS pieces (all inside one IIFE):
 - Sets: SVG net diagram, explore by tapping, and a "Name the set" quiz
 - Downloads: embedded base64 PDFs; uses `window.claude.use('downloads')` when running inside claude.ai, otherwise a Blob link (GitHub Pages)
 
-Learning design (researched; keep it): the setter is the reference point that tells you the rotation, neighbours/overlap partners confirm the exact spot, and role/job decides movement after the pass. Retrieval practice with feedback, mixed order, spaced short sessions. There is a pre-serve checklist (setter → neighbours → on court or libero → job) and a "How to learn" card in Learn.
+Learning design (researched; keep it): the setter is the reference point that tells you the rotation, neighbours/overlap partners confirm the exact spot, and role/job decides movement after the pass. Retrieval practice with feedback, mixed order, spaced short sessions. There is a pre-serve checklist (setter → neighbours → on court or libero → job) and a "How to learn" section in Learn.
 
 ## History and lessons
 

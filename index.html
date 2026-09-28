@@ -12,17 +12,22 @@
     >
     <style>
     :root {
-      --bg: #eef2f6;
+      --bg: #f5f4ee;
       --panel: #ffffff;
-      --ink: #16283d;
-      --muted: #5b6b7c;
-      --line: #d5dde6;
-      --floor: #f7e9d2;
-      --floor-line: #c9a878;
-      --net: #16283d;
-      --orange: #f08a1c;
-      --good: #1e9e5a;
-      --bad: #d8412f;
+      --ink: #14181a;
+      --muted: #52585c;
+      --line: #14181a;
+      --floor: #e9c98e;
+      --floor-line: #6b4a22;
+      --net: #14181a;
+      --accent: #c9e21f;
+      --accent-ink: #4d5e00;
+      --on-accent: #14181a;
+      --good: #0f7a40;
+      --bad: #b3261e;
+      --radius: 4px;
+      --radius-lg: 6px;
+      --edge: 2px solid var(--line);
       --move: #33414f;
       --s: #f2b53a;
       --op: #222222;
@@ -39,14 +44,17 @@
     }
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
-        --bg: #0f1a27;
-        --panel: #172536;
-        --ink: #e8eef5;
-        --muted: #9aaabb;
-        --line: #2a3b50;
+        --bg: #0c1210;
+        --panel: #141c1a;
+        --ink: #eef1ec;
+        --muted: #a7b0aa;
+        --line: #eef1ec;
         --floor: #3a3226;
-        --floor-line: #8c7552;
-        --net: #e8eef5;
+        --floor-line: #a98957;
+        --net: #eef1ec;
+        --accent: #c9f24a;
+        --accent-ink: #c9f24a;
+        --bad: #cc3a2b;
         --op: #050505;
         --move: #c9d3de;
         --set-left: #6fa8e0;
@@ -56,14 +64,17 @@
       }
     }
     :root[data-theme="dark"] {
-      --bg: #0f1a27;
-      --panel: #172536;
-      --ink: #e8eef5;
-      --muted: #9aaabb;
-      --line: #2a3b50;
+      --bg: #0c1210;
+      --panel: #141c1a;
+      --ink: #eef1ec;
+      --muted: #a7b0aa;
+      --line: #eef1ec;
       --floor: #3a3226;
-      --floor-line: #8c7552;
-      --net: #e8eef5;
+      --floor-line: #a98957;
+      --net: #eef1ec;
+      --accent: #c9f24a;
+      --accent-ink: #c9f24a;
+      --bad: #cc3a2b;
       --op: #050505;
       --move: #c9d3de;
       --set-left: #6fa8e0;
@@ -87,6 +98,41 @@
       font-size: 16px;
       line-height: 1.45;
     }
+    .score strong,
+    .pts,
+    .stats strong,
+    .rank .pos,
+    .rank .sc,
+    .passname,
+    .rot,
+    .rlist .rp {
+      font-variant-numeric: tabular-nums;
+    }
+    input[type="checkbox"],
+    input[type="radio"] {
+      appearance: none;
+      -webkit-appearance: none;
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      margin: 0;
+      border: 2px solid var(--ink);
+      border-radius: 3px;
+      background: var(--panel);
+      cursor: pointer;
+    }
+    input[type="radio"] {
+      border-radius: 50%;
+    }
+    input[type="checkbox"]:checked {
+      background:
+        var(--accent)
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5' fill='none' stroke='%2314181a' stroke-width='2.6'/%3E%3C/svg%3E")
+        center / 16px no-repeat;
+    }
+    input[type="radio"]:checked {
+      background: radial-gradient(circle, var(--on-accent) 0 4px, var(--accent) 4.5px);
+    }
     .wrap {
       max-width: 720px;
       margin: 0 auto;
@@ -109,11 +155,11 @@
       margin-top: 6px;
     }
     .bar {
-      height: 5px;
+      height: 6px;
       width: 72px;
-      background: var(--orange);
+      background: var(--accent);
       margin: 12px 0 18px;
-      border-radius: 2px;
+      border-radius: 0;
     }
     .roles {
       display: flex;
@@ -126,10 +172,12 @@
       background: var(--panel);
       color: var(--ink);
       font:
-        600 15px Barlow,
+        700 14px Barlow,
         sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
       padding: 8px 12px;
-      border-radius: 999px;
+      border-radius: var(--radius);
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -138,7 +186,7 @@
     .role i {
       width: 12px;
       height: 12px;
-      border-radius: 3px;
+      border-radius: 0;
       display: inline-block;
     }
     .role[aria-pressed="true"] {
@@ -149,31 +197,139 @@
     .tabs {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 4px;
+      border-bottom: var(--edge);
       margin-bottom: 16px;
     }
     .tab {
       border: 0;
+      border-bottom: 4px solid transparent;
       background: transparent;
       color: var(--muted);
       font:
-        700 18px "Barlow Condensed",
+        700 17px "Barlow Condensed",
         sans-serif;
-      padding: 10px;
-      border-radius: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 8px 4px 6px;
+      border-radius: 0;
       cursor: pointer;
     }
+    .tab small {
+      display: block;
+      font:
+        500 12px Barlow,
+        sans-serif;
+      line-height: 1.15;
+      margin-top: 2px;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .setupbar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 48px;
+      margin-bottom: 12px;
+      padding: 8px 14px;
+      border: var(--edge);
+      border-radius: var(--radius-lg);
+      background: var(--panel);
+      color: var(--ink);
+      font:
+        500 15px Barlow,
+        sans-serif;
+      text-align: left;
+      cursor: pointer;
+    }
+    .setupbar .chg {
+      font:
+        700 13px Barlow,
+        sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 4px 8px;
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: var(--on-accent);
+      white-space: nowrap;
+    }
+    .nudge {
+      margin: 0 0 8px;
+      font-weight: 700;
+      padding-left: 10px;
+      border-left: 6px solid var(--accent);
+    }
+    .fold > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 48px;
+      padding: 8px 14px;
+      font:
+        800 22px "Barlow Condensed",
+        sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      list-style: none;
+      cursor: pointer;
+    }
+    .fold > summary::-webkit-details-marker {
+      display: none;
+    }
+    .fold > summary::after {
+      content: "+";
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      line-height: 1;
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: var(--on-accent);
+    }
+    .fold[open] > summary::after {
+      content: "\2212";
+    }
+    .fold > summary small {
+      flex: 1;
+      font:
+        500 13px Barlow,
+        sans-serif;
+      color: var(--muted);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .card.fold {
+      padding: 0;
+    }
+    .foldbody {
+      padding: 0 14px 14px;
+    }
+    .fold.inner {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+    .fold.inner > summary {
+      font-size: 18px;
+      padding: 6px 12px;
+    }
+    .fold.inner .foldbody {
+      padding: 0 12px 12px;
+    }
     .tab[aria-selected="true"] {
-      background: var(--orange);
-      color: #fff;
+      border-bottom-color: var(--accent);
+      color: var(--ink);
     }
     .card {
       background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 14px;
+      border: var(--edge);
+      border-radius: var(--radius-lg);
       padding: 14px;
     }
     .card + .card {
@@ -186,10 +342,10 @@
       margin-bottom: 10px;
     }
     .rot {
-      border: 1.5px solid var(--line);
+      border: 2px solid var(--line);
       background: transparent;
       color: var(--ink);
-      border-radius: 9px;
+      border-radius: var(--radius);
       padding: 6px 0;
       cursor: pointer;
       font:
@@ -220,20 +376,23 @@
       margin-bottom: 10px;
     }
     .ph {
-      border: 0;
+      border: 2px solid transparent;
       background: var(--bg);
       color: var(--ink);
-      border-radius: 8px;
+      border-radius: var(--radius);
       padding: 8px 4px;
       font:
-        600 13px Barlow,
+        700 12px Barlow,
         sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
       cursor: pointer;
       line-height: 1.15;
     }
     .ph[aria-pressed="true"] {
-      background: var(--orange);
-      color: #fff;
+      background: var(--accent);
+      border-color: var(--ink);
+      color: var(--on-accent);
     }
     svg.court,
     svg.netsvg {
@@ -247,9 +406,9 @@
     .cue {
       margin-top: 12px;
       padding: 12px 14px;
-      border-left: 5px solid var(--orange);
+      border-left: 6px solid var(--accent);
       background: var(--bg);
-      border-radius: 0 10px 10px 0;
+      border-radius: 0;
     }
     .cue b {
       font-family: "Barlow Condensed", sans-serif;
@@ -272,6 +431,8 @@
         800 24px "Barlow Condensed",
         sans-serif;
       margin: 0 0 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
     }
     .card ul {
       margin: 0;
@@ -302,6 +463,8 @@
         700 15px "Barlow Condensed",
         sans-serif;
       color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
     td.r {
       font:
@@ -350,11 +513,13 @@
       border: 2px solid var(--ink);
       background: transparent;
       color: var(--ink);
-      border-radius: 10px;
+      border-radius: var(--radius);
       padding: 10px 14px;
       font:
         700 16px "Barlow Condensed",
         sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
       cursor: pointer;
     }
     .btn.primary {
@@ -365,7 +530,10 @@
       display: none;
     }
     .btn:disabled {
-      opacity: 0.4;
+      border-style: dashed;
+      border-color: var(--muted);
+      background: transparent;
+      color: var(--muted);
       cursor: default;
     }
     .toggle {
@@ -380,18 +548,18 @@
     .fb {
       margin-top: 10px;
       padding: 12px 14px;
-      border-radius: 10px;
+      border-radius: 0;
       background: var(--bg);
       min-height: 48px;
     }
     .fb.good {
-      border-left: 5px solid var(--good);
+      border-left: 6px solid var(--good);
     }
     .fb.bad {
-      border-left: 5px solid var(--bad);
+      border-left: 6px solid var(--bad);
     }
     .fb.close {
-      border-left: 5px solid var(--orange);
+      border-left: 6px solid var(--accent);
     }
     .fb b {
       font:
@@ -417,7 +585,7 @@
     .setchip {
       border: 2px solid currentColor;
       background: transparent;
-      border-radius: 9px;
+      border-radius: var(--radius);
       padding: 6px 12px;
       font:
         800 17px "Barlow Condensed",
@@ -455,10 +623,12 @@
         500 13px Barlow,
         sans-serif;
       color: var(--muted);
+      text-transform: none;
+      letter-spacing: 0;
     }
     .rules {
       margin-bottom: 16px;
-      border-left: 5px solid var(--orange);
+      border-left: 6px solid var(--accent);
     }
     .rules summary {
       font:
@@ -475,7 +645,7 @@
     }
     .steps {
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: var(--radius);
       padding: 8px 12px 10px;
       margin: 0;
       display: grid;
@@ -487,6 +657,8 @@
         700 16px "Barlow Condensed",
         sans-serif;
       padding: 0 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
     .steps label {
       display: flex;
@@ -504,16 +676,17 @@
       font-weight: 600;
     }
     .progress {
-      height: 6px;
+      height: 8px;
+      border: 1px solid var(--line);
       background: var(--bg);
-      border-radius: 3px;
+      border-radius: 0;
       overflow: hidden;
     }
     .progress i {
       display: block;
       height: 100%;
       width: 0;
-      background: var(--orange);
+      background: var(--accent);
       transition: width 0.3s;
     }
     .steptrack {
@@ -524,10 +697,12 @@
     }
     .steptrack span {
       font:
-        600 12px Barlow,
+        700 12px Barlow,
         sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
       padding: 3px 8px;
-      border-radius: 999px;
+      border-radius: var(--radius);
       background: var(--bg);
       color: var(--muted);
     }
@@ -566,7 +741,7 @@
     }
     .stats div {
       background: var(--bg);
-      border-radius: 10px;
+      border-radius: var(--radius-lg);
       padding: 10px 12px;
     }
     .stats strong {
@@ -599,15 +774,16 @@
       gap: 12px;
       margin: 12px 0 0;
       padding: 12px 14px;
-      border: 2px solid var(--orange);
-      border-radius: 12px;
-      background: color-mix(in srgb, var(--orange) 9%, var(--panel));
+      border: var(--edge);
+      border-left: 6px solid var(--accent);
+      border-radius: var(--radius-lg);
+      background: var(--panel);
       cursor: pointer;
     }
     .switch.compact {
       margin: 10px 0 0;
       padding: 6px 10px;
-      border-width: 1.5px;
+      border-width: 1.5px 1.5px 1.5px 6px;
       display: inline-flex;
     }
     .switch input {
@@ -645,7 +821,7 @@
       height: 18px;
     }
     .switch input:checked + .track {
-      background: var(--orange);
+      background: var(--accent);
     }
     .switch input:checked + .track .thumb {
       transform: translateX(22px);
@@ -654,7 +830,7 @@
       transform: translateX(18px);
     }
     .switch input:focus-visible + .track {
-      outline: 3px solid var(--orange);
+      outline: 3px solid var(--accent-ink);
       outline-offset: 2px;
     }
     .swtext b {
@@ -680,14 +856,6 @@
         transition: none;
       }
     }
-    .thumbh {
-      font:
-        800 20px "Barlow Condensed",
-        sans-serif;
-      margin: 18px 0 4px;
-      padding-top: 12px;
-      border-top: 1px solid var(--line);
-    }
     .thumbs {
       margin: 0;
       padding-left: 22px;
@@ -707,9 +875,11 @@
       font:
         700 11px Barlow,
         sans-serif;
-      background: var(--orange);
-      color: #fff;
-      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: var(--accent);
+      color: var(--on-accent);
+      border-radius: var(--radius);
       padding: 1px 7px;
       vertical-align: 2px;
     }
@@ -721,14 +891,16 @@
       margin: -4px 0 14px;
     }
     .rulesmode button {
-      border: 1.5px solid var(--line);
+      border: 2px solid var(--line);
       background: var(--panel);
       color: var(--ink);
       font:
-        600 14px Barlow,
+        700 13px Barlow,
         sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
       padding: 5px 11px;
-      border-radius: 999px;
+      border-radius: var(--radius);
       cursor: pointer;
     }
     .rulesmode button[aria-checked="true"] {
@@ -751,32 +923,37 @@
     }
     .vislabel {
       font:
-        600 13px Barlow,
+        700 12px Barlow,
         sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
       color: var(--muted);
       margin-right: 4px;
     }
     .vis button {
-      border: 2px solid var(--orange);
+      border: 2px solid var(--line);
       background: transparent;
       color: var(--ink);
       font:
         700 15px "Barlow Condensed",
         sans-serif;
-      padding: 6px 12px;
-      border-radius: 999px;
+      padding: 6px 9px;
+      border-radius: var(--radius);
+      text-transform: uppercase;
+      letter-spacing: 0.01em;
       cursor: pointer;
     }
     .vis button[aria-checked="true"] {
-      background: var(--orange);
-      color: #fff;
+      background: var(--accent);
+      color: var(--on-accent);
     }
     .visbox {
       margin: 12px 0 0;
       padding: 12px 14px;
-      border: 2px solid var(--orange);
-      border-radius: 12px;
-      background: color-mix(in srgb, var(--orange) 9%, var(--panel));
+      border: var(--edge);
+      border-left: 6px solid var(--accent);
+      border-radius: var(--radius-lg);
+      background: var(--panel);
     }
     .visbox .vis {
       margin: 0;
@@ -817,7 +994,7 @@
       margin: 10px 0 0;
       font-size: 14px;
       color: var(--muted);
-      border-left: 3px solid var(--orange);
+      border-left: 4px solid var(--accent);
       padding-left: 10px;
     }
     .check4,
@@ -832,9 +1009,10 @@
     .nbq {
       margin: 10px 0 0;
       padding: 10px 12px;
-      border: 2px solid var(--orange);
-      border-radius: 10px;
-      background: color-mix(in srgb, var(--orange) 9%, var(--panel));
+      border: var(--edge);
+      border-left: 6px solid var(--accent);
+      border-radius: var(--radius-lg);
+      background: var(--panel);
     }
     .nbq .opts button.skip {
       border-color: transparent;
@@ -851,7 +1029,7 @@
       border: 2px solid var(--ink);
       background: var(--panel);
       color: var(--ink);
-      border-radius: 8px;
+      border-radius: var(--radius);
       padding: 6px 12px;
       font:
         700 15px Barlow,
@@ -889,8 +1067,8 @@
         500 16px Barlow,
         sans-serif;
       padding: 8px 10px;
-      border: 1.5px solid var(--line);
-      border-radius: 8px;
+      border: 2px solid var(--line);
+      border-radius: var(--radius);
       background: var(--panel);
       color: var(--ink);
       min-width: 0;
@@ -904,7 +1082,7 @@
       padding: 6px;
     }
     .mprow button:disabled {
-      opacity: 0.3;
+      opacity: 0.7;
       cursor: default;
     }
     .pass {
@@ -946,7 +1124,7 @@
       align-items: center;
       gap: 6px;
       background: var(--bg);
-      border-radius: 999px;
+      border-radius: var(--radius);
       padding: 5px 12px;
       font:
         600 14px Barlow,
@@ -1010,7 +1188,7 @@
       color: var(--muted);
     }
     .rank li:first-child .pos {
-      color: var(--orange);
+      color: var(--accent-ink);
     }
     .rank li i {
       width: 14px;
@@ -1039,7 +1217,7 @@
       color: var(--muted);
     }
     .stats .rank li:first-child .pos {
-      color: var(--orange);
+      color: var(--accent-ink);
     }
     .stats .rank small {
       color: var(--muted);
@@ -1052,13 +1230,14 @@
       font-weight: 600;
     }
     button:focus-visible,
-    label:focus-within {
-      outline: 3px solid var(--orange);
+    label:focus-within,
+    summary:focus-visible {
+      outline: 3px solid var(--accent-ink);
       outline-offset: 2px;
     }
     @media (prefers-reduced-motion: no-preference) {
       .pulse {
-        animation: pulse 1.4s ease-out 2;
+        animation: pulse 1.4s ease-out 1;
       }
       @keyframes pulse {
         0% {
@@ -1080,29 +1259,44 @@
       </h1>
       <div class="bar"></div>
 
-      <p class="hint" style="margin-bottom:8px">I'm playing today as</p>
-      <div class="roles" id="roles"></div>
-      <div class="rulesmode" role="radiogroup" aria-label="Rules">
-        <span class="vislabel">Rules</span>
-        <button type="button" role="radio" aria-checked="false" data-rm="official">Official</button
-        ><button type="button" role="radio" aria-checked="false" data-rm="drill">
-          Drill: libero stays on
+      <div id="setup">
+        <button
+          type="button"
+          class="setupbar"
+          id="setupBar"
+          aria-expanded="false"
+          aria-controls="setupPanel"
+        >
+          <span id="setupSum"></span><span class="chg" id="setupChg">Change</span>
         </button>
-        <small id="rmSub"></small>
+        <div id="setupPanel" hidden>
+          <p class="nudge" id="setupNudge" hidden>Pick your role to start.</p>
+          <p class="hint" style="margin-bottom:8px">I'm playing today as</p>
+          <div class="roles" id="roles"></div>
+          <div class="rulesmode" role="radiogroup" aria-label="Rules">
+            <span class="vislabel">Rules</span>
+            <button type="button" role="radio" aria-checked="false" data-rm="official">
+              Official
+            </button><button type="button" role="radio" aria-checked="false" data-rm="drill">
+              Drill
+            </button>
+            <small id="rmSub"></small>
+          </div>
+        </div>
       </div>
 
-      <div class="tabs" role="tablist">
+      <div class="tabs" role="tablist" id="tabs">
         <button type="button" class="tab" role="tab" id="tabLearn" aria-selected="true">
-          Learn
+          Learn<small>study the spots</small>
         </button>
         <button type="button" class="tab" role="tab" id="tabDrill" aria-selected="false">
-          Drill
+          Drill<small>quick quiz</small>
         </button>
         <button type="button" class="tab" role="tab" id="tabGame" aria-selected="false">
-          Match
+          Match<small>full rotations in real order</small>
         </button>
         <button type="button" class="tab" role="tab" id="tabSets" aria-selected="false">
-          Sets
+          Sets<small>set calls</small>
         </button>
       </div>
 
@@ -1113,60 +1307,72 @@
           <svg class="court" id="courtL" viewBox="-26 -34 352 262" aria-label="Court diagram"></svg>
           <div class="cue" id="cue"></div>
         </div>
+        <details class="card fold" id="howTo">
+          <summary>How to learn with this app</summary>
+          <div class="foldbody">
+            <ol class="learnsteps">
+              <li>
+                <b>Study once, then stop rereading.</b>
+                Pick your role and step through R1 (S1) to R6 (S2) here in Learn. For each rotation,
+                say the four checks out loud.
+              </li>
+              <li>
+                <b>Test yourself.</b>
+                Go to Drill with the setter shown. Guess first, then look at the answer. Mistakes
+                are part of how you learn.
+              </li>
+              <li>
+                <b>Play a Match in order, then mixed.</b>
+                When you score 80% or more, switch to mixed order and show nobody. Mixing the order
+                makes you think, which helps you remember.
+              </li>
+              <li>
+                <b>Little and often.</b>
+                Five minutes on three or four days a week works better than one long session. Start
+                each session with “Review weak spots” in Drill.
+              </li>
+              <li>
+                <b>Before training or a match,</b>
+                do a two-minute review of the role you will play. If you might play several roles,
+                practise each one.
+              </li>
+              <li>
+                <b>Finish on court.</b>
+                The app gets you ready; walking through the rotations with your team makes it stick.
+                Your coach and the KSV guide have the final word.
+              </li>
+            </ol>
+          </div>
+        </details>
         <div class="card" id="sheet"></div>
-        <div class="card">
-          <h2>Before every serve</h2>
-          <p class="hint" style="margin-bottom:6px">
-            Four quick checks, in this order. Use them in the app and on court.
-          </p>
-          <ol class="check4">
-            <li><b>Where is the setter?</b> That tells you the rotation.</li>
-            <li>
-              <b>Who is in front of or behind me, and who is beside me?</b>
-              That confirms your legal spot.
-            </li>
-            <li><b>Am I on court, or is the libero in?</b> Middles, check this every time.</li>
-            <li>
-              <b>What is my job after the pass?</b>
-              Receive, attack which lane, set, or cover.
-            </li>
-          </ol>
-        </div>
-        <div class="card">
-          <h2>How to learn with this app</h2>
-          <ol class="learnsteps">
-            <li>
-              <b>Study once, then stop rereading.</b>
-              Pick your role and step through R1 (S1) to R6 (S2) here in Learn. For each rotation,
-              say the four checks out loud.
-            </li>
-            <li>
-              <b>Test yourself.</b>
-              Go to Drill with the setter shown. Guess first, then look at the answer. Mistakes are
-              part of how you learn.
-            </li>
-            <li>
-              <b>Play a Match in order, then mixed.</b>
-              When you score 80% or more, switch to mixed order and show nobody. Mixing the order
-              makes you think, which helps you remember.
-            </li>
-            <li>
-              <b>Little and often.</b>
-              Five minutes on three or four days a week works better than one long session. Start
-              each session with “Review weak spots” in Drill.
-            </li>
-            <li>
-              <b>Before training or a match,</b>
-              do a two-minute review of the role you will play. If you might play several roles,
-              practise each one.
-            </li>
-            <li>
-              <b>Finish on court.</b>
-              The app gets you ready; walking through the rotations with your team makes it stick.
-              Your coach and the KSV guide have the final word.
-            </li>
-          </ol>
-        </div>
+        <details class="card fold" id="checks">
+          <summary>Before every serve</summary>
+          <div class="foldbody">
+            <p class="hint" style="margin-bottom:6px">
+              Four quick checks, in this order. Use them in the app and on court.
+            </p>
+            <ol class="check4">
+              <li><b>Where is the setter?</b> That tells you the rotation.</li>
+              <li>
+                <b>Who is in front of or behind me, and who is beside me?</b>
+                That confirms your legal spot.
+              </li>
+              <li><b>Am I on court, or is the libero in?</b> Middles, check this every time.</li>
+              <li>
+                <b>What is my job after the pass?</b>
+                Receive, attack which lane, set, or cover.
+              </li>
+            </ol>
+          </div>
+        </details>
+        <details class="card fold" id="thumbsBox">
+          <summary>Rules of thumb from the guide</summary>
+          <div class="foldbody"><ol class="thumbs" id="thumbs"></ol></div>
+        </details>
+        <details class="card fold" id="allRots">
+          <summary>See all rotations at once</summary>
+          <div class="foldbody"><div class="table" id="rotTable"></div></div>
+        </details>
       </section>
 
       <section id="drill" hidden>
@@ -1189,10 +1395,6 @@
               Everyone
             </button>
           </div>
-          <label class="check"
-            ><input type="checkbox" id="nbDrill">
-            Neighbour check after reception</label
-          >
           <svg
             class="court"
             id="courtD"
@@ -1207,9 +1409,20 @@
           <div class="fb" id="fb"></div>
           <div class="weak" id="weak"></div>
           <div class="row">
-            <button type="button" class="btn" id="reviewBtn" hidden>Review weak spots</button
-            ><button type="button" class="btn quiet" id="resetBtn">Reset my progress</button>
+            <button type="button" class="btn" id="reviewBtn" hidden>Review weak spots</button>
           </div>
+          <details class="fold inner" id="dOpts">
+            <summary>Drill options</summary>
+            <div class="foldbody">
+              <label class="check"
+                ><input type="checkbox" id="nbDrill">
+                Neighbour check (who stands next to you) in reception</label
+              >
+              <div class="row">
+                <button type="button" class="btn quiet" id="resetBtn">Reset my progress</button>
+              </div>
+            </div>
+          </details>
         </div>
       </section>
 
@@ -1234,30 +1447,9 @@
               answers in secret. When everyone has answered, all answers are shown together.
             </p>
           </div>
-          <p class="hint" style="margin:10px 0">
-            Play all six rotations as <b id="gRole"></b>. Each rotation runs in real match order:
-            rotate, receive, move after the pass, then serve. Your mistakes show you where you
-            should have been.
+          <p class="hint" style="margin:10px 0 0">
+            Play all six rotations as <b id="gRole"></b>, step by step in real match order.
           </p>
-          <fieldset class="steps">
-            <legend>Steps to play in each rotation</legend>
-            <label><input type="checkbox" id="gs-start" checked> Rotation</label>
-            <label><input type="checkbox" id="gs-rec" checked> Reception</label>
-            <label><input type="checkbox" id="gs-ar" checked> After reception</label>
-            <label><input type="checkbox" id="gs-serve" checked> Serve</label>
-          </fieldset>
-          <p class="hint" id="gStepsMsg"></p>
-          <fieldset class="steps one">
-            <legend>Rotation order</legend>
-            <label
-              ><input type="radio" name="gOrder" value="order">
-              In order: R1 (S1) → R6 (S2)</label
-            >
-            <label
-              ><input type="radio" name="gOrder" value="mixed">
-              Mixed, like R1, R3, R5, R2, R4, R6</label
-            >
-          </fieldset>
           <div class="visbox">
             <div class="vis " role="radiogroup" aria-label="Who to show on court" data-vis="game">
               <span class="vislabel">Show on court</span>
@@ -1269,15 +1461,36 @@
               </button>
             </div>
             <small id="gVisSub"></small>
+            <p class="tip" id="gTip"></p>
           </div>
-          <label class="check"
-            ><input type="checkbox" id="nbGame">
-            Neighbour check after reception (optional, +30 points)</label
-          >
-          <p class="tip">
-            Tip: start in order with the setter shown. When you score 80% or more, switch to mixed
-            order and show nobody.
-          </p>
+          <details class="fold inner" id="gOpts">
+            <summary>Match options <small id="gOptSum"></small></summary>
+            <div class="foldbody">
+              <fieldset class="steps">
+                <legend>Steps to play in each rotation</legend>
+                <label><input type="checkbox" id="gs-start" checked> Rotation</label>
+                <label><input type="checkbox" id="gs-rec" checked> Reception</label>
+                <label><input type="checkbox" id="gs-ar" checked> After reception</label>
+                <label><input type="checkbox" id="gs-serve" checked> Serve</label>
+              </fieldset>
+              <p class="hint" id="gStepsMsg"></p>
+              <fieldset class="steps one">
+                <legend>Rotation order</legend>
+                <label
+                  ><input type="radio" name="gOrder" value="order">
+                  In order: R1 (S1) → R6 (S2)</label
+                >
+                <label
+                  ><input type="radio" name="gOrder" value="mixed">
+                  Mixed, like R1, R3, R5, R2, R4, R6</label
+                >
+              </fieldset>
+              <label class="check"
+                ><input type="checkbox" id="nbGame">
+                Neighbour check (who stands next to you) in reception, +30 points</label
+              >
+            </div>
+          </details>
           <div class="row">
             <button type="button" class="btn primary" id="gStart">Start match</button>
           </div>
@@ -1475,7 +1688,7 @@
       const PHASES = [
         ["start", "Rotation"],
         ["rec", "Reception"],
-        ["ar", "After rec."],
+        ["ar", "After reception"],
         ["serve", "Serve"],
       ];
       const FULL = { start: "Rotation", rec: "Reception", ar: "After reception", serve: "Serve" };
@@ -1644,7 +1857,7 @@
         H = 200;
       const DEFS = `<defs>${["bad", "muted", "move", "good"].map((c) => `<marker id="m-${c}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="var(--${c})"/></marker>`).join("")}</defs>`;
       function courtBase() {
-        let s = `<rect x="0" y="0" width="${W}" height="${H}" rx="3" fill="var(--floor)" stroke="var(--floor-line)" stroke-width="2"/>`;
+        let s = `<rect x="0" y="0" width="${W}" height="${H}" rx="0" fill="var(--floor)" stroke="var(--floor-line)" stroke-width="3"/>`;
         s += `<line x1="0" y1="${H * AL}" x2="${W}" y2="${H * AL}" stroke="var(--floor-line)" stroke-width="1.5" stroke-dasharray="6 5"/>`;
         s += `<line x1="-14" y1="0" x2="${W + 14}" y2="0" stroke="var(--net)" stroke-width="6" stroke-linecap="round"/>`;
         s += `<text x="${W / 2}" y="-12" text-anchor="middle" font-size="12" font-weight="600" fill="var(--muted)" font-family="Barlow,sans-serif">net</text>`;
@@ -1662,10 +1875,10 @@
           fg = o.p === "S" ? "#16283D" : "#fff";
         let s = `<g opacity="${dim ? 0.4 : 1}">`;
         if (me)
-          s += `<circle cx="${X}" cy="${Y}" r="26" fill="none" stroke="var(--orange)" stroke-width="4"/><circle class="pulse" cx="${X}" cy="${Y}" r="14" fill="none" stroke="var(--orange)" stroke-width="3" opacity="0"/>`;
+          s += `<circle cx="${X}" cy="${Y}" r="26" fill="none" stroke="var(--accent)" stroke-width="4"/><circle class="pulse" cx="${X}" cy="${Y}" r="14" fill="none" stroke="var(--accent)" stroke-width="3" opacity="0"/>`;
         if (o.kind === "set" && !me)
           s += `<circle cx="${X}" cy="${Y}" r="20" fill="none" stroke="var(--good)" stroke-width="2.5"/>`;
-        s += `<rect x="${X - w / 2}" y="${Y - h / 2}" width="${w}" height="${h}" rx="6" fill="${COLORS[o.p]}" stroke="#fff" stroke-width="1.5"/>`;
+        s += `<rect x="${X - w / 2}" y="${Y - h / 2}" width="${w}" height="${h}" rx="2" fill="${COLORS[o.p]}" stroke="var(--panel)" stroke-width="2"/>`;
         return (
           s +
           `<text x="${X}" y="${Y + 4.5}" text-anchor="middle" font-size="13" font-weight="700" fill="${fg}" font-family="Barlow,sans-serif">${o.p}</text></g>`
@@ -1735,8 +1948,8 @@
           } catch (e) {}
         },
       };
-      let role = store.get("role", "MB1");
-      if (!ROLES.includes(role)) role = "MB1";
+      const firstVisit = !ROLES.includes(store.get("role", null));
+      let role = firstVisit ? "MB1" : store.get("role", "MB1");
       let ri = 0,
         phase = "rec",
         stats = store.get("stats2", {});
@@ -1753,6 +1966,8 @@
               role = b.dataset.r;
               store.set("role", role);
               renderRoles();
+              renderSetupSummary();
+              setSetupOpen(false);
               renderRefLabels();
               review = null;
               renderLearn();
@@ -1768,14 +1983,28 @@
             };
           });
       }
+      function renderSetupSummary() {
+        $("setupSum").innerHTML =
+          `Playing as: <b>${NAMES[role]}</b> · ${rulesMode === "official" ? "Official" : "Drill"} rules`;
+      }
+      function setSetupOpen(open) {
+        $("setupPanel").hidden = !open;
+        $("setupBar").setAttribute("aria-expanded", open);
+        $("setupChg").textContent = open ? "Done" : "Change";
+        if (!open) $("setupNudge").hidden = true;
+      }
+      $("setupBar").onclick = () => setSetupOpen($("setupPanel").hidden);
+      $("setupNudge").hidden = !firstVisit;
+      setSetupOpen(firstVisit);
       function setTab(t) {
         ["Learn", "Drill", "Game", "Sets"].forEach((n) => {
           const k = n.toLowerCase();
           $(`tab${n}`).setAttribute("aria-selected", t === k);
           $(k).hidden = t !== k;
         });
-        $("roles").style.display = t === "sets" ? "none" : "";
-        $("roles").previousElementSibling.style.display = t === "sets" ? "none" : "";
+        $("setup").hidden = t === "sets";
+        const tabsTop = $("tabs").getBoundingClientRect().top + window.scrollY - 8;
+        if (window.scrollY > tabsTop) window.scrollTo({ top: tabsTop });
         if (t === "drill" && !cur) newQuestion();
         if (t === "sets" && !sq) newSetQ();
       }
@@ -1948,9 +2177,10 @@
             `<li${t.roles.includes(role) ? ' class="mine"' : ""}><b>${t.t}</b>${t.roles.includes(role) ? ' <span class="tag">your rule</span>' : ""}<br>${t.d}</li>`,
         ).join("");
         $("sheet").innerHTML =
-          `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role].map((x) => `<li>${ruleText(x)}</li>`).join("")}</ul>
-  <div class="table"><table><thead><tr><th></th><th>Rotation</th><th>Reception</th><th>After reception</th><th>Serve</th></tr></thead><tbody>${rows}</tbody></table></div>
-  <h3 class="thumbh">Rules of thumb from the guide</h3><ol class="thumbs">${thumbs}</ol>`;
+          `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role].map((x) => `<li>${ruleText(x)}</li>`).join("")}</ul>`;
+        $("rotTable").innerHTML =
+          `<table><thead><tr><th></th><th>Rotation</th><th>Reception</th><th>After reception</th><th>Serve</th></tr></thead><tbody>${rows}</tbody></table>`;
+        $("thumbs").innerHTML = thumbs;
       }
 
       // ---------- Reference points & neighbours ----------
@@ -1988,6 +2218,8 @@
         visGame = store.get("visGame", "none");
       function gVisText() {
         const ref = role === "S" ? "the opposite" : "the setter";
+        $("gTip").textContent =
+          `Too hard? Show ${ref} as a reference. When you score 80% or more, pick mixed order and show nobody.`;
         $("gVisSub").textContent = {
           none: "Nobody: only the net and the court. Hardest, closest to a real match.",
           ref: `Only ${ref}: find ${ref}, then work out your own spot. The way coaches teach it.`,
@@ -2047,7 +2279,7 @@
         const a = pl.find((o) => o.p === me),
           b = pl.find((o) => o.p === partner);
         if (!a || !b) return "";
-        return `<line x1="${a.x * W}" y1="${a.y * H}" x2="${b.x * W}" y2="${b.y * H}" stroke="var(--orange)" stroke-width="4" stroke-dasharray="2 6" stroke-linecap="round"/>`;
+        return `<line x1="${a.x * W}" y1="${a.y * H}" x2="${b.x * W}" y2="${b.y * H}" stroke="var(--accent)" stroke-width="4" stroke-dasharray="2 6" stroke-linecap="round"/>`;
       }
       function nbHtml(nq, id) {
         return `<div class="nbq" id="${id}"><b>Neighbour check</b> <span class="hint">optional bonus: answer, or just press Continue</span><p style="margin:2px 0 0">${nq.q}</p><div class="opts">${nq.opts.map((p) => `<button type="button" data-p="${p}">${p}</button>`).join("")}</div></div>`;
@@ -2371,7 +2603,7 @@
             const x = (1 - t) ** 2 * p.sx + 2 * (1 - t) * t * p.cx + t * t * p.ex,
               y = (1 - t) ** 2 * SY + 2 * (1 - t) * t * p.cy + t * t * (SY + 10);
             const w = 40 + 19 * st[0].length;
-            s += `<g><rect x="${x - w / 2}" y="${y - 24}" width="${w}" height="46" rx="9" fill="var(--panel)" stroke="${FAMCOL[st[3]]}" stroke-width="4"/><text x="${x}" y="${y + 10}" text-anchor="middle" font-size="30" font-weight="800" fill="${FAMCOL[st[3]]}" font-family="Barlow Condensed,sans-serif">${st[0]}</text></g>`;
+            s += `<g><rect x="${x - w / 2}" y="${y - 24}" width="${w}" height="46" rx="4" fill="var(--panel)" stroke="${FAMCOL[st[3]]}" stroke-width="4"/><text x="${x}" y="${y + 10}" text-anchor="middle" font-size="30" font-weight="800" fill="${FAMCOL[st[3]]}" font-family="Barlow Condensed,sans-serif">${st[0]}</text></g>`;
           });
         const sx = PX(SETTER_X);
         s += `<circle cx="${sx}" cy="${SY}" r="24" fill="var(--s)" stroke="#fff" stroke-width="4"/><text x="${sx}" y="${SY + 9}" text-anchor="middle" font-size="26" font-weight="800" fill="#16283D" font-family="Barlow,sans-serif">S</text>`;
@@ -2451,7 +2683,7 @@
 
       // ---------- Match mode ----------
       const STEP_ORDER = ["start", "rec", "ar", "serve"];
-      const STEP_SHORT = { start: "Rotate", rec: "Receive", ar: "After pass", serve: "Serve" };
+      const STEP_SHORT = { start: "Rotate", rec: "Receive", ar: "After reception", serve: "Serve" };
       let G = null;
       const gSettings = store.get("gameSteps", { start: true, rec: true, ar: true, serve: true });
       STEP_ORDER.forEach((k) => {
@@ -2495,7 +2727,14 @@
         $("gStepsMsg").textContent = s.length
           ? `${s.length * 6} moments in this match.`
           : "Pick at least one step.";
+        if (!s.length) $("gOpts").open = true;
         gRenderSetup();
+      }
+      function gOptText() {
+        const n = gSteps().length * 6;
+        $("gOptSum").textContent = n
+          ? `${n} moments · ${gOrder() === "mixed" ? "mixed order" : "in order"}`
+          : "pick at least one step";
       }
       function gRenderSetup() {
         const mp = gPlayersMode() === "mp";
@@ -2504,6 +2743,7 @@
         if (mp) renderMp();
         const best = mp ? null : store.get("gameBest", {})[gKey()];
         $("gBest").textContent = best ? `Your best with these settings: ${best} points.` : "";
+        gOptText();
       }
       function gView(v) {
         ["gSetup", "gPass", "gReveal", "gPlay", "gEnd"].forEach((id) => {
@@ -2653,7 +2893,7 @@
         if (!G.answered && G.help >= 2 && me) {
           const jx = me.x + (G.jit ? G.jit[0] : 0),
             jy = me.y + (G.jit ? G.jit[1] : 0);
-          s += `<circle cx="${jx * W}" cy="${jy * H}" r="46" fill="var(--orange)" opacity=".16" stroke="var(--orange)" stroke-width="2" stroke-dasharray="5 4"/>`;
+          s += `<circle cx="${jx * W}" cy="${jy * H}" r="46" fill="var(--accent)" fill-opacity=".25" stroke="var(--accent-ink)" stroke-width="2" stroke-dasharray="5 4"/>`;
         }
         (G.answered ? pl.filter((o) => o.p !== G.role) : visible(visGame, pl, G.role)).forEach(
           (o) => {
@@ -2677,7 +2917,7 @@
           z = zoneOf(st.ri, G.role);
         if (level === 2) {
           if (!me) return "You are not on court at this moment.";
-          return `Look inside the orange area. ${describe(st.ri, st.phase, G.role).t}.`;
+          return `Look inside the highlighted area. ${describe(st.ri, st.phase, G.role).t}.`;
         }
         if (!me && G.role === "L")
           return "Who is in zone 1 when we serve? Remember: under the official rules the libero may never serve.";
@@ -3138,6 +3378,7 @@
           rulesMode === "official"
             ? "Official (FIVB) rules: the libero may not serve, so in R3 and R6 the middle in zone 1 serves."
             : "Drill rules: the libero stays on court all the time and also serves in R3 and R6. The printable schema uses the official rules.";
+        renderSetupSummary();
       }
       document.querySelectorAll(".rulesmode [data-rm]").forEach((b) => {
         b.onclick = () => {
@@ -3204,6 +3445,8 @@
       renderRefLabels();
       $("fb").innerHTML = HINT;
       renderRoles();
+      $("howTo").open = !store.get("howToSeen", false);
+      store.set("howToSeen", true);
       renderLearn();
       renderSets();
     })();

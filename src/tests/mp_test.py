@@ -71,6 +71,8 @@ with sync_playwright() as p:
     print("rematch pass visible:", pg.is_visible("#gPass"))
     # role change at top doesn't kill mp
     pg.click("#tabLearn")
+    if pg.is_hidden("#setupPanel"):
+        pg.click("#setupBar")
     pg.click('.role[data-r="S"]')
     pg.click("#tabGame")
     print("still in mp match:", pg.is_visible("#gPass"))
