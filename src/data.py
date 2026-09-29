@@ -11,9 +11,9 @@ ATTACK_LINE = 0.42
 
 # Base defence when we serve, taken before the serve (not in the guide): zone -> (x, y, kind).
 BASE_DEF: dict[int, tuple[float, float, str | None]] = {
-    4: (0.15, 0.05, "block"),
-    3: (0.50, 0.05, "block"),
-    2: (0.85, 0.05, "block"),
+    4: (0.15, 0.21, "zone"),
+    3: (0.50, 0.21, "zone"),
+    2: (0.85, 0.21, "zone"),
     5: (0.12, 0.66, None),
     6: (0.50, 0.86, None),
     1: (0.88, 0.66, None),

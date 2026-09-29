@@ -51,7 +51,7 @@ def setup_match(
     page.click(f'.vis[data-vis="game"] [data-v="{vis}"]')
     if page.get_attribute("#gOpts", "open") is None:
         page.click("#gOpts > summary")
-    for step in ("start", "rec", "ar", "serve"):
+    for step in ("start", "serve", "rec", "ar"):
         page.set_checked(f"#gs-{step}", step in steps)
     page.check('input[name="gOrder"][value="order"]')
     page.set_checked("#nbGame", neighbour)
@@ -170,7 +170,7 @@ def check_peek(browser: Browser) -> None:
     if shown != "Shown: Nobody (full points) · Peeked: 1 moment":
         fail(f"end screen after one peek reads {shown!r}")
     best = page.evaluate("JSON.parse(localStorage.getItem('ksv51:gameBest'))")
-    if list(best) != ["v3|OH1|rec"]:
+    if list(best) != ["v4|OH1|rec"]:
         fail(f"best score saved under {list(best)}, expected the starting settings only")
     page.close()
 
@@ -178,13 +178,13 @@ def check_peek(browser: Browser) -> None:
 def check_best_key(browser: Browser) -> None:
     """Bests from before the scoring change are ignored, and the neighbour check has its own best."""
     page = new_page(browser)
-    page.evaluate("""localStorage.setItem('ksv51:gameBest', JSON.stringify({"v2|OH1|rec": 9999, "v3|OH1|rec": 500}))""")
+    page.evaluate("""localStorage.setItem('ksv51:gameBest', JSON.stringify({"v3|OH1|rec": 9999, "v4|OH1|rec": 500}))""")
     page.reload()
     page.wait_for_timeout(300)
     setup_match(page, "OH1", ("rec",))
     text = page.inner_text("#gBest")
     if "500" not in text:
-        fail(f"best line reads {text!r}, expected the v3 best of 500")
+        fail(f"best line reads {text!r}, expected the v4 best of 500")
     page.check("#nbGame")
     text = page.inner_text("#gBest")
     if text:
@@ -194,7 +194,7 @@ def check_best_key(browser: Browser) -> None:
 
 
 def check_our_serve(browser: Browser) -> None:
-    """Our serve: a front-row player stands at the net before the serve; only the server gets an arrow."""
+    """Our serve: a front-row player stands mid-zone before the serve; only the server gets an arrow."""
     page = new_page(browser)
     setup_match(page, "OH1", ("serve",))
     page.click("#gStart")
@@ -206,18 +206,47 @@ def check_our_serve(browser: Browser) -> None:
     page.wait_for_selector("#gFb .pts")
     ring = page.locator('#courtG circle[r="26"]')
     y = float(ring.get_attribute("cy") or "nan") / 200
-    if not y < 0.1:
-        fail(f"R1 OH1 our serve spot at y {y:.2f}, expected at the net (y < 0.1)")
+    if not 0.15 < y < 0.3:
+        fail(f"R1 OH1 our serve spot at y {y:.2f}, expected mid-zone in the front row (y 0.21)")
     arrows = page.locator('#courtG line[marker-end="url(#m-move)"]').count()
     if arrows != 1:
         fail(f"R1 our serve draws {arrows} arrows, expected 1 (the server)")
     elif not float(page.locator('#courtG line[marker-end="url(#m-move)"]').get_attribute("y1") or "nan") > 200:
         fail("the server's arrow does not start behind the end line")
     feedback = page.inner_text("#gFb")
-    if "Block left" not in feedback or "before the serve" not in feedback:
-        fail(f"our serve feedback reads {feedback!r}, expected Block left, standing there before the serve")
+    for want in ("middle of your zone", "not confirmed", "before the serve"):
+        if want not in feedback:
+            fail(f"our serve feedback reads {feedback!r}, expected {want!r}")
+    if "at the net" in feedback:
+        fail(f"our serve feedback reads {feedback!r}, the front row should not be at the net")
     page.close()
-    print("our serve: front-row spot at the net, only the server's arrow", flush=True)
+    print("our serve: front-row spot mid-zone, only the server's arrow", flush=True)
+
+
+def check_match_order(browser: Browser) -> None:
+    """In order, one rotation runs Rotate, Our serve, Receive, After reception, with a story for each."""
+    page = new_page(browser)
+    setup_match(page, "OH1", ("start", "serve", "rec", "ar"), sets=False)
+    page.click("#gStart")
+    page.wait_for_selector("#gOff:enabled")
+    track = page.locator("#gTrack span").all_text_contents()
+    if track != ["Rotate", "Our serve", "Receive", "After reception"]:
+        fail(f"R1 steps run {track}, expected Rotate, Our serve, Receive, After reception")
+    stories = []
+    for _ in range(4):
+        page.wait_for_selector("#gOff:enabled")
+        stories.append(page.inner_text("#gStory"))
+        tap_at(page, 0.5, 0.5)
+        press_next(page)
+        press_next(page)
+    if "We serve in" not in stories[1]:
+        fail(f"our serve story reads {stories[1]!r}, expected 'We serve in'")
+    if "We lost the rally" not in stories[2]:
+        fail(f"reception story reads {stories[2]!r}, expected 'We lost the rally'")
+    if "We won the rally" not in page.inner_text("#gStory"):
+        fail(f"R2 rotation story reads {page.inner_text('#gStory')!r}, expected 'We won the rally'")
+    page.close()
+    print("match order: rotate, our serve, receive, after reception", flush=True)
 
 
 MATCH_SETS = [s for s in SETS if s[0] not in UNCONFIRMED_SETS]
@@ -542,6 +571,7 @@ def main() -> None:
         check_peek(browser)
         check_best_key(browser)
         check_our_serve(browser)
+        check_match_order(browser)
         check_set_calls(browser)
         check_tap_then_continue(browser)
         check_breakdown(browser)

@@ -329,8 +329,8 @@ a(
 )
 a(
     f'<text x="40" y="{ly2 + 56}" font-size="12" fill="#8A96A3">KSV | Receiving positions and movements · '
-    "“Our serve” = base defence (not in the guide). R3 and R6: the middle in zone 1 serves, because the libero may "
-    "not serve (FIVB).</text>"
+    "“Our serve” = base defence (not in the guide, not confirmed by the coach). R3 and R6: the middle in zone 1 "
+    "serves, because the libero may not serve (FIVB).</text>"
 )
 a(
     f'<text x="40" y="{ly2 + 74}" font-size="12" fill="#8A96A3">The serving team has no overlap rule (FIVB 7.4, '

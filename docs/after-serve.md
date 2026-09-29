@@ -9,11 +9,16 @@ after the serve: everyone except the server stands in their base spot before
 the serve. The server serves from behind the end line in zone 1, then runs to
 their base spot; the app and the schema draw only that arrow. Rows still count
 for play: back-row players may not block. Spots come from `BASE_DEF` in
-`src/data.py`, one per zone: the front row blocks at the net (4 left, 3 middle,
-2 right), the back row defends deep (5, 6, 1). A back-row setter defends zone 1, a front-row setter blocks right,
-the libero always takes zone 5. In R3 and R6 under official rules the middle
+`src/data.py`, one per zone: the front row stands in the middle of its zone
+(4, 3, 2 at y 0.21), not at the net, because the coach has not confirmed these
+spots; the back row defends deep (5, 6, 1). A back-row setter defends zone 1, a
+front-row setter takes zone 2, the libero always takes zone 5. In R3 and R6 under official rules the middle
 serves, stays on and runs to zone 6. The phase key, `meta` fields and step
 indices are unchanged, so the live database rules still accept it.
+
+In a match, one rotation R runs: Rotation (we won the rally and rotate into
+R), Our serve (we serve in R), Reception (we lost the rally, the opponent
+serves) and After reception (good pass), then we win and rotate into R+1.
 
 ## Stage 2 (planned): After dig
 
@@ -63,7 +68,7 @@ live on phones before any room uses `tr`.
 
 ## Open questions for the coach
 
-- Base defence spots: perimeter depth for 5 and 1 (y 0.66) and 6 (y 0.86), and
+- Base defence spots: the front row (now mid-zone, y 0.21), perimeter depth for 5 and 1 (y 0.66) and 6 (y 0.86), and
   whether zone 6 should play up instead.
 - When exactly the back-row setter releases: on the dig, or already when the
   opponent's attack is clearly not coming to zone 1.

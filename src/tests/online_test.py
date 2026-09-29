@@ -149,7 +149,7 @@ def open_online(page: Page, name: str, rec_only: bool = False, only: str = "") -
     keep = "rec" if rec_only else only
     if keep:
         page.click("#gOpts summary")
-        for step in ("start", "rec", "ar", "serve"):
+        for step in ("start", "serve", "rec", "ar"):
             page.set_checked(f"#gs-{step}", step == keep)
 
 
