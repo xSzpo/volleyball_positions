@@ -99,7 +99,7 @@ for z, (_x, y, kind) in BASE_DEF.items():
     front = z in (4, 3, 2)
     if front and not y < AL or not front and not y > AL:
         issues.append(f"base defence zone {z} at y {y} on the wrong side of the 3 m line")
-    if kind != ("block" if front else None):
+    if kind != ("zone" if front else None):
         issues.append(f"base defence zone {z} has kind {kind}")
 for name in UNCONFIRMED_SETS:
     if name not in [s[0] for s in SETS]:

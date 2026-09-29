@@ -1746,9 +1746,9 @@
               <fieldset class="steps">
                 <legend>Steps to play in each rotation</legend>
                 <label><input type="checkbox" id="gs-start" checked> Rotation</label>
+                <label><input type="checkbox" id="gs-serve" checked> Our serve</label>
                 <label><input type="checkbox" id="gs-rec" checked> Reception</label>
                 <label><input type="checkbox" id="gs-ar" checked> After reception</label>
-                <label><input type="checkbox" id="gs-serve" checked> Our serve</label>
               </fieldset>
               <p class="hint" id="gStepsMsg"></p>
               <fieldset class="steps one">
@@ -2173,14 +2173,10 @@
         }
         const sv = serveLineup(ri);
         const zz = ORDER[[...sv[0], ...sv[1]].indexOf(role)];
-        const block = me.kind === "block";
-        const t = block
-          ? `Block ${{ 4: "left", 3: "middle", 2: "right" }[zz]}`
-          : `Defend zone ${zz}`;
-        const job = block
-          ? role === "S"
-            ? "You are front row: stay at the net and block right."
-            : "Stay at the net, ready to block."
+        const front = me.kind === "zone";
+        const t = front ? `Front row, zone ${zz}` : `Defend zone ${zz}`;
+        const job = front
+          ? `Front row, zone ${zz}: stand in the middle of your zone, ready to block or attack. Positions when we serve are not confirmed by the coach.`
           : role === "S"
             ? "You are back row: defend zone 1, and go to the net only after we dig. You may not block."
             : `Deep, about ${zz === 6 ? 8 : 6} m from the net. Read the hitter. You are back row, so you may not block.`;
@@ -2459,25 +2455,25 @@
           "R1, R2, R3: you are back row. Stay out of the passing lanes, then run to the net.",
           "R4, R5, R6: you are front row and start at the net. In R4 you run along the net from zone 4.",
           "After reception: your setting spot is at the net, right of the middle.",
-          "When we serve: back row → defend zone 1 (run to the net only after we dig); front row → block right (zone 2).",
+          "When we serve: back row → defend zone 1 (run to the net only after we dig); front row → middle of zone 2.",
         ],
         OP: [
           "Front row in R1, R2, R3 (setter back row). R1: at the left sideline, attack left. R2: at the net in the middle. R3: at the right sideline.",
           "Back row in R4, R5, R6: stand deep behind the receivers, then go straight to zone 1 for the back-row attack.",
           "Except R1, you attack from the right.",
-          "When we serve: front row → block right (zone 2), back row → defend zone 1.",
+          "When we serve: front row → middle of zone 2, back row → defend zone 1.",
         ],
         MB1: [
           "Front row in R1, R2, R6: start at the net (R6 far left, R2 right of the setter), get to the 3 m line and attack in the middle.",
           "R3, R4, R5: you are off, the libero is in for you.",
           "@MB1SERVE",
-          "When we serve, front row: always zone 3, block the middle.",
+          "When we serve, front row: middle of zone 3.",
         ],
         MB2: [
           "Front row in R3, R4, R5: start at the net (R3 and R4 on the left, R5 on the right), get to the 3 m line and attack in the middle.",
           "R6, R1, R2: you are off, the libero is in for you.",
           "@MB2SERVE",
-          "When we serve, front row: always zone 3, block the middle.",
+          "When we serve, front row: middle of zone 3.",
         ],
         OH1: [
           "You receive in every rotation, with the libero and the other outside.",
@@ -2548,8 +2544,8 @@
             ? "When we serve: defend zone 5. Exception: in R3 and R6 the back-row middle is in zone 1 and must serve, because the libero may never serve (FIVB rules). You are off until your team loses the serve."
             : "When we serve: defend zone 5. Drill rules: in R3 and R6 you serve from zone 1 for the middle, then run to zone 5.",
           "@OHSERVE": off
-            ? "When we serve: front → block left (zone 4); back → defend zone 6 (zone 5 in R3 and R6, when a middle serves)."
-            : "When we serve: front → block left (zone 4); back → defend zone 6.",
+            ? "When we serve: front → middle of zone 4; back → defend zone 6 (zone 5 in R3 and R6, when a middle serves)."
+            : "When we serve: front → middle of zone 4; back → defend zone 6.",
         };
         return lab(T[x] || x);
       }
@@ -3166,7 +3162,7 @@
       }
 
       // ---------- Match mode ----------
-      const STEP_ORDER = ["start", "rec", "ar", "serve"];
+      const STEP_ORDER = ["start", "serve", "rec", "ar"];
       const STEP_SHORT = {
         start: "Rotate",
         rec: "Receive",
@@ -3207,7 +3203,7 @@
       }
       function gKey() {
         return (
-          "v3|" +
+          "v4|" +
           role +
           "|" +
           gSteps().join(",") +
@@ -3347,10 +3343,10 @@
             : "";
         if (G.replay)
           return {
-            start: `Where is your rotational spot in ${R}?`,
-            rec: `${R}: the opponent is about to serve. Take your reception spot.`,
-            ar: `${R}: good pass, the ball goes to the setter. Where do you go?`,
-            serve: `${R}: we serve. Where do you stand?`,
+            start: `We won the rally and rotate into ${R}. Where are you?`,
+            serve: `We serve in ${R}. Where do you stand?`,
+            rec: `${R}: we lost the rally. The opponent serves. Take your reception spot.`,
+            ar: `${R}: good pass! The ball goes to the setter. Where do you go now?`,
           }[st.phase];
         if (st.phase === "start")
           return G.mixed
@@ -3358,11 +3354,15 @@
             : G.i === 0
               ? `First rally of the set. You line up in ${R}. Where are you?`
               : `We won the rally. Rotate one zone clockwise. Where are you in ${R}?`;
+        if (st.phase === "serve")
+          return pre && !G.mixed
+            ? `${pre}We serve. Where do you stand?`
+            : `${pre}We serve in ${R}. Where do you stand?`;
         if (st.phase === "rec")
-          return `${pre}The opponent is about to serve. Take your reception spot.`;
-        if (st.phase === "ar")
-          return `${pre}Good pass! The ball goes to the setter. Where do you go now?`;
-        return `${pre}We win the point and serve in ${R}. Where do you stand when we serve?`;
+          return G.i === 0
+            ? `${pre}The opponent serves. Take your reception spot.`
+            : `${pre}We lost the rally. The opponent serves. Take your reception spot.`;
+        return `${pre}Good pass! The ball goes to the setter. Where do you go now?`;
       }
       function gShow() {
         const st = G.queue[G.i];
@@ -3489,7 +3489,7 @@
             ? "You don't attack: cover the hitter, then take your defensive spot. Remember rule 3."
             : "You are back row and don't attack now: cover the attack. The libero takes left back.";
         }
-        return `When we serve there is no overlap rule, so everyone except the server stands in base defence before the serve: the front row blocks at the net, the back row defends deep. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;
+        return `When we serve there is no overlap rule, so everyone except the server stands in base defence before the serve: the front row in the middle of its zones, the back row deep. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;
       }
       $("gHelp").onclick = () => {
         if (!G || G.answered || G.help >= 2) return;

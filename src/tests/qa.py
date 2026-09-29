@@ -270,7 +270,7 @@ with sync_playwright() as p:
             print("# MATCH: all step combos", flush=True)
             # MATCH: all step combos, orders, nb on/off
             pg.click("#tabGame")
-            steps = ["start", "rec", "ar", "serve"]
+            steps = ["start", "serve", "rec", "ar"]
             combos = [c for r in range(1, 5) for c in itertools.combinations(steps, r)]
             for ci, combo in enumerate(combos):
                 role = ROLES[ci % 7]
