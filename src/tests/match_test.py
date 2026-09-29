@@ -170,7 +170,7 @@ def check_peek(browser: Browser) -> None:
     if shown != "Shown: Nobody (full points) · Peeked: 1 moment":
         fail(f"end screen after one peek reads {shown!r}")
     best = page.evaluate("JSON.parse(localStorage.getItem('ksv51:gameBest'))")
-    if list(best) != ["v2|OH1|rec"]:
+    if list(best) != ["v3|OH1|rec"]:
         fail(f"best score saved under {list(best)}, expected the starting settings only")
     page.close()
 
@@ -178,19 +178,43 @@ def check_peek(browser: Browser) -> None:
 def check_best_key(browser: Browser) -> None:
     """Bests from before the scoring change are ignored, and the neighbour check has its own best."""
     page = new_page(browser)
-    page.evaluate("""localStorage.setItem('ksv51:gameBest', JSON.stringify({"OH1|rec": 9999, "v2|OH1|rec": 500}))""")
+    page.evaluate("""localStorage.setItem('ksv51:gameBest', JSON.stringify({"v2|OH1|rec": 9999, "v3|OH1|rec": 500}))""")
     page.reload()
     page.wait_for_timeout(300)
     setup_match(page, "OH1", ("rec",))
     text = page.inner_text("#gBest")
     if "500" not in text:
-        fail(f"best line reads {text!r}, expected the v2 best of 500")
+        fail(f"best line reads {text!r}, expected the v3 best of 500")
     page.check("#nbGame")
     text = page.inner_text("#gBest")
     if text:
         fail(f"best with the neighbour check on reads {text!r}, expected none yet")
     page.close()
     print("best score key: old bests ignored, neighbour check separate", flush=True)
+
+
+def check_after_serve(browser: Browser) -> None:
+    """After serve, a front-row player's answer is a block spot at the net, with a switch arrow from zone 4."""
+    page = new_page(browser)
+    setup_match(page, "OH1", ("serve",))
+    page.click("#gStart")
+    page.wait_for_selector("#gOff:enabled")
+    if "After serve" not in page.inner_text("#gStepName"):
+        fail(f"step name reads {page.inner_text('#gStepName')!r}, expected After serve")
+    tap_at(page, 0.5, 0.5)
+    press_next(page)
+    page.wait_for_selector("#gFb .pts")
+    ring = page.locator('#courtG circle[r="26"]')
+    y = float(ring.get_attribute("cy") or "nan") / 200
+    if not y < 0.1:
+        fail(f"R1 OH1 after serve spot at y {y:.2f}, expected at the net (y < 0.1)")
+    arrows = page.locator('#courtG line[marker-end="url(#m-move)"]').count()
+    if arrows != 4:
+        fail(f"R1 after serve draws {arrows} switch arrows, expected 4 (OH1, OP, L, OH2)")
+    if "Block left" not in page.inner_text("#gFb"):
+        fail(f"after serve feedback reads {page.inner_text('#gFb')!r}, expected Block left")
+    page.close()
+    print("after serve: front-row spot at the net, switch arrows shown", flush=True)
 
 
 MATCH_SETS = [s for s in SETS if s[0] not in UNCONFIRMED_SETS]
@@ -514,6 +538,7 @@ def main() -> None:
         check_vis_scoring(browser)
         check_peek(browser)
         check_best_key(browser)
+        check_after_serve(browser)
         check_set_calls(browser)
         check_tap_then_check(browser)
         check_breakdown(browser)

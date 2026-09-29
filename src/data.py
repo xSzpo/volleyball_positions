@@ -9,6 +9,16 @@ from typing import TypedDict
 
 ATTACK_LINE = 0.42
 
+# Base defence once our serve is in the air (not in the guide): zone -> (x, y, kind).
+BASE_DEF: dict[int, tuple[float, float, str | None]] = {
+    4: (0.15, 0.05, "block"),
+    3: (0.50, 0.05, "block"),
+    2: (0.85, 0.05, "block"),
+    5: (0.12, 0.66, None),
+    6: (0.50, 0.86, None),
+    1: (0.88, 0.66, None),
+}
+
 
 class Row(TypedDict):
     """One rotation: lineup, reception, after-reception and serve positions."""

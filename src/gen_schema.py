@@ -6,7 +6,7 @@ from pathlib import Path
 import cairosvg
 
 from data import ATTACK_LINE as AL
-from data import ROWS
+from data import BASE_DEF, ROWS
 from pdf import svg_to_pdf
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -163,7 +163,7 @@ for i, c in enumerate(CHECKS):
     )
     cx += 16 + len(c) * 7.6 + 34
 x0s = [LABEL_W + i * (CW + GAP) + 10 for i in range(4)]
-for i, hd in enumerate(["ROTATION", "RECEPTION", "MOVEMENT AFTER RECEPTION", "WHEN WE SERVE"]):
+for i, hd in enumerate(["ROTATION", "RECEPTION", "MOVEMENT AFTER RECEPTION", "AFTER SERVE: BASE DEFENCE"]):
     a(
         f'<text x="{x0s[i]}" y="{TOP - 14}" font-size="13" font-weight="bold" letter-spacing="1" '
         f'fill="#5A6878">{hd}</text>'
@@ -263,7 +263,18 @@ for r, row in enumerate(ROWS):
     a(f'<line x1="{sx}" y1="{y - 6}" x2="{sx}" y2="{y + CH + 6}" stroke="{NAVY}" stroke-width="2.5"/>')
     x0 = x0s[3]
     s = base(x0, y)
-    for p, px, py in grid(*row["serve"]):
+    start = {p: (px, py) for p, px, py in grid(row["front"], row["back"])}
+    start[row["liberofor"]] = start["L"]
+    spots = [(p, *BASE_DEF[z][:2]) for p, z in zip(row["serve"][0] + row["serve"][1], ORDER, strict=True)]
+    for p, px, py in spots:
+        rx, ry = start[p]
+        # shorten() trims 34 px, so shorter moves would draw no shaft or point backwards.
+        if math.hypot(X(x0, px) - X(x0, rx), Y(py) - Y(ry)) < 44:
+            continue
+        x1, y1, x2, y2 = shorten(X(x0, rx), Y(ry), X(x0, px), Y(py))
+        s += arrow(x1, y1, x2, y2, MOVE, "mm", width=1.8, op=0.8)
+        s += f'<circle cx="{X(x0, rx)}" cy="{Y(ry)}" r="3.5" fill="{MOVE}" opacity=".5"/>'
+    for p, px, py in spots:
         s += chip(p, X(x0, px), Y(py))
     a(s)
     if r < 5:
@@ -319,9 +330,9 @@ a(
     "line.</text>"
 )
 a(
-    f'<text x="40" y="{ly2 + 56}" font-size="12" fill="#8A96A3">KSV | Receiving positions and movements · “When we '
-    "serve” = base defence after switching (not in the guide). R3 and R6: the middle in zone 1 serves, because the "
-    "libero may not serve (FIVB).</text>"
+    f'<text x="40" y="{ly2 + 56}" font-size="12" fill="#8A96A3">KSV | Receiving positions and movements · '
+    "“After serve” = base defence once our serve is in the air (not in the guide). R3 and R6: the middle in zone 1 "
+    "serves, because the libero may not serve (FIVB).</text>"
 )
 a("</svg>")
 svg = "\n".join(o)
