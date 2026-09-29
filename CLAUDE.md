@@ -25,7 +25,9 @@ src/
   gen_sets.py         front row sets   ->  downloads/KSV_front_row_sets.{svg,png,pdf}
   pdf.py              SVG -> PDF with a fixed CreationDate, so rebuilds are byte-stable
   tests/audit.py      data consistency checks (rotation order, overlap legality, serve lineups)
-  tests/qa.py         Playwright end-to-end sweep (arg: m = phone/light, d = desktop/dark)
+  tests/qa.py         Playwright end-to-end sweep (arg: m = phone/light, d = desktop/dark; --quick, --seed N)
+  tests/fast.sh       iteration loop: build, audit, theme_test, qa.py m --quick (~45 s)
+  tests/full.sh       pre-PR run: everything, qa m and d in parallel; per-test pass/fail and time, logs in tests/_out/logs
   tests/mp_test.py    Playwright test of same-device multiplayer
   tests/match_test.py Playwright test of solo match scoring (Show on court multiplier) and the set call check
   tests/online_test.py Playwright test of online multiplayer (host + guest) on the Firebase emulators
@@ -53,8 +55,10 @@ python src/tests/mp_test.py
 python src/tests/online_test.py       # starts the auth + database emulators itself (Firebase CLI + Java); needs ports 9000 and 9099 free
 python src/tests/theme_test.py
 python src/tests/match_test.py        # solo scoring and set call check
-python src/tests/qa.py m && python src/tests/qa.py d   # slow (~3-4 min each); expect "TOTAL FAILURES: 0"
+python src/tests/qa.py m && python src/tests/qa.py d   # slow (~3.5 min each); expect "TOTAL FAILURES: 0"
 ```
+
+Iterate with `src/tests/fast.sh` plus the one Playwright test that covers the change. Run `src/tests/full.sh` (~4-5 min) once before opening the PR, and again after review fixes; it exits non-zero on any failure. A qa failure prints its seed; replay it with `--seed N`. Agents run any command longer than about 5 minutes (full.sh, a full qa sweep) in the background (`run_in_background`) and poll for it, rather than blocking, to stay clear of the 600 s watchdog.
 
 Order matters: the PDFs must exist before `build.py`, because it base64-embeds them into `index.html` (so the download buttons work on GitHub Pages with no extra files).
 
