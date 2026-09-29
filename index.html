@@ -1747,7 +1747,7 @@
                 <label><input type="checkbox" id="gs-start" checked> Rotation</label>
                 <label><input type="checkbox" id="gs-rec" checked> Reception</label>
                 <label><input type="checkbox" id="gs-ar" checked> After reception</label>
-                <label><input type="checkbox" id="gs-serve" checked> Serve</label>
+                <label><input type="checkbox" id="gs-serve" checked> After serve</label>
               </fieldset>
               <p class="hint" id="gStepsMsg"></p>
               <fieldset class="steps one">
@@ -1971,13 +1971,14 @@
 
     <script>
     (() => {
-      const DATA = {"rows": [{"name": "R1", "setter": 1, "liberofor": "MB2", "front": ["OP", "MB1", "OH1"], "back": ["OH2", "L", "S"], "rec": [["MB1", 0.5, 0.18], ["OP", 0.07, 0.42], ["OH2", 0.2, 0.73], ["L", 0.5, 0.73], ["OH1", 0.8, 0.73], ["S", 0.9, 0.84]], "ar": [["OP", 0.07, 0.44, "front"], ["MB1", 0.5, 0.44, "front"], ["OH1", 0.9, 0.44, "front"], ["L", 0.18, 0.66, null], ["OH2", 0.5, 0.86, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH1", "MB1", "OP"], ["L", "OH2", "S"]], "note": "Setter in 1: the opposite plays left, outside hitter 1 plays right."}, {"name": "R2", "setter": 6, "liberofor": "MB2", "front": ["OH2", "OP", "MB1"], "back": ["L", "S", "OH1"], "rec": [["OP", 0.58, 0.1], ["S", 0.58, 0.31], ["MB1", 0.76, 0.32], ["OH2", 0.17, 0.7], ["L", 0.5, 0.72], ["OH1", 0.84, 0.72]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB1", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.2, 0.72, null], ["OH1", 0.5, 0.87, null], ["S", 0.7, 0.11, "set"]], "serve": [["OH2", "MB1", "OP"], ["L", "OH1", "S"]], "note": "The front-row middle may start near the middle or farther right, but must be ready to attack."}, {"name": "R3", "setter": 5, "liberofor": "MB1", "front": ["MB2", "OH2", "OP"], "back": ["S", "OH1", "L"], "rec": [["MB2", 0.1, 0.31], ["S", 0.36, 0.47], ["OP", 0.93, 0.4], ["OH2", 0.25, 0.72], ["OH1", 0.52, 0.76], ["L", 0.82, 0.76]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB2", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.15, 0.74, null], ["OH1", 0.52, 0.76, null], ["S", 0.66, 0.09, "set"]], "serve": [["OH2", "MB2", "OP"], ["OH1", "MB1", "S"]], "note": "Front-row outside hitter 2 stands slightly ahead of back-row outside hitter 1."}, {"name": "R4", "setter": 4, "liberofor": "MB1", "front": ["S", "MB2", "OH2"], "back": ["OH1", "L", "OP"], "rec": [["S", 0.08, 0.09], ["MB2", 0.15, 0.24], ["OH2", 0.25, 0.73], ["OH1", 0.5, 0.73], ["L", 0.76, 0.73], ["OP", 0.92, 0.92]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB2", 0.48, 0.44, "front"], ["OP", 0.93, 0.7, "back"], ["L", 0.13, 0.77, null], ["OH1", 0.5, 0.73, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH2", "MB2", "S"], ["L", "OH1", "OP"]], "note": "Setter runs along the net from zone 4. Opposite goes straight to zone 1 for the back-row attack."}, {"name": "R5", "setter": 3, "liberofor": "MB1", "front": ["OH1", "S", "MB2"], "back": ["L", "OP", "OH2"], "rec": [["S", 0.58, 0.1], ["MB2", 0.81, 0.28], ["OH1", 0.18, 0.71], ["L", 0.5, 0.76], ["OH2", 0.81, 0.69], ["OP", 0.66, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB2", 0.5, 0.44, "front"], ["OP", 0.93, 0.69, "back"], ["L", 0.2, 0.72, null], ["OH2", 0.5, 0.87, null], ["S", 0.58, 0.1, "set"]], "serve": [["OH1", "MB2", "S"], ["L", "OH2", "OP"]], "note": "The libero stands slightly behind front-row outside hitter 1."}, {"name": "R6", "setter": 2, "liberofor": "MB2", "front": ["MB1", "OH1", "S"], "back": ["OP", "OH2", "L"], "rec": [["MB1", 0.07, 0.1], ["S", 0.75, 0.12], ["OH1", 0.23, 0.7], ["OH2", 0.52, 0.76], ["L", 0.83, 0.74], ["OP", 0.4, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB1", 0.48, 0.44, "front"], ["OP", 0.93, 0.78, "back"], ["L", 0.16, 0.74, null], ["OH2", 0.52, 0.76, null], ["S", 0.75, 0.12, "set"]], "serve": [["OH1", "MB1", "S"], ["OH2", "MB2", "OP"]], "note": "Front-row outside hitter 1 stands slightly ahead of back-row outside hitter 2."}], "attackLine": 0.42, "sets": [["1", 0.02, 1.0, "left", "High ball to the left antenna (zone 4). Most time for the attacker."], ["0", 0.02, 0.52, "left", "Lower, faster ball to the left antenna."], ["2", 0.18, 0.46, "left", "Medium-fast ball landing about 1.5 m inside the left antenna."], ["Shoot", 0.36, 0.3, "mid", "Flat, fast ball between zone 4 and the middle."], ["4", 0.56, 0.72, "mid", "Higher ball just in front of the setter. More time for the middle."], ["Po", 0.56, 0.3, "mid", "Low quick just in front of the setter."], ["Til", 0.75, 0.22, "right", "Short quick just behind the setter."], ["7", 0.97, 0.5, "right", "Lower, faster back set to the right antenna."], ["6", 0.97, 0.92, "right", "High back set to the right antenna (zone 2)."]], "setterX": 0.64, "unconfirmedSets": ["Po", "4"]};
+      const DATA = {"rows": [{"name": "R1", "setter": 1, "liberofor": "MB2", "front": ["OP", "MB1", "OH1"], "back": ["OH2", "L", "S"], "rec": [["MB1", 0.5, 0.18], ["OP", 0.07, 0.42], ["OH2", 0.2, 0.73], ["L", 0.5, 0.73], ["OH1", 0.8, 0.73], ["S", 0.9, 0.84]], "ar": [["OP", 0.07, 0.44, "front"], ["MB1", 0.5, 0.44, "front"], ["OH1", 0.9, 0.44, "front"], ["L", 0.18, 0.66, null], ["OH2", 0.5, 0.86, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH1", "MB1", "OP"], ["L", "OH2", "S"]], "note": "Setter in 1: the opposite plays left, outside hitter 1 plays right."}, {"name": "R2", "setter": 6, "liberofor": "MB2", "front": ["OH2", "OP", "MB1"], "back": ["L", "S", "OH1"], "rec": [["OP", 0.58, 0.1], ["S", 0.58, 0.31], ["MB1", 0.76, 0.32], ["OH2", 0.17, 0.7], ["L", 0.5, 0.72], ["OH1", 0.84, 0.72]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB1", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.2, 0.72, null], ["OH1", 0.5, 0.87, null], ["S", 0.7, 0.11, "set"]], "serve": [["OH2", "MB1", "OP"], ["L", "OH1", "S"]], "note": "The front-row middle may start near the middle or farther right, but must be ready to attack."}, {"name": "R3", "setter": 5, "liberofor": "MB1", "front": ["MB2", "OH2", "OP"], "back": ["S", "OH1", "L"], "rec": [["MB2", 0.1, 0.31], ["S", 0.36, 0.47], ["OP", 0.93, 0.4], ["OH2", 0.25, 0.72], ["OH1", 0.52, 0.76], ["L", 0.82, 0.76]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB2", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.15, 0.74, null], ["OH1", 0.52, 0.76, null], ["S", 0.66, 0.09, "set"]], "serve": [["OH2", "MB2", "OP"], ["OH1", "MB1", "S"]], "note": "Front-row outside hitter 2 stands slightly ahead of back-row outside hitter 1."}, {"name": "R4", "setter": 4, "liberofor": "MB1", "front": ["S", "MB2", "OH2"], "back": ["OH1", "L", "OP"], "rec": [["S", 0.08, 0.09], ["MB2", 0.15, 0.24], ["OH2", 0.25, 0.73], ["OH1", 0.5, 0.73], ["L", 0.76, 0.73], ["OP", 0.92, 0.92]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB2", 0.48, 0.44, "front"], ["OP", 0.93, 0.7, "back"], ["L", 0.13, 0.77, null], ["OH1", 0.5, 0.73, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH2", "MB2", "S"], ["L", "OH1", "OP"]], "note": "Setter runs along the net from zone 4. Opposite goes straight to zone 1 for the back-row attack."}, {"name": "R5", "setter": 3, "liberofor": "MB1", "front": ["OH1", "S", "MB2"], "back": ["L", "OP", "OH2"], "rec": [["S", 0.58, 0.1], ["MB2", 0.81, 0.28], ["OH1", 0.18, 0.71], ["L", 0.5, 0.76], ["OH2", 0.81, 0.69], ["OP", 0.66, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB2", 0.5, 0.44, "front"], ["OP", 0.93, 0.69, "back"], ["L", 0.2, 0.72, null], ["OH2", 0.5, 0.87, null], ["S", 0.58, 0.1, "set"]], "serve": [["OH1", "MB2", "S"], ["L", "OH2", "OP"]], "note": "The libero stands slightly behind front-row outside hitter 1."}, {"name": "R6", "setter": 2, "liberofor": "MB2", "front": ["MB1", "OH1", "S"], "back": ["OP", "OH2", "L"], "rec": [["MB1", 0.07, 0.1], ["S", 0.75, 0.12], ["OH1", 0.23, 0.7], ["OH2", 0.52, 0.76], ["L", 0.83, 0.74], ["OP", 0.4, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB1", 0.48, 0.44, "front"], ["OP", 0.93, 0.78, "back"], ["L", 0.16, 0.74, null], ["OH2", 0.52, 0.76, null], ["S", 0.75, 0.12, "set"]], "serve": [["OH1", "MB1", "S"], ["OH2", "MB2", "OP"]], "note": "Front-row outside hitter 1 stands slightly ahead of back-row outside hitter 2."}], "attackLine": 0.42, "baseDef": {"4": [0.15, 0.05, "block"], "3": [0.5, 0.05, "block"], "2": [0.85, 0.05, "block"], "5": [0.12, 0.66, null], "6": [0.5, 0.86, null], "1": [0.88, 0.66, null]}, "sets": [["1", 0.02, 1.0, "left", "High ball to the left antenna (zone 4). Most time for the attacker."], ["0", 0.02, 0.52, "left", "Lower, faster ball to the left antenna."], ["2", 0.18, 0.46, "left", "Medium-fast ball landing about 1.5 m inside the left antenna."], ["Shoot", 0.36, 0.3, "mid", "Flat, fast ball between zone 4 and the middle."], ["4", 0.56, 0.72, "mid", "Higher ball just in front of the setter. More time for the middle."], ["Po", 0.56, 0.3, "mid", "Low quick just in front of the setter."], ["Til", 0.75, 0.22, "right", "Short quick just behind the setter."], ["7", 0.97, 0.5, "right", "Lower, faster back set to the right antenna."], ["6", 0.97, 0.92, "right", "High back set to the right antenna (zone 2)."]], "setterX": 0.64, "unconfirmedSets": ["Po", "4"]};
       const ROWS = DATA.rows.map((r) => ({
           ...r,
           short: r.name,
           name: `${r.name} (S${r.setter})`,
         })),
         AL = DATA.attackLine,
+        BASE_DEF = DATA.baseDef,
         SETS = DATA.sets,
         SETTER_X = DATA.setterX,
         UNCONFIRMED = DATA.unconfirmedSets,
@@ -2010,9 +2011,14 @@
         ["start", "Rotation"],
         ["rec", "Reception"],
         ["ar", "After reception"],
-        ["serve", "Serve"],
+        ["serve", "After serve"],
       ];
-      const FULL = { start: "Rotation", rec: "Reception", ar: "After reception", serve: "Serve" };
+      const FULL = {
+        start: "Rotation",
+        rec: "Reception",
+        ar: "After reception",
+        serve: "After serve",
+      };
       const ZONES = { 4: [0, 0], 3: [1, 0], 2: [2, 0], 5: [0, 1], 6: [1, 1], 1: [2, 1] };
       const ORDER = [4, 3, 2, 5, 6, 1];
       const XS = [0.17, 0.5, 0.83],
@@ -2030,7 +2036,10 @@
         if (phase === "rec") return r.rec.map(([p, x, y]) => ({ p, x, y }));
         if (phase === "serve") {
           const sv = serveLineup(ri);
-          return grid(sv[0], sv[1]);
+          return [...sv[0], ...sv[1]].map((p, i) => {
+            const [x, y, kind] = BASE_DEF[ORDER[i]];
+            return { p, x, y, kind };
+          });
         }
         return r.ar.map(([p, x, y, k]) => ({ p, x, y, kind: k }));
       }
@@ -2156,21 +2165,25 @@
             d: "Cover the attack, then defend from here.",
           };
         }
-        const zz = { 0: { 0: 4, 1: 3, 2: 2 }, 1: { 0: 5, 1: 6, 2: 1 } }[me.y < AL ? 0 : 1][
-          XS.indexOf(me.x)
-        ];
+        const sv = serveLineup(ri);
+        const zz = ORDER[[...sv[0], ...sv[1]].indexOf(role)];
+        const t =
+          me.kind === "block"
+            ? `Block ${{ 4: "left", 3: "middle", 2: "right" }[zz]}`
+            : `Defend zone ${zz}`;
         let d =
-          zoneOf(ri, role) === 1
-            ? zz === 1
-              ? "You serve, then defend in zone 1."
-              : `You serve from zone 1, then run to zone ${zz}.`
-            : "Switch to your spot right after the serve.";
+          me.kind === "block"
+            ? "Stay at the net, ready to block."
+            : role === "S"
+              ? "Defend zone 1 first; run to the net only after we dig."
+              : `Deep, about ${zz === 6 ? 8 : 6} m from the net. Read the hitter.`;
+        if (zoneOf(ri, role) === 1) d = `You serve, then ${d[0].toLowerCase()}${d.slice(1)}`;
         if (rulesMode === "official" && MID_SERVER[ri] === role)
           d =
-            "You are in zone 1, so you serve. The libero may not serve under the official rules, so you stay on court and defend zone 6. If we win the rally, you serve again. When we lose the serve, the libero comes back in for you.";
+            "You are in zone 1, so you serve. The libero may not serve under the official rules, so you stay on court and defend zone 6, deep. If we win the rally, you serve again. When we lose the serve, the libero comes back in for you.";
         if (rulesMode === "drill" && role === "L" && MID_SERVER[ri])
-          d = `Drill rules: you stay on and serve for ${MID_SERVER[ri]} from zone 1, then run to zone 5. Under the official rules the libero may not serve.`;
-        return { t: `Switch to zone ${zz}`, d };
+          d = `Drill rules: you stay on and serve for ${MID_SERVER[ri]} from zone 1, then run to zone 5, deep. Under the official rules the libero may not serve.`;
+        return { t, d };
       }
 
       // ---------- court drawing ----------
@@ -2237,6 +2250,26 @@
             w: 2.4,
             op: mine ? 0.95 : 0.35,
           });
+        });
+        return s;
+      }
+      function serveLayer(ri, pl, role) {
+        const r = ROWS[ri];
+        const start = (p) => {
+          const z = zoneOf(ri, p) || (p === r.liberofor ? zoneOf(ri, "L") : null);
+          if (!z) return null;
+          const [c, row] = ZONES[z];
+          return [XS[c], row ? BY : FY];
+        };
+        let s = "";
+        pl.forEach((o) => {
+          const f = start(o.p);
+          // shorten() trims 32 px, so shorter moves would draw no shaft or point backwards.
+          if (!f || Math.hypot((f[0] - o.x) * W, (f[1] - o.y) * H) < 40) return;
+          const mine = o.p === role;
+          const [a, b, c, d] = shorten(f[0] * W, f[1] * H, o.x * W, o.y * H);
+          s += `<circle cx="${f[0] * W}" cy="${f[1] * H}" r="3.5" fill="var(--move)" opacity="${mine ? 0.8 : 0.35}"/>`;
+          s += line(a, b, c, d, "move", { w: mine ? 2.6 : 1.6, op: mine ? 0.95 : 0.4 });
         });
         return s;
       }
@@ -2388,6 +2421,7 @@
         let s = DEFS + courtBase();
         if (phase === "start") s += rotArrows();
         if (phase === "ar") s += arLayer(ri, pl, role);
+        if (phase === "serve") s += serveLayer(ri, pl, role);
         pl.filter((o) => o.p !== role).forEach((o) => {
           s += chip(o, { dim: true });
         });
@@ -2401,7 +2435,7 @@
           phase === "rec" || phase === "ar"
             ? `<p class="guide">Guide: ${ROWS[ri].note}</p>`
             : phase === "serve"
-              ? `<p class="guide">Not in the guide: this is our base defence after switching.</p>`
+              ? `<p class="guide">Not in the guide: this is our base defence once our serve is in the air.</p>`
               : "";
         $("cue").innerHTML =
           `<b>${ROWS[ri].name} · ${FULL[phase]}: ${d.t}</b><p>${d.d}</p>${guide}`;
@@ -2423,25 +2457,25 @@
           "R1, R2, R3: you are back row. Stay out of the passing lanes, then run to the net.",
           "R4, R5, R6: you are front row and start at the net. In R4 you run along the net from zone 4.",
           "After reception: your setting spot is at the net, right of the middle.",
-          "Serving: back row → zone 1, front row → zone 2.",
+          "After serve: back row → defend zone 1 (run to the net only after we dig); front row → block right (zone 2).",
         ],
         OP: [
           "Front row in R1, R2, R3 (setter back row). R1: at the left sideline, attack left. R2: at the net in the middle. R3: at the right sideline.",
           "Back row in R4, R5, R6: stand deep behind the receivers, then go straight to zone 1 for the back-row attack.",
           "Except R1, you attack from the right.",
-          "Serving: front row → zone 2, back row → zone 1.",
+          "After serve: front row → block right (zone 2), back row → defend zone 1.",
         ],
         MB1: [
           "Front row in R1, R2, R6: start at the net (R6 far left, R2 right of the setter), get to the 3 m line and attack in the middle.",
           "R3, R4, R5: you are off, the libero is in for you.",
           "@MB1SERVE",
-          "Serving while front row: always zone 3, you block the middle.",
+          "After serve, front row: always zone 3, block the middle.",
         ],
         MB2: [
           "Front row in R3, R4, R5: start at the net (R3 and R4 on the left, R5 on the right), get to the 3 m line and attack in the middle.",
           "R6, R1, R2: you are off, the libero is in for you.",
           "@MB2SERVE",
-          "Serving while front row: always zone 3, you block the middle.",
+          "After serve, front row: always zone 3, block the middle.",
         ],
         OH1: [
           "You receive in every rotation, with the libero and the other outside.",
@@ -2504,11 +2538,11 @@
             ? "Exception: in R6 you are in zone 1, so you serve. The libero may not serve, so you stay on in zone 6 until your team loses the serve."
             : "Drill rules: in R6 the libero serves for you, so you are off. (Official rules: you serve.)",
           "@LSERVE": off
-            ? "When we serve: zone 5. Exception: in R3 and R6 the back-row middle is in zone 1 and must serve, because the libero may never serve (FIVB rules). You are off until your team loses the serve."
-            : "When we serve: zone 5. Drill rules: in R3 and R6 you serve from zone 1 for the middle, then run to zone 5.",
+            ? "After serve: defend zone 5. Exception: in R3 and R6 the back-row middle is in zone 1 and must serve, because the libero may never serve (FIVB rules). You are off until your team loses the serve."
+            : "After serve: defend zone 5. Drill rules: in R3 and R6 you serve from zone 1 for the middle, then run to zone 5.",
           "@OHSERVE": off
-            ? "Serving: front → zone 4; back → zone 6 (zone 5 in R3 and R6, when a middle serves)."
-            : "Serving: front → zone 4; back → zone 6.",
+            ? "After serve: front → block left (zone 4); back → defend zone 6 (zone 5 in R3 and R6, when a middle serves)."
+            : "After serve: front → block left (zone 4); back → defend zone 6.",
         };
         return lab(T[x] || x);
       }
@@ -2524,7 +2558,7 @@
         $("sheet").innerHTML =
           `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role].map((x) => `<li>${ruleText(x)}</li>`).join("")}</ul>`;
         $("rotTable").innerHTML =
-          `<table><thead><tr><th></th><th>Rotation</th><th>Reception</th><th>After reception</th><th>Serve</th></tr></thead><tbody>${rows}</tbody></table>`;
+          `<table><thead><tr><th></th><th>Rotation</th><th>Reception</th><th>After reception</th><th>After serve</th></tr></thead><tbody>${rows}</tbody></table>`;
         $("thumbs").innerHTML = thumbs;
       }
 
@@ -2761,7 +2795,7 @@
         $("dq").textContent =
           `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${ROWS[cur.ri].name} · ${FULL[cur.phase]}`;
         $("dsub").textContent =
-          `${cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? "Where do you go after the pass?" : "Where do you stand?"}`;
+          `${cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? "Where do you go after the pass?" : cur.phase === "serve" ? "Our serve is in the air. Where do you defend?" : "Where do you stand?"}`;
         $("fb").className = "fb";
         $("fb").innerHTML = HINT;
         drawDrill();
@@ -2772,6 +2806,7 @@
         let s = DEFS + courtBase();
         if (answered && cur.phase === "start") s += rotArrows();
         if (answered && cur.phase === "ar") s += arLayer(cur.ri, pl, cur.role);
+        if (answered && cur.phase === "serve") s += serveLayer(cur.ri, pl, cur.role);
         (answered ? pl.filter((o) => o.p !== cur.role) : visible(visDrill, pl, cur.role)).forEach(
           (o) => {
             s += chip(o, { dim: answered || visDrill === "all" });
@@ -3125,7 +3160,12 @@
 
       // ---------- Match mode ----------
       const STEP_ORDER = ["start", "rec", "ar", "serve"];
-      const STEP_SHORT = { start: "Rotate", rec: "Receive", ar: "After reception", serve: "Serve" };
+      const STEP_SHORT = {
+        start: "Rotate",
+        rec: "Receive",
+        ar: "After reception",
+        serve: "After serve",
+      };
       let G = null;
       const gSettings = store.get("gameSteps", { start: true, rec: true, ar: true, serve: true });
       STEP_ORDER.forEach((k) => {
@@ -3160,7 +3200,7 @@
       }
       function gKey() {
         return (
-          "v2|" +
+          "v3|" +
           role +
           "|" +
           gSteps().join(",") +
@@ -3303,7 +3343,7 @@
             start: `Where is your rotational spot in ${R}?`,
             rec: `${R}: the opponent is about to serve. Take your reception spot.`,
             ar: `${R}: good pass, the ball goes to the setter. Where do you go?`,
-            serve: `${R}: we serve. Where do you switch to after the serve?`,
+            serve: `${R}: our serve is in the air. Where is your base defence spot?`,
           }[st.phase];
         if (st.phase === "start")
           return G.mixed
@@ -3315,7 +3355,7 @@
           return `${pre}The opponent is about to serve. Take your reception spot.`;
         if (st.phase === "ar")
           return `${pre}Good pass! The ball goes to the setter. Where do you go now?`;
-        return `${pre}We win the point and serve in ${R}. Where do you switch to after the serve?`;
+        return `${pre}We win the point and serve in ${R}. The serve is in the air: where is your base defence spot?`;
       }
       function gShow() {
         const st = G.queue[G.i];
@@ -3375,6 +3415,7 @@
         let s = DEFS + courtBase();
         if (shown && st.phase === "start") s += rotArrows();
         if (shown && st.phase === "ar") s += arLayer(st.ri, pl, G.role);
+        if (shown && st.phase === "serve") s += serveLayer(st.ri, pl, G.role);
         if (!G.answered && G.help >= 2 && me) {
           const jx = me.x + (G.jit ? G.jit[0] : 0),
             jy = me.y + (G.jit ? G.jit[1] : 0);
@@ -3441,7 +3482,7 @@
             ? "You don't attack: cover the hitter, then take your defensive spot. Remember rule 3."
             : "You are back row and don't attack now: cover the attack. The libero takes left back.";
         }
-        return `After the serve everyone switches to their specialist spot. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;
+        return `Once our serve is in the air, everyone switches to base defence: the front row blocks at the net, the back row defends deep. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;
       }
       $("gHelp").onclick = () => {
         if (!G || G.answered || G.help >= 2) return;
@@ -3942,6 +3983,7 @@
           pl = players(st.ri, st.phase);
         let s = DEFS + courtBase();
         if (st.phase === "start") s += rotArrows();
+        if (st.phase === "serve") s += serveLayer(st.ri, pl, null);
         const roles = [...new Set(ps.map((p) => p.role))];
         pl.filter((o) => !roles.includes(o.p)).forEach((o) => {
           s += chip(o, { dim: true });

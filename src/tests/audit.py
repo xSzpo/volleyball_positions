@@ -1,7 +1,7 @@
 """Check the rotation data for consistency.
 
-Covers rotation order, overlap legality of every reception shape and the
-serve lineups. Prints "DATA AUDIT: no issues" on success.
+Covers rotation order, overlap legality of every reception shape, the
+serve lineups and the base defence spots. Prints "DATA AUDIT: no issues" on success.
 """
 
 import sys
@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from data import ATTACK_LINE as AL  # noqa: E402
-from data import ROWS, SETS, UNCONFIRMED_SETS, Row  # noqa: E402
+from data import BASE_DEF, ROWS, SETS, UNCONFIRMED_SETS, Row  # noqa: E402
 
 ORDER = [4, 3, 2, 5, 6, 1]
 issues: list[str] = []
@@ -88,6 +88,19 @@ for i in range(6):
             issues.append(f"{r['name']} serve: {p} at {z}, expected {exp}")
     if "S" in sb and sb[2] != "S" or "OP" in sb and sb[2] != "OP":
         issues.append(f"{r['name']} serve: S/OP not in zone 1")
+    base = dict(zip([4, 3, 2, 5, 6, 1], sf + sb, strict=True))
+    if "L" in base.values() and base[5] != "L":
+        issues.append(f"{r['name']} serve: libero not in zone 5")
+    if base[1 if r["setter"] in (1, 6, 5) else 2] != "S":
+        issues.append(f"{r['name']} serve: setter in the wrong base zone")
+if set(BASE_DEF) != set(ORDER):
+    issues.append(f"base defence zones {sorted(BASE_DEF)} != {sorted(ORDER)}")
+for z, (_x, y, kind) in BASE_DEF.items():
+    front = z in (4, 3, 2)
+    if front and not y < AL or not front and not y > AL:
+        issues.append(f"base defence zone {z} at y {y} on the wrong side of the 3 m line")
+    if kind != ("block" if front else None):
+        issues.append(f"base defence zone {z} has kind {kind}")
 for name in UNCONFIRMED_SETS:
     if name not in [s[0] for s in SETS]:
         issues.append(f"unconfirmed set {name} is not in SETS")

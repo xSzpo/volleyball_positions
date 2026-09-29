@@ -8,7 +8,7 @@ import base64
 import json
 from pathlib import Path
 
-from data import ATTACK_LINE, ROWS, SETS, SETTER_X, UNCONFIRMED_SETS
+from data import ATTACK_LINE, BASE_DEF, ROWS, SETS, SETTER_X, UNCONFIRMED_SETS
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "downloads"
@@ -30,6 +30,7 @@ rows = [
 data = dict(
     rows=rows,
     attackLine=ATTACK_LINE,
+    baseDef={z: list(v) for z, v in BASE_DEF.items()},
     sets=[list(s) for s in SETS],
     setterX=SETTER_X,
     unconfirmedSets=UNCONFIRMED_SETS,
