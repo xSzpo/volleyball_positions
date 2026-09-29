@@ -1593,8 +1593,8 @@
               <li><b>Where is the setter?</b> That tells you the rotation.</li>
               <li>
                 <b>Who is in front of or behind me, and who is beside me?</b>
-                When they serve, that confirms your legal spot. When we serve, there is no overlap
-                rule: take your defence spot.
+                When we serve, there is no overlap rule: take your defence spot. When they serve,
+                that confirms your legal spot.
               </li>
               <li><b>Am I on court, or is the libero in?</b> Middles, check this every time.</li>
               <li>
@@ -2010,15 +2010,15 @@
       const ROLES = ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"];
       const PHASES = [
         ["start", "Rotation"],
+        ["serve", "Our serve"],
         ["rec", "Reception"],
         ["ar", "After reception"],
-        ["serve", "Our serve"],
       ];
       const FULL = {
         start: "Rotation",
+        serve: "Our serve",
         rec: "Reception",
         ar: "After reception",
-        serve: "Our serve",
       };
       const ZONES = { 4: [0, 0], 3: [1, 0], 2: [2, 0], 5: [0, 1], 6: [1, 1], 1: [2, 1] };
       const ORDER = [4, 3, 2, 5, 6, 1];
@@ -2454,14 +2454,14 @@
         S: [
           "R1, R2, R3: you are back row. Stay out of the passing lanes, then run to the net.",
           "R4, R5, R6: you are front row and start at the net. In R4 you run along the net from zone 4.",
-          "After reception: your setting spot is at the net, right of the middle.",
           "When we serve: back row → defend zone 1 (run to the net only after we dig); front row → middle of zone 2.",
+          "After reception: your setting spot is at the net, right of the middle.",
         ],
         OP: [
           "Front row in R1, R2, R3 (setter back row). R1: at the left sideline, attack left. R2: at the net in the middle. R3: at the right sideline.",
+          "When we serve: front row → middle of zone 2, back row → defend zone 1.",
           "Back row in R4, R5, R6: stand deep behind the receivers, then go straight to zone 1 for the back-row attack.",
           "Except R1, you attack from the right.",
-          "When we serve: front row → middle of zone 2, back row → defend zone 1.",
         ],
         MB1: [
           "Front row in R1, R2, R6: start at the net (R6 far left, R2 right of the setter), get to the 3 m line and attack in the middle.",
@@ -2476,25 +2476,30 @@
           "When we serve, front row: middle of zone 3.",
         ],
         OH1: [
-          "You receive in every rotation, with the libero and the other outside.",
           "Front row in R1, R5, R6: attack left (zone 4). R1 is the exception: the setter is in 1, you receive on the right and attack right.",
-          "Back row in R2, R3, R4: after reception cover middle back (zone 6); the libero covers left back.",
           "@OHSERVE",
+          "You receive in every rotation, with the libero and the other outside.",
+          "Back row in R2, R3, R4: after reception cover middle back (zone 6); the libero covers left back.",
         ],
         L: [
           "You replace the back-row middle: MB2 in R1, R2 and R6, MB1 in R3, R4 and R5. You are never in the front row.",
+          "@LSERVE",
           "You receive in every rotation: in the middle of the line in R1, R2 and R5, on the right in R3, R4 and R6.",
           "After reception: cover the hitter, then move to left back (zone 5).",
-          "@LSERVE",
         ],
         OH2: [
-          "You receive in every rotation, with the libero and the other outside.",
           "Front row in R2, R3, R4: attack left (zone 4).",
-          "Back row in R1, R5, R6: after reception cover middle back (zone 6); the libero covers left back.",
           "@OHSERVE",
+          "You receive in every rotation, with the libero and the other outside.",
+          "Back row in R1, R5, R6: after reception cover middle back (zone 6); the libero covers left back.",
         ],
       };
       const THUMB = [
+        {
+          t: "When we serve: no overlap rule",
+          roles: ["OH1", "OH2", "MB1", "MB2", "OP", "S", "L"],
+          d: "Stand in your defence spot (rows still count for blocking and attacking). Not in the guide: FIVB rule 7.4, since 2025.",
+        },
         {
           t: "Three players receive",
           roles: ["OH1", "OH2", "MB1", "MB2", "OP", "S", "L"],
@@ -2514,11 +2519,6 @@
           t: "The opposite moves directly to position 1",
           roles: ["OP"],
           d: "In R4 to R6 the opposite goes straight to zone 1 after the pass for the back-row attack. Take off behind the 3 m line.",
-        },
-        {
-          t: "When we serve: no overlap rule",
-          roles: ["OH1", "OH2", "MB1", "MB2", "OP", "S", "L"],
-          d: "Stand in your defence spot (rows still count for blocking and attacking). Not in the guide: FIVB rule 7.4, since 2025.",
         },
       ];
       const RLAB = ROWS.map((r) => r.name);
@@ -2552,7 +2552,7 @@
       function renderSheet() {
         const rows = ROWS.map((r, i) => {
           const z = zoneOf(i, role);
-          return `<tr><td class="r">${r.name}</td><td>${z ? `Zone ${z}` : `Off (libero in zone ${zoneOf(i, "L")})`}</td>${["rec", "ar", "serve"].map((ph) => `<td>${describe(i, ph, role).t}</td>`).join("")}</tr>`;
+          return `<tr><td class="r">${r.name}</td><td>${z ? `Zone ${z}` : `Off (libero in zone ${zoneOf(i, "L")})`}</td>${["serve", "rec", "ar"].map((ph) => `<td>${describe(i, ph, role).t}</td>`).join("")}</tr>`;
         }).join("");
         const thumbs = THUMB.map(
           (t, i) =>
@@ -2561,7 +2561,7 @@
         $("sheet").innerHTML =
           `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role].map((x) => `<li>${ruleText(x)}</li>`).join("")}</ul>`;
         $("rotTable").innerHTML =
-          `<table><thead><tr><th></th><th>Rotation</th><th>Reception</th><th>After reception</th><th>Our serve</th></tr></thead><tbody>${rows}</tbody></table>`;
+          `<table><thead><tr><th></th><th>Rotation</th><th>Our serve</th><th>Reception</th><th>After reception</th></tr></thead><tbody>${rows}</tbody></table>`;
         $("thumbs").innerHTML = thumbs;
       }
 
@@ -3165,12 +3165,12 @@
       const STEP_ORDER = ["start", "serve", "rec", "ar"];
       const STEP_SHORT = {
         start: "Rotate",
+        serve: "Our serve",
         rec: "Receive",
         ar: "After reception",
-        serve: "Our serve",
       };
       let G = null;
-      const gSettings = store.get("gameSteps", { start: true, rec: true, ar: true, serve: true });
+      const gSettings = store.get("gameSteps", { start: true, serve: true, rec: true, ar: true });
       STEP_ORDER.forEach((k) => {
         $(`gs-${k}`).checked = gSettings[k] !== false;
         $(`gs-${k}`).onchange = gCheckSteps;

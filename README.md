@@ -1,6 +1,6 @@
 # KSV 5-1 rotation trainer
 
-A single-page app for learning your position in the KSV 5-1 system: receiving positions, movement after reception, serving positions and front row sets.
+A single-page app for learning your position in the KSV 5-1 system: serving positions, receiving positions, movement after reception and front row sets.
 
 Live site: https://xszpo.github.io/volleyball_positions/
 

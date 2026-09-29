@@ -164,7 +164,7 @@ for i, c in enumerate(CHECKS):
     )
     cx += 16 + len(c) * 7.6 + 34
 x0s = [LABEL_W + i * (CW + GAP) + 10 for i in range(4)]
-for i, hd in enumerate(["ROTATION", "RECEPTION", "MOVEMENT AFTER RECEPTION", "OUR SERVE: BASE DEFENCE"]):
+for i, hd in enumerate(["ROTATION", "OUR SERVE: BASE DEFENCE", "RECEPTION", "MOVEMENT AFTER RECEPTION"]):
     a(
         f'<text x="{x0s[i]}" y="{TOP - 14}" font-size="13" font-weight="bold" letter-spacing="1" '
         f'fill="#5A6878">{hd}</text>'
@@ -206,8 +206,8 @@ for r, row in enumerate(ROWS):
         s += chip(p, X(x0, px), Y(py))
     a(s)
 
-    # 2 reception
-    x0 = x0s[1]
+    # 3 reception
+    x0 = x0s[2]
     s = base(x0, y)
     pos = {zmap[p]: (X(x0, px), Y(py)) for p, px, py in row["rec"]}
     for z1, z2 in OVERLAP:
@@ -228,8 +228,8 @@ for r, row in enumerate(ROWS):
         )
     a(s)
 
-    # 3 after reception
-    x0 = x0s[2]
+    # 4 after reception
+    x0 = x0s[3]
     s = base(x0, y)
     recpos = {p: (px, py) for p, px, py in row["rec"]}
     for p, px, py, kind in row["ar"]:
@@ -259,10 +259,10 @@ for r, row in enumerate(ROWS):
         s += chip(p, X(x0, px), Y(py), ring=GREEN if kind == "set" else None)
     a(s)
 
-    # 4 serve
-    sx = x0s[3] - GAP / 2
+    # 2 serve
+    sx = x0s[2] - GAP / 2
     a(f'<line x1="{sx}" y1="{y - 6}" x2="{sx}" y2="{y + CH + 6}" stroke="{NAVY}" stroke-width="2.5"/>')
-    x0 = x0s[3]
+    x0 = x0s[1]
     s = base(x0, y)
     spots = [(p, *BASE_DEF[z][:2]) for p, z in zip(row["serve"][0] + row["serve"][1], ORDER, strict=True)]
     server = row["liberofor"] if row["back"][2] == "L" else row["back"][2]

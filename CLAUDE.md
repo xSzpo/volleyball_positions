@@ -69,6 +69,7 @@ Deploy = open a PR to `main`; merging needs the `checks` job to pass (ruleset on
 - **Single self-contained file.** `index.html` must work from `file://` and from GitHub Pages. No build tooling beyond the Python scripts, no framework, no bundler. The only external resources are Google Fonts (Barlow, Barlow Condensed) with system fallbacks.
 - **Mobile first.** The main use is on a phone at training. Keep tap targets big and avoid horizontal scrolling. Never hide the primary "Continue/Next" action behind something the user must discover. A real bug came from exactly this, see "History".
 - **localStorage** keys are prefixed `ksv51:` and always wrapped in try/catch (`store.get/set` helpers).
+- **Phase order:** everywhere the phases are listed (Learn buttons, all-rotations table, role rules, Match steps, cheat sheet), use the real order of `STEP_ORDER`: Rotation → Our serve → Reception → After reception.
 - **Naming on screen:** rotations are shown as `R1 (S1)` … `R6 (S2)`; the number after S is the setter's zone. The guide calls these H1, H6, H5, H4, H3, H2 (H = Danish *hæver*, setter). The guide's "D" (diagonal) is our `OP`.
 - **Language:** UI in English, plain and short. The owner is Polish and plays in Denmark; keep wording simple.
 - **Light and dark themes** via CSS tokens on `:root` (see the top of the `<style>` block); default follows the system, the header button `#themeBtn` sets `data-theme` on `<html>` and stores `ksv51:theme` (tested by `tests/theme_test.py`). The blue `--accent` fills and marks; text in accent colour uses `--accent-ink`, text on an accent fill uses `--on-accent`. Radii come from `--radius`/`--radius-lg`.
@@ -116,7 +117,7 @@ Secondary content uses native `<details class="fold">`: in Learn, "How to learn"
 
 Key JS pieces (all inside one IIFE):
 
-- `players(ri, phase)` returns the positions for `phase` in `start|rec|ar|serve`
+- `players(ri, phase)` returns the positions for `phase` in `start|serve|rec|ar`
 - `describe(ri, phase, role)` returns `{t, d}`: the title and explanation shown after each answer. Most user-facing wording lives here.
 - `zoneOf`, `relation`, `neighbourQ` (overlap-partner questions), `visible()` (Nobody / Setter / Everyone; for the setter role the reference player is the opposite)
 - Drill: weighted random questions from `stats` (misses come up more often), **Review weak spots** (up to 8 missed items), optional neighbour check
