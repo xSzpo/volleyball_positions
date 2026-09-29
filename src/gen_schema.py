@@ -33,6 +33,7 @@ ORDER = [4, 3, 2, 5, 6, 1]
 OVERLAP = [(4, 3), (3, 2), (5, 6), (6, 1), (4, 5), (3, 6), (2, 1)]
 XS = [0.17, 0.5, 0.83]
 FY, BY = 0.21, 0.71
+SERVE_SPOT = (0.88, 1.1)
 
 CW, CH = 280, 190
 LABEL_W, GAP, TOP, ROW_H = 160, 40, 350, 246
@@ -163,7 +164,7 @@ for i, c in enumerate(CHECKS):
     )
     cx += 16 + len(c) * 7.6 + 34
 x0s = [LABEL_W + i * (CW + GAP) + 10 for i in range(4)]
-for i, hd in enumerate(["ROTATION", "RECEPTION", "MOVEMENT AFTER RECEPTION", "AFTER SERVE: BASE DEFENCE"]):
+for i, hd in enumerate(["ROTATION", "RECEPTION", "MOVEMENT AFTER RECEPTION", "OUR SERVE: BASE DEFENCE"]):
     a(
         f'<text x="{x0s[i]}" y="{TOP - 14}" font-size="13" font-weight="bold" letter-spacing="1" '
         f'fill="#5A6878">{hd}</text>'
@@ -263,17 +264,14 @@ for r, row in enumerate(ROWS):
     a(f'<line x1="{sx}" y1="{y - 6}" x2="{sx}" y2="{y + CH + 6}" stroke="{NAVY}" stroke-width="2.5"/>')
     x0 = x0s[3]
     s = base(x0, y)
-    start = {p: (px, py) for p, px, py in grid(row["front"], row["back"])}
-    start[row["liberofor"]] = start["L"]
     spots = [(p, *BASE_DEF[z][:2]) for p, z in zip(row["serve"][0] + row["serve"][1], ORDER, strict=True)]
-    for p, px, py in spots:
-        rx, ry = start[p]
-        # shorten() trims 34 px, so shorter moves would draw no shaft or point backwards.
-        if math.hypot(X(x0, px) - X(x0, rx), Y(py) - Y(ry)) < 44:
-            continue
-        x1, y1, x2, y2 = shorten(X(x0, rx), Y(ry), X(x0, px), Y(py))
-        s += arrow(x1, y1, x2, y2, MOVE, "mm", width=1.8, op=0.8)
-        s += f'<circle cx="{X(x0, rx)}" cy="{Y(ry)}" r="3.5" fill="{MOVE}" opacity=".5"/>'
+    server = row["liberofor"] if row["back"][2] == "L" else row["back"][2]
+    bx, by = next((px, py) for p, px, py in spots if p == server)
+    fx, fy = X(x0, SERVE_SPOT[0]), Y(SERVE_SPOT[1])
+    x1, y1, x2, y2 = shorten(fx, fy, X(x0, bx), Y(by), a=7)
+    s += arrow(x1, y1, x2, y2, MOVE, "mm", width=1.8, op=0.8)
+    s += f'<circle cx="{fx}" cy="{fy}" r="4" fill="{MOVE}" opacity=".7"/>'
+    s += f'<text x="{fx + 8}" y="{fy + 4}" font-size="11" fill="#5A6878">serve</text>'
     for p, px, py in spots:
         s += chip(p, X(x0, px), Y(py))
     a(s)
@@ -323,7 +321,7 @@ a(
 )
 a(
     f'<line x1="530" y1="{ly2 + 8}" x2="570" y2="{ly2 + 8}" stroke="{ORANGE}" stroke-width="1.8" stroke-dasharray="3 '
-    f'4"/><text x="580" y="{ly2 + 13}" font-size="14" fill="#33414F">Overlap pair (keep order at serve contact)</text>'
+    f'4"/><text x="580" y="{ly2 + 13}" font-size="14" fill="#33414F">Overlap pair (when receiving)</text>'
 )
 a(
     f'<text x="930" y="{ly2 + 13}" font-size="14" fill="#33414F">Back-row opposite attacks from behind the 3 m '
@@ -331,8 +329,13 @@ a(
 )
 a(
     f'<text x="40" y="{ly2 + 56}" font-size="12" fill="#8A96A3">KSV | Receiving positions and movements · '
-    "“After serve” = base defence once our serve is in the air (not in the guide). R3 and R6: the middle in zone 1 "
-    "serves, because the libero may not serve (FIVB).</text>"
+    "“Our serve” = base defence (not in the guide). R3 and R6: the middle in zone 1 serves, because the libero may "
+    "not serve (FIVB).</text>"
+)
+a(
+    f'<text x="40" y="{ly2 + 74}" font-size="12" fill="#8A96A3">The serving team has no overlap rule (FIVB 7.4, '
+    "since 2025): stand in your defence spot before the serve; only the server moves. Rows still count for blocking "
+    "and attacking.</text>"
 )
 a("</svg>")
 svg = "\n".join(o)

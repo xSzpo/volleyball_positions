@@ -44,7 +44,7 @@ LABELS = {"perfect": "Spot on", "close": "Close enough", "miss": "Not there", "n
 
 
 def press_next(page: Page) -> None:
-    """Presses Check or Continue and waits out the short lock that stops a double tap skipping the feedback."""
+    """Presses Continue or Next and waits out the short lock that stops a double tap skipping the feedback."""
     page.click("#gNext")
     page.wait_for_selector("#gNext:not([aria-disabled])", state="attached")
 
@@ -171,7 +171,7 @@ def uid_of(page: Page) -> str:
 
 
 def tap_spot(page: Page, role: str, ri: int, phase: str = "rec", check: bool = True) -> None:
-    """Taps the role's correct spot for ``phase`` in rotation ``ri``, then presses Check."""
+    """Taps the role's correct spot for ``phase`` in rotation ``ri``, then presses Continue."""
     spots = [(s[0], s[1], s[2]) for s in (ROWS[ri]["ar"] if phase == "ar" else ROWS[ri]["rec"])]
     tap_at(page, *next((x, y) for p, x, y in spots if p == role))
     if check:
@@ -427,11 +427,11 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
             tap_at(host, 0.5, 0.03)
             tap_spot(host, "OH1", i, check=False)
             host.wait_for_timeout(1000)
-            assert admin(emulator_db, "GET", f"rooms/{code}/answers/{i}") is None, "a tap without Check was saved"
-            assert not strip(guest)["Anna"][1], "answered shown before Check"
+            assert admin(emulator_db, "GET", f"rooms/{code}/answers/{i}") is None, "a tap without Continue was saved"
+            assert not strip(guest)["Anna"][1], "answered shown before Continue"
             answer(host, "OH1", i)
             guest.wait_for_function("document.getElementById('gStrip').textContent.includes('✓ answered')")
-            assert strip(guest)["Anna"] == (totals["Anna"], True), f"strip after the host's Check: {strip(guest)}"
+            assert strip(guest)["Anna"] == (totals["Anna"], True), f"strip after the host's Continue: {strip(guest)}"
             answer(guest, "L", i, off=True)
             expected["Ben"] = "miss"
         elif i == 3:

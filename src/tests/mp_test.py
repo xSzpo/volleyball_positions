@@ -16,7 +16,7 @@ CHIPS = "#courtG g[opacity]"
 
 
 def press_next(page: Page) -> None:
-    """Presses Check or Continue and waits out the short lock that stops a double tap skipping the feedback."""
+    """Presses Continue or Next and waits out the short lock that stops a double tap skipping the feedback."""
     page.click("#gNext")
     page.wait_for_selector("#gNext:not([aria-disabled])", state="attached")
 
@@ -150,7 +150,9 @@ with sync_playwright() as p:
             assert pg.is_hidden("#gVisPlay"), "Show on court can be changed during a multiplayer match"
             chips_before = pg.locator(CHIPS).count()
             strip_before = pg.inner_text("#gStrip")
-            assert not pg.is_enabled("#gNext") and pg.inner_text("#gNext") == "CHECK", "Check enabled before a pick"
+            assert not pg.is_enabled("#gNext") and pg.inner_text("#gNext") == "CONTINUE", (
+                "Continue enabled before a pick"
+            )
             if random.random() < 0.3:
                 pg.click("#gOff")
                 how = "off"
@@ -162,11 +164,11 @@ with sync_playwright() as p:
                         box["x"] + box["width"] * random.random(), box["y"] + box["height"] * random.random()
                     )
                     assert pg.locator("#courtG .myspot").count() == 1, "re-tap does not move the marker"
-                    assert not VERDICT.search(pg.inner_text("#gFb")), "a tap before Check leaks the verdict"
+                    assert not VERDICT.search(pg.inner_text("#gFb")), "a tap before Continue leaks the verdict"
                 how = "tap"
             if not doubled:
                 pg.evaluate("() => { const b = document.getElementById('gNext'); b.click(); b.click(); }")
-                assert pg.is_hidden("#gPass") and pg.is_visible("#gFb"), "a double tap on Check passed the device"
+                assert pg.is_hidden("#gPass") and pg.is_visible("#gFb"), "a double tap on Continue passed the device"
                 pg.wait_for_selector("#gNext:not([aria-disabled])", state="attached")
                 doubled = True
             else:
@@ -180,7 +182,7 @@ with sync_playwright() as p:
     print("ended:", pg.is_visible("#gEnd"), "actions", n)
     print("answers checked:", answered_by)
     assert all(answered_by.values()), f"not every answer path was checked: {answered_by}"
-    assert doubled, "the double tap on Check was not tried"
+    assert doubled, "the double tap on Continue was not tried"
     assert set_lines == answered_by["set"], f"{answered_by['set']} set calls answered, {set_lines} on the reveals"
     assert "sets " in pg.inner_text("#gStats"), "final ranking has no set call score"
     print("first 9 turns:", order_seen[:9])

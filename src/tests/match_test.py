@@ -18,7 +18,7 @@ FAIL: list[str] = []
 
 
 def press_next(page: Page) -> None:
-    """Presses Check or Continue and waits out the short lock that stops a double tap skipping the feedback."""
+    """Presses Continue or Next and waits out the short lock that stops a double tap skipping the feedback."""
     page.click("#gNext")
     page.wait_for_selector("#gNext:not([aria-disabled])", state="attached")
 
@@ -73,7 +73,7 @@ def tap_at(page: Page, x: float, y: float) -> None:
 
 
 def tap_spot(page: Page, role: str, ri: int, phase: str, check: bool = True) -> None:
-    """Picks the role's correct spot for ``phase`` in rotation ``ri`` (or I'm off court), then presses Check."""
+    """Picks the role's correct spot for ``phase`` in rotation ``ri`` (or I'm off court), then presses Continue."""
     spots = [(s[0], s[1], s[2]) for s in (ROWS[ri]["ar"] if phase == "ar" else ROWS[ri]["rec"])]
     found = next(((x, y) for p, x, y in spots if p == role), None)
     if found is None:
@@ -193,28 +193,31 @@ def check_best_key(browser: Browser) -> None:
     print("best score key: old bests ignored, neighbour check separate", flush=True)
 
 
-def check_after_serve(browser: Browser) -> None:
-    """After serve, a front-row player's answer is a block spot at the net, with a switch arrow from zone 4."""
+def check_our_serve(browser: Browser) -> None:
+    """Our serve: a front-row player stands at the net before the serve; only the server gets an arrow."""
     page = new_page(browser)
     setup_match(page, "OH1", ("serve",))
     page.click("#gStart")
     page.wait_for_selector("#gOff:enabled")
-    if "After serve" not in page.inner_text("#gStepName"):
-        fail(f"step name reads {page.inner_text('#gStepName')!r}, expected After serve")
+    if "Our serve" not in page.inner_text("#gStepName"):
+        fail(f"step name reads {page.inner_text('#gStepName')!r}, expected Our serve")
     tap_at(page, 0.5, 0.5)
     press_next(page)
     page.wait_for_selector("#gFb .pts")
     ring = page.locator('#courtG circle[r="26"]')
     y = float(ring.get_attribute("cy") or "nan") / 200
     if not y < 0.1:
-        fail(f"R1 OH1 after serve spot at y {y:.2f}, expected at the net (y < 0.1)")
+        fail(f"R1 OH1 our serve spot at y {y:.2f}, expected at the net (y < 0.1)")
     arrows = page.locator('#courtG line[marker-end="url(#m-move)"]').count()
-    if arrows != 4:
-        fail(f"R1 after serve draws {arrows} switch arrows, expected 4 (OH1, OP, L, OH2)")
-    if "Block left" not in page.inner_text("#gFb"):
-        fail(f"after serve feedback reads {page.inner_text('#gFb')!r}, expected Block left")
+    if arrows != 1:
+        fail(f"R1 our serve draws {arrows} arrows, expected 1 (the server)")
+    elif not float(page.locator('#courtG line[marker-end="url(#m-move)"]').get_attribute("y1") or "nan") > 200:
+        fail("the server's arrow does not start behind the end line")
+    feedback = page.inner_text("#gFb")
+    if "Block left" not in feedback or "before the serve" not in feedback:
+        fail(f"our serve feedback reads {feedback!r}, expected Block left, standing there before the serve")
     page.close()
-    print("after serve: front-row spot at the net, switch arrows shown", flush=True)
+    print("our serve: front-row spot at the net, only the server's arrow", flush=True)
 
 
 MATCH_SETS = [s for s in SETS if s[0] not in UNCONFIRMED_SETS]
@@ -283,7 +286,7 @@ def play_set_calls(browser: Browser, role: str, steps: tuple[str, ...], sets: bo
             if any(o in UNCONFIRMED_SETS for o in options):
                 fail(f"{tag}: unconfirmed set among the options {options}")
             if not page.is_enabled("#gNext"):
-                fail(f"{tag}: Continue disabled during the set question")
+                fail(f"{tag}: Next disabled during the set question")
             if "Set call: –" not in page.inner_text("#gBd"):
                 fail(f"{tag}: breakdown before the set call reads {page.inner_text('#gBd')!r}")
             before = points(page)
@@ -362,18 +365,18 @@ def in_view(page: Page, selector: str) -> bool:
     return box is not None and box["y"] >= 0 and box["y"] + box["height"] <= 844
 
 
-def check_tap_then_check(browser: Browser) -> None:
-    """A tap only places a marker; Check scores the last tap, and off court can be undone by a tap."""
+def check_tap_then_continue(browser: Browser) -> None:
+    """A tap only places a marker; Continue scores the last tap, then Next; off court is undone by a tap."""
     page = new_page(browser)
     setup_match(page, "OH1", ("rec",))
     page.click("#gStart")
     page.wait_for_selector("#gOff:enabled")
-    if page.inner_text("#gNext") != "CHECK" or page.is_enabled("#gNext"):
+    if page.inner_text("#gNext") != "CONTINUE" or page.is_enabled("#gNext"):
         fail(
             f"before a tap the primary button reads {page.inner_text('#gNext')!r}, enabled={page.is_enabled('#gNext')}"
         )
     if not in_view(page, "#gNext"):
-        fail("Check is below the fold")
+        fail("Continue is below the fold")
     spot = next((x, y) for p, x, y in ROWS[0]["rec"] if p == "OH1")
     tap_at(page, 0.5, 0.03)
     if page.locator("#gFb .pts").count() or page.locator("#courtG .myspot").count() != 1:
@@ -381,18 +384,18 @@ def check_tap_then_check(browser: Browser) -> None:
     tap_at(page, *spot)
     if page.locator("#gFb .pts").count() or page.locator("#courtG .myspot").count() != 1:
         fail("the second tap scored the moment or left two markers")
-    if not page.is_enabled("#gNext") or not page.is_enabled("#gHelp"):
-        fail("Check or Help not available after a tap")
+    if page.inner_text("#gNext") != "CONTINUE" or not page.is_enabled("#gNext") or not page.is_enabled("#gHelp"):
+        fail(f"after a tap the primary button reads {page.inner_text('#gNext')!r}, or it or Help is disabled")
     press_next(page)
     if "Spot on" not in page.inner_text("#gFb"):
-        fail(f"Check did not score the last tap: {page.inner_text('#gFb')!r}")
-    if page.inner_text("#gNext") != "CONTINUE":
-        fail(f"after Check the primary button reads {page.inner_text('#gNext')!r}")
+        fail(f"Continue did not score the last tap: {page.inner_text('#gFb')!r}")
+    if page.inner_text("#gNext") != "NEXT":
+        fail(f"after scoring the primary button reads {page.inner_text('#gNext')!r}")
     press_next(page)
     page.wait_for_selector("#gOff:enabled")
     page.click("#gOff")
     if page.get_attribute("#gOff", "aria-pressed") != "true" or not page.is_enabled("#gNext"):
-        fail("I'm off court is not selected or Check stays disabled")
+        fail("I'm off court is not selected or Continue stays disabled")
     spot = next((x, y) for p, x, y in ROWS[1]["rec"] if p == "OH1")
     tap_at(page, *spot)
     if page.get_attribute("#gOff", "aria-pressed") != "false":
@@ -401,7 +404,7 @@ def check_tap_then_check(browser: Browser) -> None:
     if "Spot on" not in page.inner_text("#gFb"):
         fail(f"off court then a tap did not score the tap: {page.inner_text('#gFb')!r}")
     page.close()
-    print("tap then Check: marker moves, Check scores the last pick", flush=True)
+    print("tap then Continue: marker moves, Continue scores the last pick, then Next", flush=True)
 
 
 def neighbour_answer(ri: int, role: str, question: str) -> str:
@@ -488,7 +491,7 @@ def check_end_screen(browser: Browser) -> None:
 
 
 def check_court_not_covered(browser: Browser) -> None:
-    """While answering, the buttons do not cover the court; after Check they stay in view."""
+    """While answering, the buttons do not cover the court; after scoring they stay in view."""
     page = new_page(browser)
     setup_match(page, "OH1", ("rec",))
     if page.is_hidden("#setupPanel"):
@@ -511,25 +514,25 @@ def check_court_not_covered(browser: Browser) -> None:
             fail("a tap on the lower court did not place a marker")
     press_next(page)
     if not in_view(page, "#gNext"):
-        fail("Continue is below the fold after Check")
+        fail("Next is below the fold after scoring")
     page.close()
     print("court not covered while answering", flush=True)
 
 
 def check_double_check(browser: Browser) -> None:
-    """A double tap on Check keeps the feedback on screen."""
+    """A double tap on Continue keeps the feedback on screen."""
     page = new_page(browser)
     setup_match(page, "OH1", ("rec",))
     page.click("#gStart")
     tap_spot(page, "OH1", 0, "rec", check=False)
     page.evaluate("() => { const b = document.getElementById('gNext'); b.click(); b.click(); }")
     if "moment 1 of" not in page.inner_text("#gStepName") or not page.locator("#gFb .pts").count():
-        fail(f"a double tap on Check skipped the feedback: {page.inner_text('#gStepName')!r}")
+        fail(f"a double tap on Continue skipped the feedback: {page.inner_text('#gStepName')!r}")
     press_next(page)
     if "moment 2 of" not in page.inner_text("#gStepName"):
-        fail("Continue does not work after the double tap lock")
+        fail("Next does not work after the double tap lock")
     page.close()
-    print("double tap on Check keeps the feedback", flush=True)
+    print("double tap on Continue keeps the feedback", flush=True)
 
 
 def main() -> None:
@@ -538,9 +541,9 @@ def main() -> None:
         check_vis_scoring(browser)
         check_peek(browser)
         check_best_key(browser)
-        check_after_serve(browser)
+        check_our_serve(browser)
         check_set_calls(browser)
-        check_tap_then_check(browser)
+        check_tap_then_continue(browser)
         check_breakdown(browser)
         check_end_screen(browser)
         check_court_not_covered(browser)
