@@ -24,6 +24,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Insert the PostHog key
+        env:
+          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
+        run: |
+          [[ "$POSTHOG_KEY" =~ ^phc_[A-Za-z0-9]+$ ]] || { echo "::warning::POSTHOG_KEY secret missing or malformed; analytics stays off"; exit 0; }
+          [ "$(grep -c 'const POSTHOG_KEY = "phc_REPLACE_ME";' index.html)" = 1 ] || { echo "::error::placeholder not found once in index.html"; exit 1; }
+          sed -i "s/const POSTHOG_KEY = \"phc_REPLACE_ME\";/const POSTHOG_KEY = \"$POSTHOG_KEY\";/" index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

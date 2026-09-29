@@ -2339,6 +2339,7 @@
             b.onclick = () => {
               role = b.dataset.r;
               store.set("role", role);
+              track("role_picked", { role });
               renderRoles();
               renderSetupSummary();
               setSetupOpen(false);
@@ -2372,6 +2373,7 @@
       $("setupNudge").hidden = !firstVisit;
       setSetupOpen(firstVisit);
       function setTab(t) {
+        track("tab_viewed", { tab: t });
         ["Learn", "Drill", "Game", "Sets"].forEach((n) => {
           const k = n.toLowerCase();
           $(`tab${n}`).setAttribute("aria-selected", t === k);
@@ -2847,6 +2849,12 @@
         updateScore();
       }
       function feedback(cls, title) {
+        track("drill_answered", {
+          role: cur.role,
+          rotation: `R${cur.ri + 1}`,
+          phase: cur.phase,
+          result: { good: "right", close: "close", bad: "wrong" }[cls],
+        });
         const d = describe(cur.ri, cur.phase, cur.role);
         $("fb").className = `fb ${cls}`;
         $("fb").innerHTML = `<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
@@ -3070,6 +3078,7 @@
         if (sAns) return;
         sAns = true;
         const ok = name === sq[0];
+        track("sets_quiz_answered", { result: ok ? "right" : "wrong" });
         sScore.n++;
         if (ok) {
           sScore.ok++;
@@ -3284,6 +3293,18 @@
           sc: null,
           mp: null,
         };
+        track("match_started", {
+          mode: mp ? "device" : "solo",
+          role: mp ? null : role,
+          steps: gSteps().join(","),
+          order: gOrder(),
+          vis: visGame,
+          nb: $("nbGame").checked,
+          sets: setOn(),
+          rules: rulesMode,
+          players: mp ? mp.length : 1,
+          replay,
+        });
         if (mp) {
           G.mp = {
             players: mp.map((p, k) => ({
@@ -3728,11 +3749,32 @@
             : "";
         return `<p class="hint" id="gShown" style="grid-column:1/-1;margin:0">Shown: ${visName(v, r)} (${m < 1 ? `${Math.round(m * 100)}% points` : "full points"})${peeks}</p>`;
       }
+      function gTrackFinish() {
+        const list = G.online ? onList(G.online.room, G.i) : G.mp ? G.mp.players : null;
+        // Same device: one event per match, with the winner's numbers.
+        const p = G.online
+          ? list.find((o) => o.uid === ON.uid)
+          : list
+            ? [...list].sort((a, b) => b.score - a.score)[0]
+            : G;
+        if (!p) return;
+        track("match_finished", {
+          mode: G.online ? "online" : G.mp ? "device" : "solo",
+          role: G.mp ? null : p.role,
+          score: p.score,
+          moments: G.queue.length,
+          perfect: p.perfect,
+          peeked: G.mp || G.online ? 0 : G.peeks,
+          set_ok: p.setOk,
+          set_n: p.setN,
+        });
+      }
       function gFinish() {
         $("gAgain").hidden = !!G.online;
         $("gToLobby").hidden = !G.online;
         $("gEndWait").hidden = true;
         $("gSettings").textContent = G.online ? "Leave room" : "Change settings";
+        gTrackFinish();
         if (G.online) return mpFinish(onList(G.online.room, G.i));
         if (G.mp) return mpFinish();
         const n = G.queue.length,
@@ -4096,6 +4138,60 @@
         storageBucket: "ksv-volleyball-xszpo.firebasestorage.app",
       };
       const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/11.10.0";
+
+      // ---------- Analytics (PostHog, only on the Pages host) ----------
+      const POSTHOG_KEY = "phc_REPLACE_ME";
+      const POSTHOG_SDK = {
+        src: "https://cdn.jsdelivr.net/npm/posthog-js@1.434.17/dist/array.no-external.js",
+        integrity: "sha384-8UjS7Fq5RAruabOgf7TR3iM8oBDrcwXEXdxQ0WaS9Tpo4zspMStPA5ggoFfD61bN",
+      };
+      let posthog = null;
+      function analyticsOn(hostname, key) {
+        return hostname === "xszpo.github.io" && /^phc_\w+$/.test(key) && key !== "phc_REPLACE_ME";
+      }
+      function analyticsLoad() {
+        if (!analyticsOn(location.hostname, POSTHOG_KEY)) return;
+        try {
+          const el = document.createElement("script");
+          el.src = POSTHOG_SDK.src;
+          el.integrity = POSTHOG_SDK.integrity;
+          el.crossOrigin = "anonymous";
+          el.onload = () => {
+            try {
+              window.posthog.init(POSTHOG_KEY, {
+                api_host: "https://us.i.posthog.com",
+                ui_host: "https://us.posthog.com",
+                persistence: "memory",
+                person_profiles: "identified_only",
+                autocapture: false,
+                capture_pageview: true,
+                capture_pageleave: true,
+                disable_session_recording: true,
+                disable_surveys: true,
+                disable_web_experiments: true,
+                advanced_disable_flags: true,
+                capture_heatmaps: false,
+                capture_dead_clicks: false,
+                capture_performance: false,
+                rageclick: false,
+                mask_all_text: true,
+                mask_all_element_attributes: true,
+                respect_dnt: true,
+              });
+              posthog = window.posthog;
+            } catch (e) {}
+          };
+          el.onerror = () => el.remove();
+          document.head.appendChild(el);
+        } catch (e) {}
+      }
+      // Props must never carry player names, room codes or Firebase uids.
+      function track(event, props) {
+        try {
+          if (posthog) posthog.capture(event, props);
+        } catch (e) {}
+      }
+      window.ksvAnalytics = { analyticsOn, track };
       // ?emu=<database host:port>,<auth host:port> points the app at the Firebase emulators (tests).
       const EMU = (() => {
         const v = new URLSearchParams(location.search).get("emu");
@@ -4354,7 +4450,7 @@
       }
       $("onRejoin").onclick = () => {
         $("onCode").value = String(store.get("room", ""));
-        onJoin();
+        onJoin("rejoin");
       };
       async function onCreate() {
         if (onPending || ON) return;
@@ -4404,13 +4500,14 @@
             }),
           );
           onEnter(fb, ref, code, uid);
+          track("online_room", { action: "create" });
         } catch (e) {
           onError(e);
         } finally {
           onBusy(false);
         }
       }
-      async function onJoin() {
+      async function onJoin(via) {
         if (onPending || ON) return;
         $("onErr").textContent = "";
         const code = $("onCode").value.replace(/\D/g, "");
@@ -4461,6 +4558,7 @@
             await withTimeout(mine.child("color").set(pick(ps)));
           }
           onEnter(fb, ref, code, uid);
+          track("online_room", { action: via === "rejoin" ? "rejoin" : "join" });
         } catch (e) {
           onError(e);
         } finally {
@@ -4537,6 +4635,7 @@
       function onLeave() {
         if (!ON) return;
         const o = onDetach();
+        track("online_room", { action: "leave" });
         store.del("room");
         o.ref
           .child(`players/${o.uid}`)
@@ -4659,6 +4758,19 @@
         if (ON.last) $("lLastList").innerHTML = stripHtml(ON.last);
       }
       function onInitG(meta, me) {
+        if (meta.i === 0 && !ON.room.answers[0]?.[ON.uid])
+          track("match_started", {
+            mode: "online",
+            role: me.role,
+            steps: meta.steps.join(","),
+            order: meta.order,
+            vis: meta.vis,
+            nb: meta.nb,
+            sets: meta.sets,
+            rules: meta.rulesMode,
+            players: Object.values(ON.room.players).filter((p) => p.online === true).length,
+            replay: false,
+          });
         const changed = rulesMode !== meta.rulesMode;
         rulesMode = meta.rulesMode;
         ON.last = null;
@@ -4972,6 +5084,7 @@
         b.onclick = () => {
           rulesMode = b.dataset.rm;
           store.set("rulesMode", rulesMode);
+          track("rules_changed", { mode: rulesMode });
           if (ON?.isHost && ON.meta.state === "lobby")
             ON.ref
               .child("meta/rulesMode")
@@ -4997,6 +5110,7 @@
         return new Blob([u], { type: "application/pdf" });
       }
       async function download(key) {
+        track("download", { file: key });
         const f = PDF[key];
         const blob = b64Blob(f.b64);
         const msg = $("dlmsg");
@@ -5042,6 +5156,7 @@
       store.set("howToSeen", true);
       renderLearn();
       renderSets();
+      analyticsLoad();
     })();
     </script>
   </body>

@@ -27,4 +27,5 @@ Source files live in `src/`; `index.html` is generated. See `CLAUDE.md` for the 
 - Match mode can be played alone or with 2–6 friends on the same device (random turn order each moment).
 - Rules switch at the top: Official (FIVB, the libero may not serve) or Drill (the libero stays on court and also serves).
 - Progress (drill stats, best scores, settings) is saved in each player's browser.
+- The live site uses cookieless PostHog analytics (anonymous usage events, no cookies, no session recording).
 - Positions follow the KSV guide "Receiving positions and movements". The serve column is the team's base defence when we serve (the serving team has no overlap rule since FIVB 2025, so only the server moves) and is not covered by the guide.

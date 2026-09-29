@@ -26,11 +26,12 @@ src/
   pdf.py              SVG -> PDF with a fixed CreationDate, so rebuilds are byte-stable
   tests/audit.py      data consistency checks (rotation order, overlap legality, serve lineups)
   tests/qa.py         Playwright end-to-end sweep (arg: m = phone/light, d = desktop/dark; --quick, --seed N)
-  tests/fast.sh       iteration loop: build, audit, theme_test, qa.py m --quick (~45 s)
+  tests/fast.sh       iteration loop: build, audit, theme_test, analytics_test, qa.py m --quick (~45 s)
   tests/full.sh       pre-PR run: everything, qa m and d in parallel; per-test pass/fail and time, logs in tests/_out/logs
   tests/mp_test.py    Playwright test of same-device multiplayer
   tests/match_test.py Playwright test of solo match scoring (Show on court multiplier) and the set call check
   tests/online_test.py Playwright test of online multiplayer (host + guest) on the Firebase emulators
+  tests/analytics_test.py Playwright test that PostHog loads only on the Pages host with a real key
 reference/KSV_M3.pdf  official club guide (git-ignored; keep it private)
 infra/                Terraform for Firebase (project, web app, Realtime Database, optional auth/budget)
   database.rules.json RTDB security rules (uploaded by the Firebase CLI, not Terraform)
@@ -54,6 +55,7 @@ python src/tests/audit.py              # must print "DATA AUDIT: no issues"
 python src/tests/mp_test.py
 python src/tests/online_test.py       # starts the auth + database emulators itself (Firebase CLI + Java); needs ports 9000 and 9099 free
 python src/tests/theme_test.py
+python src/tests/analytics_test.py
 python src/tests/match_test.py        # solo scoring and set call check
 python src/tests/qa.py m && python src/tests/qa.py d   # slow (~3.5 min each); expect "TOTAL FAILURES: 0"
 ```
@@ -66,7 +68,7 @@ Deploy = open a PR to `main`; merging needs the `checks` job to pass (ruleset on
 
 ## Conventions and hard constraints
 
-- **Single self-contained file.** `index.html` must work from `file://` and from GitHub Pages. No build tooling beyond the Python scripts, no framework, no bundler. The only external resources are Google Fonts (Barlow, Barlow Condensed) with system fallbacks.
+- **Single self-contained file.** `index.html` must work from `file://` and from GitHub Pages. No build tooling beyond the Python scripts, no framework, no bundler. The only external resources are Google Fonts (Barlow, Barlow Condensed) with system fallbacks, the Firebase SDK (only for Online room) and PostHog (only on `xszpo.github.io`, see Analytics).
 - **Mobile first.** The main use is on a phone at training. Keep tap targets big and avoid horizontal scrolling. Never hide the primary "Continue/Next" action behind something the user must discover. A real bug came from exactly this, see "History".
 - **localStorage** keys are prefixed `ksv51:` and always wrapped in try/catch (`store.get/set` helpers).
 - **Phase order:** everywhere the phases are listed (Learn buttons, all-rotations table, role rules, Match steps, cheat sheet), use the real order of `STEP_ORDER`: Rotation → Our serve → Reception → After reception.
@@ -166,6 +168,14 @@ Built (Match → "Online room"):
 - Rooms persist. `onReset()` (the host's New match at the end, or the host's Quit mid-match) writes one update: `state: lobby`, `i: 0`, no `queue`, no `answers`, per-match player fields cleared (name, role, colour, joinedAt kept), fresh `activeAt`, and it drops an old room's `hostLeft` (`onMeta` does too). Start clears `answers` and the per-match fields again, because a guest's queued answer write can land after the reset; `onWrite` also drops writes when the state is `lobby` or `i` has moved on. The lobby then shows the last match's scores (`#lLast`) until Start. A guest's Quit mid-match "benches" them (`ON.bench`, marked offline so nothing waits for them) in the lobby view with "Match in progress" and **Join in**; a guest's Back to lobby after a match does the same without going offline. Leave room (`onLeave`) removes your player node and clears `ksv51:room`; the room stays, and host takeover applies.
 - `ksv51:room` keeps the last room; opening Online room shows **Rejoin room 482 715** when that room still exists and is not stale (`onRejoinCheck()`).
 - Join is refused if the room is missing or idle for more than 7 days (`stale()`: `activeAt`, else `createdAt`). A stale room found on Join, Rejoin or a Create code collision is deleted (delete-on-hit); there is no sweep. Denied writes are caught and ignored. Presence writes into a room without `meta` are rejected by the rules.
+
+## Analytics (PostHog)
+
+PostHog US cloud, project 635296. `POSTHOG_KEY` sits next to `FIREBASE_CONFIG` in `template.html` and stays `phc_REPLACE_ME` in git (the owner does not want the key committed); `pages.yml` swaps in the `POSTHOG_KEY` repository secret at deploy. While it is the placeholder nothing loads. `analyticsOn(hostname, key)` decides: only `xszpo.github.io` with a real key, so `file://`, the tests and the emulators send nothing. `analyticsLoad()` injects the pinned `posthog-js` bundle (`array.no-external.js` on jsdelivr, with SRI) at the end of start-up; if it fails or is blocked the app works as before. All events go through `track(event, props)`, a no-op until PostHog has loaded, and it never throws. `window.ksvAnalytics` exposes both for `tests/analytics_test.py`.
+
+Privacy: `persistence: "memory"` (no cookies or storage, so no consent banner), `person_profiles: "identified_only"`, no autocapture, session recording, surveys, flags, heatmaps or web vitals; `mask_all_text`, `respect_dnt`. Pageview and pageleave are on. Never send player names, room codes or Firebase uids.
+
+Events: `tab_viewed {tab}`, `role_picked {role}`, `rules_changed {mode}`, `drill_answered {role, rotation, phase, result}`, `match_started {mode: solo|device|online, role, steps, order, vis, nb, sets, rules, players, replay}`, `match_finished {mode, role, score, moments, perfect, peeked, set_ok, set_n}`, `online_room {action: create|join|rejoin|leave}`, `download {file}`, `sets_quiz_answered {result}`. Same device sends one `match_finished` with the winner's numbers and `role: null`; online, each phone sends its own `match_started` (at moment 0) and `match_finished`. PostHog drops events from headless Chromium as bots.
 
 ## Other open items
 
