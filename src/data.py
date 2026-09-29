@@ -9,7 +9,7 @@ from typing import TypedDict
 
 ATTACK_LINE = 0.42
 
-# Base defence once our serve is in the air (not in the guide): zone -> (x, y, kind).
+# Base defence when we serve, taken before the serve (not in the guide): zone -> (x, y, kind).
 BASE_DEF: dict[int, tuple[float, float, str | None]] = {
     4: (0.15, 0.05, "block"),
     3: (0.50, 0.05, "block"),

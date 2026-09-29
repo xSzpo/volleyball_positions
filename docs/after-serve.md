@@ -1,18 +1,23 @@
-# After serve and After dig
+# Our serve and After dig
 
-## Stage 1 (done): After serve
+## Stage 1 (done): Our serve
 
-The `serve` phase (shown as "After serve") is base defence once our serve is in
-the air. Spots come from `BASE_DEF` in `src/data.py`, one per zone: the front
-row blocks at the net (4 left, 3 middle, 2 right), the back row defends deep
-(5, 6, 1). A back-row setter defends zone 1, a front-row setter blocks right,
+The `serve` phase (shown as "Our serve") is where everyone stands when we
+serve. Since the FIVB 2025-2028 rules (7.4, adopted by Volleyball Danmark in
+September 2025) the serving team has no overlap rule, so there is no switch
+after the serve: everyone except the server stands in their base spot before
+the serve. The server serves from behind the end line in zone 1, then runs to
+their base spot; the app and the schema draw only that arrow. Rows still count
+for play: back-row players may not block. Spots come from `BASE_DEF` in
+`src/data.py`, one per zone: the front row blocks at the net (4 left, 3 middle,
+2 right), the back row defends deep (5, 6, 1). A back-row setter defends zone 1, a front-row setter blocks right,
 the libero always takes zone 5. In R3 and R6 under official rules the middle
-serves, stays on and defends zone 6. The phase key, `meta` fields and step
+serves, stays on and runs to zone 6. The phase key, `meta` fields and step
 indices are unchanged, so the live database rules still accept it.
 
 ## Stage 2 (planned): After dig
 
-A new phase `tr` (transition) follows After serve: we dig the opponent's
+A new phase `tr` (transition) follows Our serve: we dig the opponent's
 attack and go to attack.
 
 - Positions per rotation in `data.py`, shaped like `ar`: `(player, x, y, kind)`

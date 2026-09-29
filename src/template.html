@@ -1593,7 +1593,8 @@
               <li><b>Where is the setter?</b> That tells you the rotation.</li>
               <li>
                 <b>Who is in front of or behind me, and who is beside me?</b>
-                That confirms your legal spot.
+                When they serve, that confirms your legal spot. When we serve, there is no overlap
+                rule: take your defence spot.
               </li>
               <li><b>Am I on court, or is the libero in?</b> Middles, check this every time.</li>
               <li>
@@ -1747,7 +1748,7 @@
                 <label><input type="checkbox" id="gs-start" checked> Rotation</label>
                 <label><input type="checkbox" id="gs-rec" checked> Reception</label>
                 <label><input type="checkbox" id="gs-ar" checked> After reception</label>
-                <label><input type="checkbox" id="gs-serve" checked> After serve</label>
+                <label><input type="checkbox" id="gs-serve" checked> Our serve</label>
               </fieldset>
               <p class="hint" id="gStepsMsg"></p>
               <fieldset class="steps one">
@@ -1890,7 +1891,7 @@
           ></svg>
           <div id="gNbBox"></div>
           <div class="row" id="gActs">
-            <button type="button" class="btn primary" id="gNext" disabled>Check</button>
+            <button type="button" class="btn primary" id="gNext" disabled>Continue</button>
             <button type="button" class="btn" id="gOff" aria-pressed="false">I'm off court</button>
             <button type="button" class="btn" id="gHelp">Help</button>
             <button type="button" class="btn quiet" id="gQuit">Quit</button>
@@ -2011,13 +2012,13 @@
         ["start", "Rotation"],
         ["rec", "Reception"],
         ["ar", "After reception"],
-        ["serve", "After serve"],
+        ["serve", "Our serve"],
       ];
       const FULL = {
         start: "Rotation",
         rec: "Reception",
         ar: "After reception",
-        serve: "After serve",
+        serve: "Our serve",
       };
       const ZONES = { 4: [0, 0], 3: [1, 0], 2: [2, 0], 5: [0, 1], 6: [1, 1], 1: [2, 1] };
       const ORDER = [4, 3, 2, 5, 6, 1];
@@ -2058,6 +2059,11 @@
           return [r.serve[0], ["L", ...r.serve[1].filter((p) => p !== m)]];
         }
         return r.serve;
+      }
+      function server(ri) {
+        const p = ROWS[ri].back[2];
+        if (p !== "L") return p;
+        return rulesMode === "drill" ? "L" : MID_SERVER[ri];
       }
       function zoneOf(ri, role) {
         const r = ROWS[ri];
@@ -2167,22 +2173,25 @@
         }
         const sv = serveLineup(ri);
         const zz = ORDER[[...sv[0], ...sv[1]].indexOf(role)];
-        const t =
-          me.kind === "block"
-            ? `Block ${{ 4: "left", 3: "middle", 2: "right" }[zz]}`
-            : `Defend zone ${zz}`;
-        let d =
-          me.kind === "block"
-            ? "Stay at the net, ready to block."
-            : role === "S"
-              ? "Defend zone 1 first; run to the net only after we dig."
-              : `Deep, about ${zz === 6 ? 8 : 6} m from the net. Read the hitter.`;
-        if (zoneOf(ri, role) === 1) d = `You serve, then ${d[0].toLowerCase()}${d.slice(1)}`;
-        if (rulesMode === "official" && MID_SERVER[ri] === role)
-          d =
-            "You are in zone 1, so you serve. The libero may not serve under the official rules, so you stay on court and defend zone 6, deep. If we win the rally, you serve again. When we lose the serve, the libero comes back in for you.";
-        if (rulesMode === "drill" && role === "L" && MID_SERVER[ri])
-          d = `Drill rules: you stay on and serve for ${MID_SERVER[ri]} from zone 1, then run to zone 5, deep. Under the official rules the libero may not serve.`;
+        const block = me.kind === "block";
+        const t = block
+          ? `Block ${{ 4: "left", 3: "middle", 2: "right" }[zz]}`
+          : `Defend zone ${zz}`;
+        const job = block
+          ? role === "S"
+            ? "You are front row: stay at the net and block right."
+            : "Stay at the net, ready to block."
+          : role === "S"
+            ? "You are back row: defend zone 1, and go to the net only after we dig. You may not block."
+            : `Deep, about ${zz === 6 ? 8 : 6} m from the net. Read the hitter. You are back row, so you may not block.`;
+        let d = `${job} Stand here already before the serve: since 2025 the serving team has no overlap rule (FIVB 7.4).`;
+        if (role === server(ri)) {
+          d = `Serve, then run to zone ${zz}. ${job}`;
+          if (rulesMode === "official" && MID_SERVER[ri] === role)
+            d = `You are in zone 1, so you serve: the libero may not serve under the official rules. Serve, then run to zone ${zz}, deep. If we win the rally, you serve again. When we lose the serve, the libero comes back in for you.`;
+          if (role === "L")
+            d = `Drill rules: you serve for ${MID_SERVER[ri]}. Serve, then run to zone ${zz}, deep. Under the official rules the libero may not serve.`;
+        }
         return { t, d };
       }
 
@@ -2253,25 +2262,18 @@
         });
         return s;
       }
+      const SERVE_SPOT = [0.88, 1.1];
       function serveLayer(ri, pl, role) {
-        const r = ROWS[ri];
-        const start = (p) => {
-          const z = zoneOf(ri, p) || (p === r.liberofor ? zoneOf(ri, "L") : null);
-          if (!z) return null;
-          const [c, row] = ZONES[z];
-          return [XS[c], row ? BY : FY];
-        };
-        let s = "";
-        pl.forEach((o) => {
-          const f = start(o.p);
-          // shorten() trims 32 px, so shorter moves would draw no shaft or point backwards.
-          if (!f || Math.hypot((f[0] - o.x) * W, (f[1] - o.y) * H) < 40) return;
-          const mine = o.p === role;
-          const [a, b, c, d] = shorten(f[0] * W, f[1] * H, o.x * W, o.y * H);
-          s += `<circle cx="${f[0] * W}" cy="${f[1] * H}" r="3.5" fill="var(--move)" opacity="${mine ? 0.8 : 0.35}"/>`;
-          s += line(a, b, c, d, "move", { w: mine ? 2.6 : 1.6, op: mine ? 0.95 : 0.4 });
-        });
-        return s;
+        const o = pl.find((x) => x.p === server(ri));
+        if (!o) return "";
+        const mine = o.p === role;
+        const [fx, fy] = SERVE_SPOT;
+        const [a, b, c, d] = shorten(fx * W, fy * H, o.x * W, o.y * H, 7);
+        return (
+          `<circle cx="${fx * W}" cy="${fy * H}" r="4" fill="var(--move)" opacity="${mine ? 0.9 : 0.5}"/>` +
+          `<text x="${fx * W + 8}" y="${fy * H + 4}" font-size="11" font-weight="600" fill="var(--muted)" font-family="Barlow,sans-serif">serve</text>` +
+          line(a, b, c, d, "move", { w: mine ? 2.6 : 1.8, op: mine ? 0.95 : 0.6 })
+        );
       }
       function rotArrows() {
         return [
@@ -2435,7 +2437,7 @@
           phase === "rec" || phase === "ar"
             ? `<p class="guide">Guide: ${ROWS[ri].note}</p>`
             : phase === "serve"
-              ? `<p class="guide">Not in the guide: this is our base defence once our serve is in the air.</p>`
+              ? `<p class="guide">Not in the guide: our base defence when we serve. The serving team may stand anywhere at the serve (FIVB 7.4, since 2025), so only the server moves.</p>`
               : "";
         $("cue").innerHTML =
           `<b>${ROWS[ri].name} · ${FULL[phase]}: ${d.t}</b><p>${d.d}</p>${guide}`;
@@ -2457,25 +2459,25 @@
           "R1, R2, R3: you are back row. Stay out of the passing lanes, then run to the net.",
           "R4, R5, R6: you are front row and start at the net. In R4 you run along the net from zone 4.",
           "After reception: your setting spot is at the net, right of the middle.",
-          "After serve: back row → defend zone 1 (run to the net only after we dig); front row → block right (zone 2).",
+          "When we serve: back row → defend zone 1 (run to the net only after we dig); front row → block right (zone 2).",
         ],
         OP: [
           "Front row in R1, R2, R3 (setter back row). R1: at the left sideline, attack left. R2: at the net in the middle. R3: at the right sideline.",
           "Back row in R4, R5, R6: stand deep behind the receivers, then go straight to zone 1 for the back-row attack.",
           "Except R1, you attack from the right.",
-          "After serve: front row → block right (zone 2), back row → defend zone 1.",
+          "When we serve: front row → block right (zone 2), back row → defend zone 1.",
         ],
         MB1: [
           "Front row in R1, R2, R6: start at the net (R6 far left, R2 right of the setter), get to the 3 m line and attack in the middle.",
           "R3, R4, R5: you are off, the libero is in for you.",
           "@MB1SERVE",
-          "After serve, front row: always zone 3, block the middle.",
+          "When we serve, front row: always zone 3, block the middle.",
         ],
         MB2: [
           "Front row in R3, R4, R5: start at the net (R3 and R4 on the left, R5 on the right), get to the 3 m line and attack in the middle.",
           "R6, R1, R2: you are off, the libero is in for you.",
           "@MB2SERVE",
-          "After serve, front row: always zone 3, block the middle.",
+          "When we serve, front row: always zone 3, block the middle.",
         ],
         OH1: [
           "You receive in every rotation, with the libero and the other outside.",
@@ -2517,6 +2519,11 @@
           roles: ["OP"],
           d: "In R4 to R6 the opposite goes straight to zone 1 after the pass for the back-row attack. Take off behind the 3 m line.",
         },
+        {
+          t: "When we serve: no overlap rule",
+          roles: ["OH1", "OH2", "MB1", "MB2", "OP", "S", "L"],
+          d: "Stand in your defence spot (rows still count for blocking and attacking). Not in the guide: FIVB rule 7.4, since 2025.",
+        },
       ];
       const RLAB = ROWS.map((r) => r.name);
       function lab(t) {
@@ -2532,17 +2539,17 @@
         const off = rulesMode === "official";
         const T = {
           "@MB1SERVE": off
-            ? "Exception: in R3 you are in zone 1, so you serve. The libero may not serve, so you stay on in zone 6 until your team loses the serve."
+            ? "Exception: in R3 you are in zone 1, so you serve, then run to zone 6. The libero may not serve, so you stay on until your team loses the serve."
             : "Drill rules: in R3 the libero serves for you, so you are off. (Official rules: you serve.)",
           "@MB2SERVE": off
-            ? "Exception: in R6 you are in zone 1, so you serve. The libero may not serve, so you stay on in zone 6 until your team loses the serve."
+            ? "Exception: in R6 you are in zone 1, so you serve, then run to zone 6. The libero may not serve, so you stay on until your team loses the serve."
             : "Drill rules: in R6 the libero serves for you, so you are off. (Official rules: you serve.)",
           "@LSERVE": off
-            ? "After serve: defend zone 5. Exception: in R3 and R6 the back-row middle is in zone 1 and must serve, because the libero may never serve (FIVB rules). You are off until your team loses the serve."
-            : "After serve: defend zone 5. Drill rules: in R3 and R6 you serve from zone 1 for the middle, then run to zone 5.",
+            ? "When we serve: defend zone 5. Exception: in R3 and R6 the back-row middle is in zone 1 and must serve, because the libero may never serve (FIVB rules). You are off until your team loses the serve."
+            : "When we serve: defend zone 5. Drill rules: in R3 and R6 you serve from zone 1 for the middle, then run to zone 5.",
           "@OHSERVE": off
-            ? "After serve: front → block left (zone 4); back → defend zone 6 (zone 5 in R3 and R6, when a middle serves)."
-            : "After serve: front → block left (zone 4); back → defend zone 6.",
+            ? "When we serve: front → block left (zone 4); back → defend zone 6 (zone 5 in R3 and R6, when a middle serves)."
+            : "When we serve: front → block left (zone 4); back → defend zone 6.",
         };
         return lab(T[x] || x);
       }
@@ -2558,7 +2565,7 @@
         $("sheet").innerHTML =
           `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role].map((x) => `<li>${ruleText(x)}</li>`).join("")}</ul>`;
         $("rotTable").innerHTML =
-          `<table><thead><tr><th></th><th>Rotation</th><th>Reception</th><th>After reception</th><th>After serve</th></tr></thead><tbody>${rows}</tbody></table>`;
+          `<table><thead><tr><th></th><th>Rotation</th><th>Reception</th><th>After reception</th><th>Our serve</th></tr></thead><tbody>${rows}</tbody></table>`;
         $("thumbs").innerHTML = thumbs;
       }
 
@@ -2679,7 +2686,7 @@
         return `<line x1="${a.x * W}" y1="${a.y * H}" x2="${b.x * W}" y2="${b.y * H}" stroke="var(--accent)" stroke-width="4" stroke-dasharray="2 6" stroke-linecap="round"/>`;
       }
       function nbHtml(nq, id) {
-        return `<div class="nbq" id="${id}"><b>Neighbour check</b> <span class="hint">optional bonus: answer, or just press Continue</span><p style="margin:2px 0 0">${nq.q}</p><div class="opts">${nq.opts.map((p) => `<button type="button" data-p="${p}">${p}</button>`).join("")}</div></div>`;
+        return `<div class="nbq" id="${id}"><b>Neighbour check</b> <span class="hint">optional bonus: answer, or just press Next</span><p style="margin:2px 0 0">${nq.q}</p><div class="opts">${nq.opts.map((p) => `<button type="button" data-p="${p}">${p}</button>`).join("")}</div></div>`;
       }
       function nbMark(id, nq, choice) {
         const box = $(id);
@@ -2795,7 +2802,7 @@
         $("dq").textContent =
           `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${ROWS[cur.ri].name} · ${FULL[cur.phase]}`;
         $("dsub").textContent =
-          `${cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? "Where do you go after the pass?" : cur.phase === "serve" ? "Our serve is in the air. Where do you defend?" : "Where do you stand?"}`;
+          `${cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? "Where do you go after the pass?" : cur.phase === "serve" ? "We serve. Where do you stand?" : "Where do you stand?"}`;
         $("fb").className = "fb";
         $("fb").innerHTML = HINT;
         drawDrill();
@@ -3111,7 +3118,7 @@
         return { ask, opts: shuffle([ask, near, ...rest]), who, done: false };
       }
       function setHtml(q) {
-        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press Continue</span><p style="margin:2px 0 0">${{ setter: "You set this ball. What is the call?", hitter: "The setter sets this ball for you. What is the call?", other: "The setter sets this ball. What is the call?" }[q.who]}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip ${s[3]}" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
+        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press Next</span><p style="margin:2px 0 0">${{ setter: "You set this ball. What is the call?", hitter: "The setter sets this ball for you. What is the call?", other: "The setter sets this ball. What is the call?" }[q.who]}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip ${s[3]}" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
       }
       function setMark(q, pick) {
         const ok = pick === q.ask[0];
@@ -3164,7 +3171,7 @@
         start: "Rotate",
         rec: "Receive",
         ar: "After reception",
-        serve: "After serve",
+        serve: "Our serve",
       };
       let G = null;
       const gSettings = store.get("gameSteps", { start: true, rec: true, ar: true, serve: true });
@@ -3343,7 +3350,7 @@
             start: `Where is your rotational spot in ${R}?`,
             rec: `${R}: the opponent is about to serve. Take your reception spot.`,
             ar: `${R}: good pass, the ball goes to the setter. Where do you go?`,
-            serve: `${R}: our serve is in the air. Where is your base defence spot?`,
+            serve: `${R}: we serve. Where do you stand?`,
           }[st.phase];
         if (st.phase === "start")
           return G.mixed
@@ -3355,7 +3362,7 @@
           return `${pre}The opponent is about to serve. Take your reception spot.`;
         if (st.phase === "ar")
           return `${pre}Good pass! The ball goes to the setter. Where do you go now?`;
-        return `${pre}We win the point and serve in ${R}. The serve is in the air: where is your base defence spot?`;
+        return `${pre}We win the point and serve in ${R}. Where do you stand when we serve?`;
       }
       function gShow() {
         const st = G.queue[G.i];
@@ -3399,11 +3406,11 @@
         $("gNext").hidden = false;
         $("gNext").disabled = true;
         $("gNext").removeAttribute("aria-disabled");
-        $("gNext").textContent = "Check";
+        $("gNext").textContent = "Continue";
         gStrip();
         $("gFb").className = "fb";
         $("gFb").innerHTML =
-          '<p class="hint">Tap the court where you stand, then press Check. If the libero is in for you, press “I\'m off court”.</p>';
+          '<p class="hint">Tap the court where you stand, then press Continue. If the libero is in for you, press “I\'m off court”.</p>';
         gDraw();
         G.t0 = performance.now();
       }
@@ -3482,7 +3489,7 @@
             ? "You don't attack: cover the hitter, then take your defensive spot. Remember rule 3."
             : "You are back row and don't attack now: cover the attack. The libero takes left back.";
         }
-        return `Once our serve is in the air, everyone switches to base defence: the front row blocks at the net, the back row defends deep. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;
+        return `When we serve there is no overlap rule, so everyone except the server stands in base defence before the serve: the front row blocks at the net, the back row defends deep. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;
       }
       $("gHelp").onclick = () => {
         if (!G || G.answered || G.help >= 2) return;
@@ -3590,10 +3597,10 @@
             ? "Next player"
             : "Show everyone's answers"
           : G.online
-            ? "Continue"
+            ? "Next"
             : G.i === G.queue.length - 1
               ? "See results"
-              : "Continue";
+              : "Next";
         $("gNext").focus({ preventScroll: true });
         if (st.phase === "rec" && (G.online ? G.online.meta.nb : $("nbGame").checked)) {
           const nq = neighbourQ(st.ri, G.role);
@@ -3691,7 +3698,7 @@
         if (!G.answered) {
           if (G.tap || G.off) {
             gCheck();
-            // Check and Continue share the button; a double tap on Check must not skip the feedback.
+            // The same button scores and moves on; a double tap must not skip the feedback.
             const next = $("gNext");
             next.setAttribute("aria-disabled", "true");
             setTimeout(() => next.removeAttribute("aria-disabled"), 400);
@@ -4811,7 +4818,7 @@
         const mine = ans[ON.uid];
         $("wText").innerHTML =
           (mine && !mine.done
-            ? `<b>Answer the ${bonus === "set call" ? "set call" : "neighbour"} question or press Continue.</b> The others wait for you. `
+            ? `<b>Answer the ${bonus === "set call" ? "set call" : "neighbour"} question or press Next.</b> The others wait for you. `
             : "") +
           (waiting.length ? `Waiting for ${waiting.join(", ")}.` : "Everyone has answered.") +
           (away.length ? ` Offline, skipped: ${away.join(", ")}.` : "") +
