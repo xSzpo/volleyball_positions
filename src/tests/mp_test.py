@@ -203,16 +203,13 @@ with sync_playwright() as p:
         pg.click("#setupBar")
     pg.click('.role[data-r="S"]')
     pg.click("#tabGame")
-    print("still in mp match:", pg.is_visible("#gPass"))
+    assert pg.is_visible("#gPass"), "role change at the top ended the same-device match"
     pg.click("#pQuit")
     pg.reload()
     pg.wait_for_timeout(300)
     pg.click("#tabGame")
-    print(
-        "mp remembered:",
-        pg.is_checked('input[name="gPlayers"][value="mp"]'),
-        pg.input_value('#mpList input[data-k="0"]'),
-    )
+    assert pg.is_checked('input[name="gPlayers"][value="mp"]'), "same-device choice not remembered"
+    assert pg.input_value('#mpList input[data-k="0"]'), "player names not remembered"
     # remove works after reload, when the list exists before the Rules switch is wired up
     rules_before = pg.evaluate("localStorage.getItem('ksv51:rulesMode')")
     pg.click('#mpList button[data-rm="2"]')
@@ -221,6 +218,6 @@ with sync_playwright() as p:
     print("remove after reload: ok")
     pg.check('input[name="gPlayers"][value="solo"]')
     pg.click("#gStart")
-    print("solo play visible:", pg.is_visible("#gPlay"), pg.is_hidden("#gWho"))
-    print(errs)
+    assert pg.is_visible("#gPlay") and pg.is_hidden("#gWho"), "solo match did not start after same-device"
+    assert not errs, f"JS errors: {errs}"
     b.close()
