@@ -2820,9 +2820,12 @@
             from: st.src,
             to: st.moves,
             notes: st.notes,
-            ball: st.ball ? { from: st.ball.from, to: st.ball.to } : null,
+            ball: st.ball ? { from: st.ball.from, to: st.ball.to, ms: st.ball.ms } : null,
             paths: Object.fromEntries(Object.entries(st.mv).map(([p, m]) => [p, m.path])),
             delays: Object.fromEntries(Object.entries(st.mv).map(([p, m]) => [p, m.delay])),
+            arrive: Object.fromEntries(
+              Object.entries(st.mv).map(([p, m]) => [p, m.delay + m.glide]),
+            ),
             start: st.start,
             dur: st.dur,
           })),

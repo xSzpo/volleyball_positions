@@ -697,6 +697,12 @@ def check_reception_ends(page: Page) -> None:
             take_off = (stages[1]["paths"].get(middle) or [{"y": 1.0}])[-1]
             if abs(take_off["y"] - APPROACH_Y) > 0.06:
                 fail(f"{tag}: {middle} is not ready for the quick when the pass reaches the setter: {take_off}")
+            if middle in stages[1]["arrive"]:
+                pass_ms, ready_ms = stages[1]["ball"]["ms"], stages[1]["arrive"][middle]
+                if abs(pass_ms - ready_ms) > 20:
+                    fail(f"{tag}: the pass reaches the setter at {pass_ms} ms, {middle} takes off at {ready_ms} ms")
+                if take_off["x"] >= ar[setter][0]:
+                    fail(f"{tag}: {middle} takes off at x {take_off['x']:.2f}, not left of the set spot {ar[setter]}")
             netward = [v["y"] for v in s3["paths"][middle]]
             if any(b < a - 0.005 for a, b in zip(netward, netward[1:], strict=False)):
                 fail(f"{tag}: {middle} runs towards the net during the set: {s3['paths'][middle]}")
