@@ -31,6 +31,9 @@
       --net: #ffffff;
       --net-label: #0b1b2e;
       --marker-edge: #0b1b2e;
+      --ball-blue: #1d5bc4;
+      --ball-yellow: #ffd02e;
+      --ball-seam: #0b1b2e;
       --ring: #0b1b2e;
       --ring-gap: #ffffff;
       --halo: rgba(255, 255, 255, 0.85);
@@ -554,22 +557,31 @@
       position: sticky;
       bottom: 0;
       z-index: 2;
+      display: flex;
       margin-top: 12px;
       padding: 4px 0;
       border-top: 1px solid var(--line);
       background: var(--panel);
     }
-    .lrow {
-      display: flex;
-      align-items: center;
-      gap: 6px;
+    .cpanel {
+      max-width: min(480px, calc(max(100svh - 330px, 381px) * 108 / 127));
+      margin: 0 auto;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(var(--court-g0), var(--court-g1) 50%, var(--court-g2));
+    }
+    .cpanel svg.court {
+      max-width: none;
+      border-radius: 0;
+      background: none;
     }
     .lanim {
       display: flex;
+      align-items: center;
+      justify-content: flex-end;
       gap: 6px;
+      padding: 0 8px 8px;
     }
-    .lanim[hidden],
-    .ldots[hidden] {
+    .lanim[hidden] {
       display: none;
     }
     .ictl {
@@ -578,7 +590,7 @@
       padding: 0;
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      background: var(--bg);
+      background: var(--panel);
       color: var(--ink);
       font:
         700 18px Barlow,
@@ -595,23 +607,19 @@
       cursor: default;
     }
     .ldots {
-      position: absolute;
-      top: -5px;
-      left: 50%;
-      transform: translateX(-50%);
       display: flex;
       gap: 8px;
-      padding: 0 6px;
-      background: var(--panel);
+      margin-right: auto;
+      padding-left: 4px;
     }
     .ldots i {
       width: 8px;
       height: 8px;
-      border: 1.5px solid var(--accent);
+      border: 1.5px solid var(--net-label);
       border-radius: 50%;
     }
     .ldots i.on {
-      background: var(--accent);
+      background: var(--net-label);
     }
     .lcap {
       margin-top: 10px;
@@ -1707,22 +1715,25 @@
           <div class="rots" id="rots"></div>
           <div class="phases" id="phases"></div>
           <p class="ttag" id="learnTag" aria-live="polite"></p>
-          <svg class="court" id="courtL" viewBox="-4 -14 108 127" aria-label="Court diagram"></svg>
+          <div class="cpanel" id="lPanel">
+            <svg
+              class="court"
+              id="courtL"
+              viewBox="-4 -14 108 127"
+              aria-label="Court diagram"
+            ></svg>
+            <div class="lanim" id="lAnim">
+              <div class="ldots" id="lDots" aria-hidden="true"></div>
+              <button type="button" class="ictl" id="lReplay" aria-label="Replay">⟲</button>
+              <button type="button" class="ictl" id="lPlay" aria-label="Play">▶</button>
+              <button type="button" class="ictl" id="lStep" aria-label="Step one stage">▸|</button>
+              <button type="button" class="ictl speed" id="lSpeed">1×</button>
+            </div>
+          </div>
           <div class="lcap" id="lCap" aria-live="polite"></div>
           <div class="cue" id="cue"></div>
           <div class="lctl" id="lCtl">
-            <div class="lrow">
-              <span class="lanim" id="lAnim">
-                <button type="button" class="ictl" id="lReplay" aria-label="Replay">⟲</button>
-                <button type="button" class="ictl" id="lPlay" aria-label="Play">▶</button>
-                <button type="button" class="ictl" id="lStep" aria-label="Step one stage">
-                  ▸|
-                </button>
-                <button type="button" class="ictl speed" id="lSpeed">1×</button>
-              </span>
-              <button type="button" class="btn primary" id="lNext"></button>
-            </div>
-            <div class="ldots" id="lDots" aria-hidden="true"></div>
+            <button type="button" class="btn primary" id="lNext"></button>
           </div>
         </div>
         <details class="card fold" id="howTo">
@@ -2894,6 +2905,8 @@
         stages: (ri, phase) =>
           phaseStages(ri, phase).stages.map((st) => ({
             moves: Object.keys(st.moves),
+            from: st.src,
+            to: st.moves,
             notes: st.notes,
             ball: !!st.ball,
           })),
@@ -3105,8 +3118,7 @@
         const at = PHASES.findIndex(([k]) => k === phase);
         const upNext = at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1];
         learnTr = animPhase(phase) ? phaseStages(ri, phase) : { stages: [] };
-        const controls = animated() && learnTr.stages.length;
-        $("lNext").textContent = `${controls ? "" : "Next: "}${upNext} ▸`;
+        $("lNext").textContent = `${phase === "rec" ? "After" : `Next: ${upNext}`} ▸`;
         $("lNext").setAttribute("aria-label", `Next: ${upNext}`);
         $("lCap").innerHTML = captionHtml(ri, phase, learnTr);
         renderAnimControls();
@@ -3131,13 +3143,55 @@
       const ANIM_OFF = new URLSearchParams(location.search).get("anim") === "0";
       const motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
       const SERVE_BALL = { x: 0.3, y: -0.08 };
-      const THEIR_SERVE = { x: 0.3, y: -0.12 };
+      const THEIR_SERVE = { x: 0.3, y: -0.09 };
+      const BALL_R = MARKER_R * 0.65;
+      // A unit volleyball, scaled to BALL_R: three curved panels with dark seams.
+      const BALL_SVG =
+        '<g class="ball" opacity="0"><clipPath id="ballClip"><circle r="1"/></clipPath>' +
+        '<circle r="1" fill="#fff"/><g clip-path="url(#ballClip)">' +
+        '<path d="M-1.2,0.45Q-0.1,-0.15 0.55,-1.2L-1.2,-1.2Z" fill="var(--ball-blue)"/>' +
+        '<path d="M1.2,-0.05Q0.05,0.35 -0.45,1.2L1.2,1.2Z" fill="var(--ball-yellow)"/>' +
+        '<g fill="none" stroke="var(--ball-seam)" stroke-width="0.09">' +
+        '<path class="seam" d="M-1.2,0.45Q-0.1,-0.15 0.55,-1.2"/>' +
+        '<path class="seam" d="M1.2,-0.05Q0.05,0.35 -0.45,1.2"/>' +
+        '<path class="seam" d="M-0.85,0.45Q0.15,0.1 0.9,-0.6"/></g></g>' +
+        '<circle r="1" fill="none" stroke="var(--marker-edge)" stroke-width="0.14"/></g>';
       const HOLD_MS = 900,
         BALL_MS = 450,
         FADE_MS = 150;
       const SERVE_HIT = "Serve from the spot behind the end line: the ball must clear the net.";
       const PASS_TEXT = "Pass the serve high to the setter at the net.";
       const SET_TEXT = "Take the pass at the setting spot: you play the second contact.";
+      const SPIKE_BALL = { x: 0.62, y: -0.09 };
+      const HIT_Y = 0.08,
+        APPROACH_Y = 0.17,
+        BACK_HIT_Y = 0.5;
+      // 3-2 cup around the hitter's spot at the net: three close and low (2-3 m), two deep (4-6 m).
+      const CUP = {
+        front: { dx: 0.24, y: 0.15 },
+        set: { dx: 0.23, y: 0.31 },
+        back: { dx: 0.03, y: 0.32 },
+      };
+      const DEEP = [
+        { dx: 0.38, y: 0.55 },
+        { dx: 0.05, y: 0.62 },
+      ];
+      const ATTACK_NOTES = {
+        hit: [
+          "Approach and jump: the setter sets you in zone 4.",
+          (z) => `Spike over the net, then back off to zone ${z} and defend.`,
+        ],
+        front: "Run your approach too: the block must watch you.",
+        back: "Approach behind the 3 m line too: the block must watch you.",
+        cupFront: (hitter) => `Approach for the quick, then drop in low to cover ${hitter}.`,
+        cupSet: (hitter) => `Set ${hitter} in zone 4, then follow in low to cover the hit.`,
+        cupBack: (hitter) => `Close in low behind ${hitter}: cover a ball the block sends back.`,
+        deep: "Stay deep behind the cover: a ball off the block can fly far.",
+        base: (z, front) =>
+          front
+            ? `Back off the net to zone ${z}: block or defend the next ball.`
+            : `Go to zone ${z} and defend while they play the ball.`,
+      };
       const SWAP_NOTES = {
         serve: [
           () => "Go off at the sideline: the libero may not serve.",
@@ -3213,6 +3267,36 @@
         }
         return { notes, team, swap: leave.length + enter.length > 0 };
       }
+      // Where the ball meets a player: at the marker edge toward its next target, so the label stays readable.
+      function touch(at, next) {
+        const dx = next ? next.x - at.x : 0,
+          dy = next ? next.y - at.y : -1,
+          d = Math.hypot(dx, dy) || 1,
+          k = (MARKER_R + BALL_R * 0.3) / 100 / d;
+        return { x: at.x + dx * k, y: at.y + dy * k };
+      }
+      // A mover stops a marker width from anyone standing there, so no two markers overlap in a hold.
+      function clearOf(p, end, standing) {
+        const gap = (2 * MARKER_R + 0.2) / 100;
+        return Object.entries(standing).reduce((pos, [q, o]) => {
+          const d = Math.hypot(pos.x - o.x, pos.y - o.y);
+          if (q === p || d >= gap || d === 0) return pos;
+          return { x: o.x + ((pos.x - o.x) * gap) / d, y: o.y + ((pos.y - o.y) * gap) / d };
+        }, end);
+      }
+      // Base defence by job for the players on court: OH 4, MB 3, S/OP 2 in front; S/OP 1, L 5, OH 6 behind.
+      function baseSpots(ri, ps) {
+        const zoneFor = (p) => {
+          const job = p.replace(/[0-9]/g, "");
+          if (isFront(ri, p)) return job === "OH" ? 4 : job === "MB" ? 3 : 2;
+          return job === "L" ? 5 : job === "OH" ? 6 : job === "S" || job === "OP" ? 1 : 6;
+        };
+        return pick(ps, (p) => {
+          const z = zoneFor(p),
+            [x, y] = BASE_DEF[z];
+          return { x, y, zone: z };
+        });
+      }
       // What happens in (ri, phase) after its still picture, in stages that end back on that picture.
       function phaseStages(ri, phase) {
         const list = learnSpots(ri, phase);
@@ -3227,7 +3311,7 @@
             stages.push({
               moves: { [sv]: from[sv] },
               notes: { ...notes, [sv]: SERVE_HIT },
-              ball: { from: from[sv], to: SERVE_BALL },
+              ball: { from: touch(from[sv], SERVE_BALL), to: SERVE_BALL },
             });
             stages.push({ moves: { [sv]: { x: base.x, y: base.y } }, notes: { [sv]: notes[sv] } });
           }
@@ -3240,10 +3324,13 @@
           const attackers = order.filter((p) => kind[p] === "front" || kind[p] === "back");
           const passer = from.L ? "L" : order.find((p) => !kind[p]);
           const setSpot = setter.length ? to[setter[0]] : null;
+          const front = attackers.filter((p) => kind[p] === "front");
+          const hitter = front.reduce((a, p) => (a == null || to[p].x < to[a].x ? p : a), null);
+          const hit = hitter && { x: to[hitter].x, y: HIT_Y };
           stages.push({
             moves: pick(setter, (p) => to[p]),
             notes: { ...notes, ...pick(setter, (p) => arNotes[p]) },
-            ball: passer && { from: THEIR_SERVE, to: from[passer] },
+            ball: passer && { from: THEIR_SERVE, to: touch(from[passer], setSpot || SERVE_BALL) },
           });
           stages.push({
             moves: pick(attackers, (p) => to[p]),
@@ -3252,8 +3339,63 @@
               ...(passer ? { [passer]: PASS_TEXT } : {}),
               ...pick(setter, () => SET_TEXT),
             },
-            ball: passer && setSpot && { from: from[passer], to: setSpot },
+            ball: passer &&
+              setSpot && { from: touch(from[passer], setSpot), to: touch(setSpot, hit) },
           });
+          if (hitter && setSpot) {
+            const near = (ps) =>
+              ps.reduce(
+                (a, p) =>
+                  a == null || Math.abs(to[p].x - hit.x) < Math.abs(to[a].x - hit.x) ? p : a,
+                null,
+              );
+            const cupFront = near(
+              order.filter((p) => isFront(ri, p) && p !== hitter && kind[p] !== "set"),
+            );
+            const backs = order.filter((p) => !isFront(ri, p) && !kind[p]);
+            const cupBack = backs.includes("L") ? "L" : near(backs);
+            const cup = { ...pick(setter, () => CUP.set) };
+            if (cupFront) cup[cupFront] = CUP.front;
+            if (cupBack) cup[cupBack] = CUP.back;
+            const rest = order.filter((p) => p !== hitter && !cup[p]);
+            const approach = rest.filter((p) => kind[p] === "front" || kind[p] === "back");
+            const deep = rest.filter((p) => !approach.includes(p));
+            const around = (c) => ({ x: Math.min(0.9, hit.x + c.dx), y: c.y });
+            const moves = {
+              [hitter]: hit,
+              ...pick(approach, (p) => ({
+                x: to[p].x,
+                y: kind[p] === "front" ? APPROACH_Y : BACK_HIT_Y,
+              })),
+              ...Object.fromEntries(Object.entries(cup).map(([p, c]) => [p, around(c)])),
+              ...Object.fromEntries(
+                deep.map((p, i) => [p, around(DEEP[Math.min(i, DEEP.length - 1)])]),
+              ),
+            };
+            const spike = touch(hit, SPIKE_BALL);
+            stages.push({
+              moves,
+              notes: {
+                [hitter]: ATTACK_NOTES.hit[0],
+                ...pick(approach, (p) => ATTACK_NOTES[kind[p]]),
+                ...pick(deep, () => ATTACK_NOTES.deep),
+                ...pick(setter, () => ATTACK_NOTES.cupSet(hitter)),
+                ...(cupFront ? { [cupFront]: ATTACK_NOTES.cupFront(hitter) } : {}),
+                ...(cupBack ? { [cupBack]: ATTACK_NOTES.cupBack(hitter) } : {}),
+              },
+              ball: { from: touch(setSpot, hit), to: spike, sync: true },
+            });
+            const base = baseSpots(ri, order);
+            const zone = (p) => base[p].zone;
+            stages.push({
+              moves: pick(order, (p) => ({ x: base[p].x, y: base[p].y })),
+              notes: {
+                ...pick(order, (p) => ATTACK_NOTES.base(zone(p), isFront(ri, p))),
+                [hitter]: ATTACK_NOTES.hit[1](zone(hitter)),
+              },
+              ball: { from: spike, to: SPIKE_BALL },
+            });
+          }
         }
         const tr = {
           from,
@@ -3266,6 +3408,11 @@
           st.start = t;
           st.src = {};
           st.glide = {};
+          const standing = { ...at, ...st.moves };
+          Object.keys(st.moves).forEach((p) => {
+            st.moves[p] = clearOf(p, st.moves[p], standing);
+            standing[p] = st.moves[p];
+          });
           Object.entries(st.moves).forEach(([p, end]) => {
             st.src[p] = at[p];
             st.glide[p] = Math.min(
@@ -3275,6 +3422,7 @@
             at[p] = { x: end.x, y: end.y };
           });
           st.dur = Math.max(600, ...Object.values(st.glide));
+          if (st.ball) st.ball.ms = st.ball.sync ? st.dur : BALL_MS;
           t += st.dur + HOLD_MS;
         });
         tr.total = t;
@@ -3330,13 +3478,27 @@
           const start = b.start;
           const until = k + 1 < tr.stages.length ? tr.stages[k + 1].start : tr.total + 1;
           if (a.t >= start && a.t < until)
-            ball = { ...b.ball, u: Math.min(1, (a.t - start) / BALL_MS) };
+            ball = { ...b.ball, u: Math.min(1, (a.t - start) / b.ball.ms) };
+        });
+        a.trails.forEach(({ el, st, p }) => {
+          if (a.t <= st.start) {
+            el.setAttribute("visibility", "hidden");
+            return;
+          }
+          const end = a.t < st.start + st.glide[p] ? posAt(tr, p, a.t) : st.moves[p];
+          el.setAttribute("x2", end.x * W);
+          el.setAttribute("y2", end.y * H);
+          el.setAttribute("visibility", "visible");
         });
         a.ball.setAttribute("opacity", ball ? 1 : 0);
         if (ball) {
-          a.ball.setAttribute("cx", (ball.from.x + (ball.to.x - ball.from.x) * ball.u) * W);
-          a.ball.setAttribute("cy", (ball.from.y + (ball.to.y - ball.from.y) * ball.u) * H);
-          a.ball.setAttribute("r", 1.8 + Math.sin(Math.PI * ball.u) * 1.2);
+          const x = (ball.from.x + (ball.to.x - ball.from.x) * ball.u) * W,
+            y = (ball.from.y + (ball.to.y - ball.from.y) * ball.u) * H,
+            r = BALL_R * (1 + 0.15 * Math.sin(Math.PI * ball.u));
+          a.ball.setAttribute(
+            "transform",
+            `translate(${x} ${y}) rotate(${ball.u * 360}) scale(${r})`,
+          );
         }
         if (i !== a.stage) {
           a.stage = i;
@@ -3400,13 +3562,22 @@
         const mark = (p, me) =>
           `<g class="am" data-p="${p}">${chip({ p, x: 0, y: 0 }, { me })}</g>`;
         let s = DEFS + courtBase(off);
+        const trails = [];
+        tr.stages.forEach((st) => {
+          Object.entries(st.moves).forEach(([p, end]) => {
+            const src = st.src[p];
+            if (Math.hypot(end.x - src.x, end.y - src.y) < 0.01) return;
+            trails.push({ st, p });
+            s += `<line class="trail" data-p="${p}" x1="${src.x * W}" y1="${src.y * H}" x2="${src.x * W}" y2="${src.y * H}" stroke="${routeOf(p)}" stroke-width="1" stroke-dasharray="2 1.6" stroke-linecap="round" opacity="0.6" visibility="hidden"/>`;
+          });
+        });
         tr.players
           .filter((p) => p !== role)
           .forEach((p) => {
             s += mark(p, false);
           });
         if (tr.players.includes(role)) s += mark(role, true);
-        s += `<circle class="ball" r="1.8" fill="#fff" stroke="var(--marker-edge)" stroke-width="0.6" opacity="0"/>`;
+        s += BALL_SVG;
         $("courtL").innerHTML = s;
         const els = {};
         $("courtL")
@@ -3418,6 +3589,10 @@
           tr,
           t: 0,
           els,
+          trails: [...$("courtL").querySelectorAll(".trail")].map((el, i) => ({
+            el,
+            ...trails[i],
+          })),
           ball: $("courtL").querySelector(".ball"),
           stage: -1,
           total: tr.total,
@@ -3426,7 +3601,7 @@
         animResume(step ? tr.stages[0].dur : null);
         learnFit();
       }
-      // While a phase plays, the court and caption sit above the sticky controls.
+      // While a phase plays, the court and caption sit above the sticky Next.
       function learnFit() {
         const court = $("courtL").getBoundingClientRect();
         const cap = $("lCap").getBoundingClientRect();
@@ -3451,8 +3626,8 @@
       }
       function renderAnimControls() {
         const on = animated() && !!learnTr?.stages.length;
-        $("lAnim").hidden = !on;
-        $("lDots").hidden = !on;
+        $("lAnim").hidden = !animated();
+        $("lAnim").style.visibility = on ? "" : "hidden";
         if (!on) return;
         const playing = !!anim?.playing;
         $("lPlay").textContent = playing ? "❚❚" : "▶";

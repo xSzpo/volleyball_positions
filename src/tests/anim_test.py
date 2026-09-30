@@ -5,11 +5,14 @@ picture; Rotation and After reception are static with no controls. Checks the
 stage end positions, the controls (Replay, Pause, Step, speed), that Next and
 the chips never animate or wait, the still captions for exchanges and the
 middle pair reset, the caption length and height, reduced motion and ?anim=0,
-the sticky controls on a short phone, and that the flag off leaves no trace.
+Reception through the set and spike to the after-reception spots, the movement
+trails, the controls in the court panel on a short phone, and that the flag off
+leaves no trace.
 
 Usage: python src/tests/anim_test.py
 """
 
+import math
 import re
 import sys
 from pathlib import Path
@@ -118,8 +121,8 @@ def check_opens_and_returns(page: Page) -> None:
         if sorted(page.evaluate(MARKERS, "#courtL .am")) != sorted(still):
             fail(f"{label}: the animation has other players than the still picture")
         wait_done(page)
-        if page.locator("#courtL .am").count():
-            fail(f"{label}: the animation markers stay after the play")
+        if page.locator("#courtL .am").count() or page.locator("#courtL .trail").count():
+            fail(f"{label}: the animation markers or trails stay after the play")
         end = page.evaluate(MARKERS, "#courtL .mk")
         if sorted(end) != sorted(still):
             fail(f"{label}: the end picture shows {sorted(end)}, expected {sorted(still)}")
@@ -194,23 +197,63 @@ def check_static(page: Page) -> None:
             fail(f"{key} has animation stages: {stages}")
 
 
+HIT_Y, APPROACH_Y, BACK_HIT_Y = 0.08, 0.17, 0.5
+MARKER_R = 0.06
+TRAILS = """() => [...document.querySelectorAll('#courtL .trail')]
+  .filter((l) => l.getAttribute('visibility') === 'visible').map((l) => l.dataset.p)"""
+TRAIL_LENGTHS = """() => Object.fromEntries([...document.querySelectorAll('#courtL .trail')]
+  .filter((l) => l.getAttribute('visibility') === 'visible')
+  .map((l) => [l.dataset.p, Math.hypot(l.getAttribute('x2') - l.getAttribute('x1'),
+    l.getAttribute('y2') - l.getAttribute('y1'))]))"""
+
+
+def base_zone(p: str, front: bool) -> int:
+    """Base defence by job: OH 4, MB 3, S/OP 2 in the front row; S/OP 1, L 5, OH 6 in the back row."""
+    job = p.rstrip("12")
+    if front:
+        return {"OH": 4, "MB": 3}.get(job, 2)
+    return {"L": 5, "OH": 6, "S": 1, "OP": 1}.get(job, 6)
+
+
+def reception_plan(ri: int, mode: str) -> tuple[list[list[str]], dict[str, tuple[float, float]], str]:
+    """The movers per Reception stage, the base defence end positions and the zone 4 hitter."""
+    row = lineup(ri, mode)  # type: ignore[arg-type]
+    ar = {p: (x, y) for p, x, y, _ in row["ar"]}
+    kind = {p: k for p, _, _, k in row["ar"]}
+    order = [p for p, _, _ in row["rec"]]
+    attackers = [p for p in order if kind[p] in ("front", "back")]
+    hitter = min((p for p in attackers if kind[p] == "front"), key=lambda p: ar[p][0])
+    moves = [[p for p in order if kind[p] == "set"], attackers, order, order]
+    end = {p: BASE_DEF[base_zone(p, p in row["front"])][:2] for p in order}
+    return moves, end, hitter
+
+
+def trail_movers(stage: dict[str, Any]) -> list[str]:
+    """The players who move far enough in a stage to leave a trail."""
+    return [
+        p
+        for p in stage["moves"]
+        if abs(stage["to"][p]["x"] - stage["from"][p]["x"]) + abs(stage["to"][p]["y"] - stage["from"][p]["y"]) >= 0.01
+    ]
+
+
 def check_reception_stages(page: Page) -> None:
-    """Step runs one stage and pauses: the serve comes and the setter releases, then the pass and the attackers."""
+    """Step runs one stage and pauses: serve and setter, pass and approach, set and cover, spike and defence."""
     open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
     learn(page, 0, "start")
     page.click('.ph[data-k="rec"]')
     wait_done(page)
-    row = lineup(0, "simple")
     rec = spots(0, "rec")
     ar = spots(0, "ar")
-    kind = {p: k for p, _, _, k in row["ar"]}
+    moves, end, hitter = reception_plan(0, "simple")
     stages: list[dict[str, Any]] = page.evaluate("window.ksvLearn.stages(0, 'rec')")
-    if [st["moves"] for st in stages] != [["S"], [p for p in rec if kind[p] in ("front", "back")]]:
-        fail(f"Reception stages move {[st['moves'] for st in stages]}")
+    if [sorted(st["moves"]) for st in stages] != [sorted(m) for m in moves]:
+        fail(f"Reception stages move {[st['moves'] for st in stages]}, expected {moves}")
     if not all(st["ball"] for st in stages):
         fail("a Reception stage has no ball")
-    stage_kinds: list[tuple[str | None, ...]] = [("set",), ("front", "back")]
-    for stage in range(2):
+    after_pass = {p: ar[p] if p in moves[0] + moves[1] else rec[p] for p in rec}
+    trails: list[str] = []
+    for stage in range(4):
         page.click("#lStep")
         wait_paused(page)
         state = anim(page)
@@ -220,16 +263,123 @@ def check_reception_stages(page: Page) -> None:
         if state["stage"] != stage or page.locator("#lDots i.on").count() != stage + 1:
             fail(f"stage {stage + 1}: dots {page.locator('#lDots i.on').count()} on, stage {state['stage']}")
         got = page.evaluate(MARKERS, "#courtL .am")
-        moved = {p: ar[p] if any(kind[p] in kinds for kinds in stage_kinds[: stage + 1]) else rec[p] for p in rec}
-        check_positions(f"after Step {stage + 1}", got, moved)
-    page.click("#lStep")
-    wait_paused(page)
-    if anim(page):
-        fail("the last Step does not return to the still picture")
-    check_positions("after the last Step", page.evaluate(MARKERS, "#courtL .mk"), rec)
+        if stage == 0:
+            check_ball(page, got["L"])
+        if stage == 1:
+            check_positions("after the pass", got, after_pass)
+        if stage == 3:
+            check_positions("after the spike", got, end)
+        trails += trail_movers(stages[stage])
+        if sorted(page.evaluate(TRAILS)) != sorted(trails):
+            fail(f"after Step {stage + 1}: trails {sorted(page.evaluate(TRAILS))}, expected {sorted(trails)}")
+    page.click("#lReplay")
+    if not (anim(page) or {}).get("playing"):
+        page.click("#lPlay")
+    ends = (anim(page) or {}).get("ends", [0, 0, 0, 0])
+    page.wait_for_function(f"(window.ksvLearn.anim() || {{t: 1e9}}).t > {(ends[1] + ends[2]) / 2}", timeout=15000)
+    mid = page.evaluate(TRAIL_LENGTHS)
+    if not set(trail_movers(stages[0]) + trail_movers(stages[1])) <= set(mid) or not all(v > 1 for v in mid.values()):
+        fail(f"mid stage 3: trails {mid}, expected at least the setter and the attackers")
+    page.click("#lReplay")
+    state = anim(page)
+    fresh = page.evaluate(TRAIL_LENGTHS)
+    if not state or state["t"] > 200 or any(v > 1 for v in fresh.values()):
+        fail(f"Replay keeps the old trails: {fresh} at {state and state['t']}")
+    if not (anim(page) or {}).get("playing"):
+        page.click("#lPlay")
+    wait_done(page)
+    if page.locator("#courtL .trail").count():
+        fail("the trails stay on the still picture")
+    check_positions("back on the still picture", page.evaluate(MARKERS, "#courtL .mk"), rec)
     captions: list[str] = page.evaluate("window.ksvLearn.captions(0, 'rec', 'L')")
-    if captions[-1] != "You (L): Pass the serve high to the setter at the net.":
+    if captions[1] != "You (L): Pass the serve high to the setter at the net." or captions[-1] != (
+        "You (L): Go to zone 5 and defend while they play the ball."
+    ):
         fail(f"Reception captions for L: {captions}")
+    if hitter != "OP" or "set op in zone 4" not in page.evaluate("window.ksvLearn.captions(0, 'rec', 'S')")[2].lower():
+        fail(f"R1: the setter does not set the zone 4 hitter {hitter}")
+
+
+def check_ball(page: Page, passer: list[float]) -> None:
+    """The ball is a volleyball with seams, about two thirds of a marker, and stops at the passer's edge."""
+    ball: dict[str, Any] = page.evaluate(
+        """() => { const g = document.querySelector('#courtL .ball');
+        const t = g.getAttribute('transform') || '';
+        const m = t.match(/scale\\(([\\d.]+)\\)/), at = t.match(/translate\\((-?[\\d.]+)[ ,](-?[\\d.]+)\\)/);
+        return { opacity: g.getAttribute('opacity'), r: m ? +m[1] : 0, at: at ? [+at[1], +at[2]] : null,
+          seams: g.querySelectorAll('path.seam').length,
+          panels: [...g.querySelectorAll('path[fill]')].map((e) => e.getAttribute('fill')) }; }"""
+    )
+    if ball["opacity"] != "1" or not 0.6 * 6 <= ball["r"] <= 0.7 * 6:
+        fail(f"the ball is not shown at 0.6 to 0.7 of the marker radius: {ball}")
+    if ball["seams"] < 3 or len(ball["panels"]) < 2:
+        fail(f"the ball has no volleyball seams or panels: {ball}")
+    if not ball["at"] or math.dist(ball["at"], passer) < MARKER_R * 100:
+        fail(f"the ball covers the passer's label: ball at {ball['at']}, passer at {passer}")
+
+
+def check_reception_ends(page: Page) -> None:
+    """Every rotation, both rule sets: set and 3-2 cup, then the spike and base defence in every zone."""
+    zones = {z: spot[:2] for z, spot in BASE_DEF.items()}
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            tag = f"{mode} R{ri + 1} Reception"
+            row = lineup(ri, mode)  # type: ignore[arg-type]
+            moves, end, hitter = reception_plan(ri, mode)
+            stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")
+            if [sorted(st["moves"]) for st in stages] != [sorted(m) for m in moves]:
+                fail(f"{tag}: stages move {[st['moves'] for st in stages]}, expected {moves}")
+                continue
+            kind = {p: k for p, _, _, k in row["ar"]}
+            at_set = {p: (v["x"], v["y"]) for p, v in stages[2]["to"].items()}
+            hit = at_set[hitter]
+            if abs(hit[1] - HIT_Y) > 0.005:
+                fail(f"{tag}: {hitter} hits at {hit}")
+            for p, spot in at_set.items():
+                if p == hitter:
+                    continue
+                gap = math.dist(spot, hit)
+                if kind[p] == "front" and abs(spot[1] - APPROACH_Y) > 0.005 and not 0.22 <= gap <= 0.34:
+                    fail(f"{tag}: {p} neither finishes the approach nor covers close: {spot}")
+                if kind[p] == "back" and abs(spot[1] - BACK_HIT_Y) > 0.005 and not 0.22 <= gap <= 0.34:
+                    fail(f"{tag}: {p} does not take off behind the 3 m line: {spot}")
+            close_cover = [p for p, spot in at_set.items() if p != hitter and 0.22 <= math.dist(spot, hit) <= 0.34]
+            setter = next(p for p in kind if kind[p] == "set")
+            if len(close_cover) != 3 or setter not in close_cover or "L" not in close_cover:
+                fail(f"{tag}: the close cover is {close_cover}, expected the setter, L and a front player")
+            track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, 'rec', 1)")
+            last = {p: (v["x"], v["y"]) for p, v in track[-1]["pos"].items()}
+            check_positions(f"{tag} end", {p: [x * 100, y * 100] for p, (x, y) in last.items()}, end)
+            held = sorted(z for z, spot in zones.items() for p in last if math.dist(last[p], spot) < 0.005)
+            if held != [1, 2, 3, 4, 5, 6]:
+                fail(f"{tag}: after the spike the defence holds zones {held}")
+            if "S" in row["back"] and math.dist(last["S"], zones[1]) > 0.005:
+                fail(f"{tag}: the back-row setter ends at {last['S']}, not zone 1")
+            spike = stages[-1]["notes"].get(hitter, "")
+            if not spike.startswith("Spike over the net"):
+                fail(f"{tag}: the last stage is not {hitter}'s spike: {spike!r}")
+
+
+def check_no_overlap(page: Page) -> None:
+    """No two markers overlap whenever the players stand still, in any animated phase, rotation and rule set."""
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            for phase in ("serve", "rec"):
+                track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, '{phase}', 300)")
+                seen: set[tuple[str, str]] = set()
+                for now, then in zip(track, track[1:], strict=False):
+                    if now["pos"] != then["pos"]:
+                        continue
+                    pos = now["pos"]
+                    names = sorted(pos)
+                    for i, a in enumerate(names):
+                        for b in names[i + 1 :]:
+                            gap = math.dist((pos[a]["x"], pos[a]["y"]), (pos[b]["x"], pos[b]["y"]))
+                            if gap < 2 * MARKER_R - 1e-6 and (a, b) not in seen:
+                                seen.add((a, b))
+                                fail(f"{mode} R{ri + 1} {phase} t={now['t']:.0f}: {a} and {b} overlap ({gap:.3f})")
 
 
 def check_never_blocks(page: Page) -> None:
@@ -363,8 +513,9 @@ def check_reduced(browser: Browser) -> None:
                 fail(f"{label} {phase}: Next plays a glide")
             if page.is_visible("#lAnim") or page.is_visible("#lDots") or not page.is_visible("#lNext"):
                 fail(f"{label} {phase}: Replay/Pause/Step/speed and dots must be hidden, Next shown")
-            if page.locator("#lCap ol li").count() != 2:
-                fail(f"{label} {phase}: the caption is not the list of two stages: {page.inner_text('#lCap')!r}")
+            count = 2 if phase == "serve" else 4
+            if page.locator("#lCap ol li").count() != count:
+                fail(f"{label} {phase}: the caption is not the list of {count} stages: {page.inner_text('#lCap')!r}")
         page.click("#lNext")
         if page.locator("#courtL .rt").count() == 0 or page.locator("#lCap ol").count():
             fail(f"{label}: After reception has no routes or lists stages")
@@ -373,21 +524,29 @@ def check_reduced(browser: Browser) -> None:
 
 LAYOUT = """() => {
   const box = (e) => e.getBoundingClientRect();
-  const row = box(document.querySelector('#lCtl')), dots = box(document.querySelector('#lDots'));
-  const top = Math.min(row.top, dots.height ? dots.top : row.top);
-  const hit = (b) => b.bottom > top + 0.5 && b.top < innerHeight;
+  const row = box(document.querySelector('#lCtl'));
+  const hit = (b) => b.bottom > row.top + 0.5 && b.top < innerHeight;
   const marks = [...document.querySelectorAll('#courtL .am, #courtL .mk')]
     .filter((g) => +(g.getAttribute('opacity') ?? 1) > 0)
     .map((g) => [g.dataset.p, box(g)]);
   const court = box(document.querySelector('#courtL')), cap = box(document.querySelector('#lCap'));
+  const panel = box(document.querySelector('#lPanel')), bar = box(document.querySelector('#lAnim'));
+  const pill = box(document.querySelector('#courtL .offpill'));
+  const inside = (b) => b.left >= panel.left - 0.5 && b.right <= panel.right + 0.5
+    && b.top >= panel.top - 0.5 && b.bottom <= panel.bottom + 0.5;
+  const apart = (a, b) => a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+  const buttons = [...document.querySelectorAll('#lAnim button')].map(box);
+  const clip = (m) => ({ left: m.left, right: m.right, top: m.top, bottom: Math.min(m.bottom, court.bottom) });
   return { rowHeight: row.height, nextHeight: box(document.querySelector('#lNext')).height,
-    capCovered: hit(cap), courtCovered: hit(court) || court.top < 0,
+    capCovered: hit(cap), courtCovered: hit(court) || court.top < 0, barCovered: hit(bar),
+    barInPanel: inside(bar) && buttons.every(inside), barOffCourt: bar.top >= court.bottom - 0.5,
+    barClear: buttons.every((b) => apart(b, pill) && marks.every(([, m]) => apart(b, clip(m)))),
     marksCovered: marks.filter(([, b]) => hit(b) || b.top < 0).map(([p]) => p) };
 }"""
 
 
 def check_phone(browser: Browser) -> None:
-    """While a phase plays, the sticky row covers neither the caption nor a marker, and it stays one line."""
+    """While a phase plays, the controls sit in the court panel and the sticky row covers nothing."""
     for height in (750, 664):
         context = browser.new_context(viewport={"width": 390, "height": height}, is_mobile=True, has_touch=True)
         page = context.new_page()
@@ -412,8 +571,13 @@ def check_phone(browser: Browser) -> None:
                 got = page.evaluate(LAYOUT)
                 if got["rowHeight"] > 58 or got["nextHeight"] > 50:
                     fail(f"{tag}: row {got['rowHeight']:.0f} px, Next {got['nextHeight']:.0f} px high")
-                if got["capCovered"] or got["marksCovered"]:
-                    fail(f"{tag}: the row covers the caption {got['capCovered']} or markers {got['marksCovered']}")
+                if got["capCovered"] or got["marksCovered"] or got["barCovered"]:
+                    fail(
+                        f"{tag}: the row covers the caption {got['capCovered']}, the controls {got['barCovered']}"
+                        f" or markers {got['marksCovered']}"
+                    )
+                if not (got["barInPanel"] and got["barOffCourt"] and got["barClear"]):
+                    fail(f"{tag}: the controls are not in the court panel below the court, clear of markers: {got}")
                 if height == 750 and got["courtCovered"]:
                     fail(f"{tag}: the court is not all in view above the row")
                 played += 1
@@ -476,6 +640,8 @@ def main() -> None:
         check_no_autoplay(page)
         check_static(page)
         check_reception_stages(page)
+        check_reception_ends(page)
+        check_no_overlap(page)
         check_never_blocks(page)
         check_speed(page)
         check_still_captions(page)
