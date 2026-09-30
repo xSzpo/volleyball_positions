@@ -2,7 +2,7 @@
 # Pre-PR run: build and audit, then both full qa sweeps in parallel with the other browser tests.
 source "$(dirname "$0")/lib.sh"
 
-ORDER=(build audit qa-m qa-d theme analytics match mp online)
+ORDER=(build audit qa-m qa-d theme analytics flags match mp online)
 run build src/build.py
 run audit src/tests/audit.py
 read -r rc _ <"$LOGS/build.status"
@@ -12,6 +12,7 @@ if [ "$rc" = 0 ]; then
   {
     run theme src/tests/theme_test.py
     run analytics src/tests/analytics_test.py
+    run flags src/tests/flags_test.py
     run match src/tests/match_test.py
     run mp src/tests/mp_test.py
     run online src/tests/online_test.py

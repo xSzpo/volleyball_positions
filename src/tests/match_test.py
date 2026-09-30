@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from data import ROWS, SETS, UNCONFIRMED_SETS  # noqa: E402
 
-URL = (ROOT / "index.html").as_uri()
+URL = (ROOT / "index.html").as_uri() + "?ff=all"
 FAIL: list[str] = []
 
 

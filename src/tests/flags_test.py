@@ -1,0 +1,231 @@
+"""Playwright test of the feature flags in index.html.
+
+Checks the built-in defaults, the ``?ff=`` preview override and its storage,
+that a feature that is off leaves no trace in the DOM, dependency propagation,
+the tab bar and the empty state, and the PostHog override on the Pages host
+with a fake PostHog SDK.
+
+Usage: python src/tests/flags_test.py
+"""
+
+import base64
+import hashlib
+import json
+import re
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from playwright.sync_api import Browser, Page, Route, sync_playwright
+
+ROOT = Path(__file__).resolve().parents[2]
+URL = (ROOT / "index.html").as_uri()
+PAGES_URL = "https://xszpo.github.io/volleyball_positions/"
+FAIL: list[str] = []
+UNBUILT = {"learn-animation", "rules-official", "after-dig"}
+FAKE_POSTHOG = """
+window.posthog = {
+  calls: { register: [] },
+  init(key, config) { this.config = config; return this; },
+  register(props) { this.calls.register.push(props); },
+  onFeatureFlags(callback) { this.callback = callback; },
+  capture() {},
+  fire(values) { this.callback(Object.keys(values).filter((k) => values[k]), values, { errorsLoading: false }); },
+};
+"""
+
+
+def fail(message: str) -> None:
+    FAIL.append(message)
+    print("FAIL:", message, flush=True)
+
+
+def values(page: Page) -> dict[str, bool]:
+    result: dict[str, bool] = page.evaluate("window.ksvFeatures.values()")
+    return result
+
+
+def present(page: Page, element_id: str) -> bool:
+    return bool(page.evaluate("(id) => !!document.getElementById(id)", element_id))
+
+
+def open_app(page: Page, query: str = "") -> None:
+    page.goto(URL + query)
+    page.wait_for_timeout(200)
+
+
+def check_defaults(page: Page) -> None:
+    open_app(page)
+    got = values(page)
+    for key, on in got.items():
+        if on != (key not in UNBUILT):
+            fail(f"default {key} = {on}")
+    for element_id in ("tabLearn", "drill", "game", "sets", "setsQuiz", "downloads", "howTo", "allRots"):
+        if not present(page, element_id):
+            fail(f"default: #{element_id} missing")
+    if page.is_hidden("#tabs") or page.is_visible("#ffEmpty"):
+        fail("default: tab bar hidden or empty state shown")
+    if page.evaluate("localStorage.getItem('ksv51:ffOverride')") is not None:
+        fail("default: override stored without ?ff=")
+
+
+def check_off_leaves_no_trace(page: Page) -> None:
+    open_app(page, "?ff=-drill-tab")
+    html = page.evaluate(
+        """() => {
+            const body = document.body.cloneNode(true);
+            body.querySelectorAll("script").forEach((s) => s.remove());
+            return body.innerHTML;
+        }"""
+    )
+    for element_id in ("tabDrill", "drill", "reviewBtn", "nbDrill", "nbGame", "dOpts"):
+        if present(page, element_id):
+            fail(f"drill-tab off: #{element_id} still in the DOM")
+    for text in ("quick quiz", "Drill options", "Reset my progress", "Neighbour check (who stands"):
+        if text in html:
+            fail(f"drill-tab off: {text!r} still in the DOM")
+    got = values(page)
+    if got["neighbour-check"] or got["drill-review"]:
+        fail("drill-tab off: dependent features still on")
+    if not got["match-solo"]:
+        fail("drill-tab off: match-solo switched off too")
+    page.click("#tabGame")
+    page.click("#gStart")
+    page.wait_for_timeout(200)
+    if not page.is_visible("#gPlay"):
+        fail("drill-tab off: Match does not start")
+
+
+def check_override_storage(page: Page) -> None:
+    open_app(page, "?ff=reset,-sets-quiz")
+    open_app(page)
+    if present(page, "setsQuiz") or not present(page, "sets"):
+        fail("?ff=-sets-quiz not kept after a reload without ?ff=")
+    open_app(page, "?ff=-downloads")
+    stored = json.loads(page.evaluate("localStorage.getItem('ksv51:ffOverride')") or "null")
+    if stored != {"sets-quiz": False, "downloads": False}:
+        fail(f"?ff= does not merge into the stored override: {stored}")
+    open_app(page, "?ff=all")
+    if not all(values(page).values()):
+        fail(f"?ff=all: not every flag on: {values(page)}")
+    open_app(page, "?ff=-sets-tab")
+    got = values(page)
+    if got["sets-tab"] or got["sets-quiz"] or got["set-call-check"] or not got["learn-animation"]:
+        fail(f"?ff=all then ?ff=-sets-tab: {got}")
+    if present(page, "setGameCheck"):
+        fail("sets-tab off: the set call check is still in Match options")
+    open_app(page, "?ff=reset")
+    if page.evaluate("localStorage.getItem('ksv51:ffOverride')") is not None:
+        fail("?ff=reset left the override stored")
+    if not present(page, "sets") or values(page)["learn-animation"]:
+        fail("?ff=reset did not restore the defaults")
+    parsed = page.evaluate("window.ksvFeatures.ffParse(' drill-tab , -nope,-learn-tab,bogus', {'sets-tab': false})")
+    if parsed != {"sets-tab": False, "drill-tab": True, "learn-tab": False}:
+        fail(f"ffParse: {parsed}")
+
+
+def check_tabs(page: Page) -> None:
+    open_app(page, "?ff=reset,-drill-tab,-match-solo,-sets-tab")
+    if page.is_visible("#tabs") or not page.is_visible("#learn"):
+        fail("one tab on: tab bar shown or Learn hidden")
+    open_app(page, "?ff=reset,-learn-tab")
+    if page.is_visible("#tabs") or not page.is_visible("#sets"):
+        fail("only Sets on: tab bar shown or Sets not opened")
+    open_app(page, "?ff=reset,-learn-tab,-sets-tab")
+    if page.is_visible("#tabs") or not page.is_visible("#ffEmpty"):
+        fail("no tab on: tab bar shown or no empty state")
+    if page.locator("section").count():
+        fail("no tab on: a tab section is still in the DOM")
+    if not page.is_visible("#themeBtn") or not page.is_visible("#setupBar"):
+        fail("no tab on: the shell is gone")
+    open_app(page, "?ff=reset")
+
+
+def serve(html: str) -> Callable[[Route], None]:
+    def handler(route: Route) -> None:
+        route.fulfill(status=200, content_type="text/html", body=html)
+
+    return handler
+
+
+def pages_html() -> str:
+    html = (ROOT / "index.html").read_text()
+    html = html.replace('const POSTHOG_KEY = "phc_REPLACE_ME";', 'const POSTHOG_KEY = "phc_test123";')
+    digest = base64.b64encode(hashlib.sha384(FAKE_POSTHOG.encode()).digest()).decode()
+    return re.sub(r'integrity: "sha384-[^"]+"', f'integrity: "sha384-{digest}"', html)
+
+
+def check_posthog(browser: Browser) -> None:
+    context = browser.new_context(viewport={"width": 360, "height": 740})
+    context.add_init_script(
+        """if (!sessionStorage.getItem('seeded')) {
+            sessionStorage.setItem('seeded', '1');
+            localStorage.setItem('ksv51:flags', JSON.stringify({'drill-tab': false}));
+        }"""
+    )
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.route(PAGES_URL + "**", serve(pages_html()))
+    page.route(
+        re.compile("posthog-js"),
+        lambda route: route.fulfill(
+            body=FAKE_POSTHOG, content_type="text/javascript", headers={"Access-Control-Allow-Origin": "*"}
+        ),
+    )
+    page.goto(PAGES_URL)
+    page.wait_for_function("!!(window.posthog && window.posthog.callback)")
+    config: dict[str, Any] = page.evaluate("window.posthog.config")
+    if "advanced_disable_flags" in config:
+        fail("posthog: advanced_disable_flags still set")
+    if config.get("persistence") != "memory" or config.get("autocapture") is not False:
+        fail(f"posthog: privacy settings changed: {config}")
+    if config.get("bootstrap") != {"featureFlags": {"drill-tab": False}}:
+        fail(f"posthog: bootstrap is {config.get('bootstrap')}")
+    if page.evaluate("window.posthog.calls.register") != [{"app_version": "2"}]:
+        fail("posthog: app_version not registered")
+    if present(page, "drill"):
+        fail("posthog: stored flags not applied at load")
+    page.evaluate("window.posthog.fire({'learn-tab': true, 'drill-tab': true})")
+    if not present(page, "drill") or present(page, "sets") or present(page, "game"):
+        fail("posthog: flags before the first touch not applied")
+    page.mouse.click(5, 5)
+    page.evaluate("window.posthog.fire({'learn-tab': true, 'sets-tab': true})")
+    if not present(page, "drill") or present(page, "sets"):
+        fail("posthog: flags applied after the first touch")
+    stored = json.loads(page.evaluate("localStorage.getItem('ksv51:flags')"))
+    if not stored["sets-tab"] or stored["drill-tab"] or len(stored) != 16:
+        fail(f"posthog: flags not stored: {stored}")
+    page.reload()
+    page.wait_for_function("!!(window.posthog && window.posthog.callback)")
+    if not present(page, "sets") or present(page, "drill"):
+        fail("posthog: stored flags not used on the next load")
+    page.goto(PAGES_URL + "?ff=all")
+    page.wait_for_function("!!(window.posthog && window.posthog.callback)")
+    page.evaluate("window.posthog.fire({})")
+    if not all(values(page).values()):
+        fail("posthog: ?ff=all does not win over PostHog")
+    if errors:
+        fail(f"posthog: page errors: {errors}")
+    context.close()
+
+
+def main() -> None:
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        for check in (check_defaults, check_off_leaves_no_trace, check_override_storage, check_tabs):
+            check(page)
+        if errors:
+            fail(f"page errors: {errors}")
+        check_posthog(browser)
+        browser.close()
+    print("FLAGS TEST FAILURES:", len(FAIL))
+    sys.exit(1 if FAIL else 0)
+
+
+if __name__ == "__main__":
+    main()

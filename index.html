@@ -236,9 +236,13 @@
     }
     .tabs {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-auto-flow: column;
+      grid-auto-columns: 1fr;
       border-bottom: var(--edge);
       margin-bottom: 16px;
+    }
+    .tabs[hidden] {
+      display: none;
     }
     .tab {
       border: 0;
@@ -1537,6 +1541,7 @@
           Sets<small>set calls</small>
         </button>
       </div>
+      <p class="card" id="ffEmpty" hidden>New version on the way.</p>
 
       <section id="learn">
         <div class="card">
@@ -1647,13 +1652,13 @@
           </div>
           <div class="fb" id="fb"></div>
           <div class="weak" id="weak"></div>
-          <div class="row">
+          <div class="row" id="reviewRow">
             <button type="button" class="btn" id="reviewBtn" hidden>Review weak spots</button>
           </div>
           <details class="fold inner" id="dOpts">
             <summary>Drill options</summary>
             <div class="foldbody">
-              <label class="check"
+              <label class="check" id="nbDrillCheck"
                 ><input type="checkbox" id="nbDrill">
                 Neighbour check (who stands next to you) in reception</label
               >
@@ -1672,11 +1677,11 @@
           <fieldset class="steps one" style="margin-bottom:10px">
             <legend>Who is playing?</legend>
             <label><input type="radio" name="gPlayers" value="solo"> Just me</label>
-            <label
+            <label id="gPlayersMp"
               ><input type="radio" name="gPlayers" value="mp">
               With friends, on this device</label
             >
-            <label
+            <label id="gPlayersOnline"
               ><input type="radio" name="gPlayers" value="online">
               Online room, each on their own phone</label
             >
@@ -1762,11 +1767,11 @@
                   Mixed, like R1, R3, R5, R2, R4, R6</label
                 >
               </fieldset>
-              <label class="check"
+              <label class="check" id="nbGameCheck"
                 ><input type="checkbox" id="nbGame">
                 Neighbour check (who stands next to you) in reception, +30 points</label
               >
-              <label class="check"
+              <label class="check" id="setGameCheck"
                 ><input type="checkbox" id="setGame">
                 Set call check after the pass, +30 points</label
               >
@@ -1932,7 +1937,7 @@
           <div class="setchips" id="setchips"></div>
           <div class="cue" id="setcue"></div>
         </div>
-        <div class="card">
+        <div class="card" id="setsQuiz">
           <div class="prompt">
             <div>
               <div class="big">Name the set</div>
@@ -1956,7 +1961,7 @@
         </div>
       </section>
 
-      <div class="card" style="margin-top:16px">
+      <div class="card" id="downloads" style="margin-top:16px">
         <h2>Printable cheat sheets</h2>
         <div class="dl">
           <button type="button" class="btn" data-dl="schema">
@@ -2025,7 +2030,8 @@
       const XS = [0.17, 0.5, 0.83],
         FY = 0.21,
         BY = 0.71;
-      const $ = (id) => document.getElementById(id);
+      const DETACHED = new Map();
+      const $ = (id) => document.getElementById(id) || DETACHED.get(id);
 
       function players(ri, phase) {
         const r = ROWS[ri];
@@ -2305,6 +2311,213 @@
           } catch (e) {}
         },
       };
+      // ---------- Analytics (PostHog, only on the Pages host) ----------
+      const POSTHOG_KEY = "phc_REPLACE_ME";
+      const POSTHOG_SDK = {
+        src: "https://cdn.jsdelivr.net/npm/posthog-js@1.434.17/dist/array.no-external.js",
+        integrity: "sha384-8UjS7Fq5RAruabOgf7TR3iM8oBDrcwXEXdxQ0WaS9Tpo4zspMStPA5ggoFfD61bN",
+      };
+      let posthog = null;
+      function analyticsOn(hostname, key) {
+        return hostname === "xszpo.github.io" && /^phc_\w+$/.test(key) && key !== "phc_REPLACE_ME";
+      }
+      function analyticsLoad() {
+        if (!analyticsOn(location.hostname, POSTHOG_KEY)) return;
+        try {
+          const el = document.createElement("script");
+          el.src = POSTHOG_SDK.src;
+          el.integrity = POSTHOG_SDK.integrity;
+          el.crossOrigin = "anonymous";
+          el.onload = () => {
+            try {
+              window.posthog.init(POSTHOG_KEY, {
+                api_host: "https://us.i.posthog.com",
+                ui_host: "https://us.posthog.com",
+                persistence: "memory",
+                person_profiles: "identified_only",
+                autocapture: false,
+                capture_pageview: true,
+                capture_pageleave: true,
+                disable_session_recording: true,
+                disable_surveys: true,
+                disable_web_experiments: true,
+                capture_heatmaps: false,
+                capture_dead_clicks: false,
+                capture_performance: false,
+                rageclick: false,
+                mask_all_text: true,
+                mask_all_element_attributes: true,
+                respect_dnt: true,
+                bootstrap: { featureFlags: store.get("flags", {}) },
+              });
+              posthog = window.posthog;
+              posthog.register({ app_version: "2" });
+              posthog.onFeatureFlags(flagsFromPosthog);
+            } catch (e) {}
+          };
+          el.onerror = () => el.remove();
+          document.head.appendChild(el);
+        } catch (e) {}
+      }
+      // Props must never carry player names, room codes or Firebase uids.
+      function track(event, props) {
+        try {
+          if (posthog) posthog.capture(event, props);
+        } catch (e) {}
+      }
+      window.ksvAnalytics = { analyticsOn, track };
+
+      // ---------- Feature flags ----------
+      const FEATURES = {
+        "learn-tab": true,
+        "learn-animation": false,
+        "rules-official": false,
+        "learn-guides": true,
+        "rotations-table": true,
+        "drill-tab": true,
+        "drill-review": true,
+        "neighbour-check": true,
+        "match-solo": true,
+        "set-call-check": true,
+        "match-same-device": true,
+        "match-online": true,
+        "sets-tab": true,
+        "sets-quiz": true,
+        downloads: true,
+        "after-dig": false,
+      };
+      const FEATURE_NEEDS = {
+        "learn-animation": ["learn-tab"],
+        "rules-official": ["learn-tab", "learn-animation"],
+        "learn-guides": ["learn-tab"],
+        "rotations-table": ["learn-tab"],
+        "drill-tab": ["learn-tab"],
+        "drill-review": ["drill-tab"],
+        "neighbour-check": ["drill-tab"],
+        "match-solo": ["learn-tab"],
+        "set-call-check": ["match-solo", "sets-tab"],
+        "match-same-device": ["match-solo"],
+        "match-online": ["match-same-device"],
+        "sets-quiz": ["sets-tab"],
+        downloads: ["learn-tab"],
+        "after-dig": ["match-solo"],
+      };
+      const FEATURE_ELEMENTS = {
+        "learn-tab": ["tabLearn", "learn"],
+        "learn-guides": ["howTo", "checks", "thumbsBox"],
+        "rotations-table": ["allRots"],
+        "drill-tab": ["tabDrill", "drill"],
+        "drill-review": ["reviewRow"],
+        "neighbour-check": ["nbDrillCheck", "nbGameCheck"],
+        "match-solo": ["tabGame", "game"],
+        "set-call-check": ["setGameCheck", "setGameHint"],
+        "match-same-device": ["gPlayersMp", "mpBox"],
+        "match-online": ["gPlayersOnline", "onBox"],
+        "sets-tab": ["tabSets", "sets"],
+        "sets-quiz": ["setsQuiz"],
+        downloads: ["downloads"],
+      };
+      const TABS = [
+        ["learn", "learn-tab"],
+        ["drill", "drill-tab"],
+        ["game", "match-solo"],
+        ["sets", "sets-tab"],
+      ];
+      const FEATURE_KEYS = Object.keys(FEATURES);
+      function ffParse(value, current) {
+        let next = { ...(current || {}) };
+        String(value)
+          .split(",")
+          .forEach((part) => {
+            const key = part.trim().replace(/^-/, "");
+            if (part.trim() === "all") next = { "*": true };
+            else if (part.trim() === "reset") next = {};
+            else if (key in FEATURES) next[key] = !part.trim().startsWith("-");
+          });
+        return Object.keys(next).length ? next : null;
+      }
+      function featureValues(base, override) {
+        const out = {};
+        const on = (k) => {
+          if (!(k in out)) {
+            const own = override && k in override ? override[k] : override?.["*"] || base[k];
+            out[k] = !!own && (FEATURE_NEEDS[k] || []).every(on);
+          }
+          return out[k];
+        };
+        FEATURE_KEYS.forEach(on);
+        return out;
+      }
+      const flagsLive = analyticsOn(location.hostname, POSTHOG_KEY);
+      let flagsBase = flagsLive ? { ...FEATURES, ...store.get("flags", {}) } : FEATURES;
+      let ffOverride = store.get("ffOverride", null);
+      const ffParam = new URLSearchParams(location.search).get("ff");
+      if (ffParam !== null) {
+        ffOverride = ffParse(ffParam, ffOverride);
+        if (ffOverride) store.set("ffOverride", ffOverride);
+        else store.del("ffOverride");
+      }
+      let flags = featureValues(flagsBase, ffOverride);
+      const feature = (key) => !!flags[key];
+      const nbOn = (id) => feature("neighbour-check") && $(id).checked;
+      let touched = false;
+      ["pointerdown", "touchstart", "keydown"].forEach((type) => {
+        document.addEventListener(type, () => (touched = true), { capture: true, passive: true });
+      });
+      const SLOTS = new Map();
+      function attach(el) {
+        const slot = SLOTS.get(el);
+        if (el.parentNode === slot.parent) return;
+        const next = slot.following.find((s) => s.parentNode === slot.parent);
+        slot.parent.insertBefore(el, next || null);
+      }
+      function applyFeatures() {
+        const els = FEATURE_KEYS.flatMap((k) =>
+          (FEATURE_ELEMENTS[k] || []).map((id) => [k, $(id)]),
+        );
+        els.forEach(([, el]) => {
+          if (!SLOTS.has(el)) {
+            const following = [];
+            for (let n = el.nextElementSibling; n; n = n.nextElementSibling) following.push(n);
+            SLOTS.set(el, { parent: el.parentNode, following });
+          }
+        });
+        els.forEach(([k, el]) => {
+          if (feature(k)) attach(el);
+          else el.remove();
+        });
+        DETACHED.clear();
+        els.forEach(([, el]) => {
+          if (!el.isConnected)
+            [el, ...el.querySelectorAll("[id]")].forEach((n) => {
+              DETACHED.set(n.id, n);
+            });
+        });
+        const tabs = TABS.filter(([, k]) => feature(k)).map(([t]) => t);
+        $("tabs").hidden = tabs.length < 2;
+        $("ffEmpty").hidden = tabs.length > 0;
+        if (!$("game").querySelector('input[name="gPlayers"]:checked'))
+          $("game").querySelector('input[name="gPlayers"][value="solo"]').checked = true;
+        if (tabs.length && tabs.every((t) => $(t).hidden)) setTab(tabs[0], true);
+        drawVis("drill", visDrill);
+        drawVis("game", visGame);
+        renderRefLabels();
+        renderLearn();
+        gRenderSetup();
+      }
+      function flagsFromPosthog(_enabled, variants, context) {
+        if (context?.errorsLoading) return;
+        const next = {};
+        FEATURE_KEYS.forEach((k) => {
+          next[k] = !!variants?.[k];
+        });
+        store.set("flags", next);
+        if (touched) return;
+        flagsBase = next;
+        flags = featureValues(flagsBase, ffOverride);
+        applyFeatures();
+      }
+      window.ksvFeatures = { feature, ffParse, featureValues, values: () => ({ ...flags }) };
       const themeBtn = $("themeBtn");
       const darkQuery = matchMedia("(prefers-color-scheme: dark)");
       function paintThemeButton() {
@@ -2372,8 +2585,8 @@
       $("setupBar").onclick = () => setSetupOpen($("setupPanel").hidden);
       $("setupNudge").hidden = !firstVisit;
       setSetupOpen(firstVisit);
-      function setTab(t) {
-        track("tab_viewed", { tab: t });
+      function setTab(t, quiet) {
+        if (!quiet) track("tab_viewed", { tab: t });
         ["Learn", "Drill", "Game", "Sets"].forEach((n) => {
           const k = n.toLowerCase();
           $(`tab${n}`).setAttribute("aria-selected", t === k);
@@ -2858,7 +3071,7 @@
         const d = describe(cur.ri, cur.phase, cur.role);
         $("fb").className = `fb ${cls}`;
         $("fb").innerHTML = `<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
-        if (cur.phase === "rec" && $("nbDrill").checked) {
+        if (cur.phase === "rec" && nbOn("nbDrill")) {
           const nq = neighbourQ(cur.ri, cur.role);
           if (nq) {
             dNb = nq;
@@ -3164,7 +3377,7 @@
         $("gNext").focus({ preventScroll: true });
       }
       function setOn() {
-        return $("setGame").checked && gSteps().includes("ar");
+        return feature("set-call-check") && $("setGame").checked && gSteps().includes("ar");
       }
       function gBonusPending() {
         return !!((G.nb && !G.nb.done) || (G.sc && !G.sc.done));
@@ -3219,7 +3432,7 @@
           (gOrder() === "mixed" ? "|mixed" : "") +
           (rulesMode === "drill" ? "|drill" : "") +
           (visGame !== "none" ? `|${visGame}` : "") +
-          ($("nbGame").checked && gSteps().includes("rec") ? "|nb" : "") +
+          (nbOn("nbGame") && gSteps().includes("rec") ? "|nb" : "") +
           (setOn() ? "|sets" : "")
         );
       }
@@ -3299,7 +3512,7 @@
           steps: gSteps().join(","),
           order: gOrder(),
           vis: visGame,
-          nb: $("nbGame").checked,
+          nb: nbOn("nbGame"),
           sets: setOn(),
           rules: rulesMode,
           players: mp ? mp.length : 1,
@@ -3623,7 +3836,7 @@
               ? "See results"
               : "Next";
         $("gNext").focus({ preventScroll: true });
-        if (st.phase === "rec" && (G.online ? G.online.meta.nb : $("nbGame").checked)) {
+        if (st.phase === "rec" && (G.online ? G.online.meta.nb : nbOn("nbGame"))) {
           const nq = neighbourQ(st.ri, G.role);
           if (nq) {
             G.nb = nq;
@@ -4139,59 +4352,6 @@
       };
       const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/11.10.0";
 
-      // ---------- Analytics (PostHog, only on the Pages host) ----------
-      const POSTHOG_KEY = "phc_REPLACE_ME";
-      const POSTHOG_SDK = {
-        src: "https://cdn.jsdelivr.net/npm/posthog-js@1.434.17/dist/array.no-external.js",
-        integrity: "sha384-8UjS7Fq5RAruabOgf7TR3iM8oBDrcwXEXdxQ0WaS9Tpo4zspMStPA5ggoFfD61bN",
-      };
-      let posthog = null;
-      function analyticsOn(hostname, key) {
-        return hostname === "xszpo.github.io" && /^phc_\w+$/.test(key) && key !== "phc_REPLACE_ME";
-      }
-      function analyticsLoad() {
-        if (!analyticsOn(location.hostname, POSTHOG_KEY)) return;
-        try {
-          const el = document.createElement("script");
-          el.src = POSTHOG_SDK.src;
-          el.integrity = POSTHOG_SDK.integrity;
-          el.crossOrigin = "anonymous";
-          el.onload = () => {
-            try {
-              window.posthog.init(POSTHOG_KEY, {
-                api_host: "https://us.i.posthog.com",
-                ui_host: "https://us.posthog.com",
-                persistence: "memory",
-                person_profiles: "identified_only",
-                autocapture: false,
-                capture_pageview: true,
-                capture_pageleave: true,
-                disable_session_recording: true,
-                disable_surveys: true,
-                disable_web_experiments: true,
-                advanced_disable_flags: true,
-                capture_heatmaps: false,
-                capture_dead_clicks: false,
-                capture_performance: false,
-                rageclick: false,
-                mask_all_text: true,
-                mask_all_element_attributes: true,
-                respect_dnt: true,
-              });
-              posthog = window.posthog;
-            } catch (e) {}
-          };
-          el.onerror = () => el.remove();
-          document.head.appendChild(el);
-        } catch (e) {}
-      }
-      // Props must never carry player names, room codes or Firebase uids.
-      function track(event, props) {
-        try {
-          if (posthog) posthog.capture(event, props);
-        } catch (e) {}
-      }
-      window.ksvAnalytics = { analyticsOn, track };
       // ?emu=<database host:port>,<auth host:port> points the app at the Firebase emulators (tests).
       const EMU = (() => {
         const v = new URLSearchParams(location.search).get("emu");
@@ -4486,7 +4646,7 @@
                 steps: gSteps(),
                 order: gOrder(),
                 vis: visGame,
-                nb: $("nbGame").checked,
+                nb: nbOn("nbGame"),
                 sets: setOn(),
                 rulesMode,
               },
@@ -5037,7 +5197,7 @@
             steps: gSteps(),
             order: gOrder(),
             vis: visGame,
-            nb: $("nbGame").checked,
+            nb: nbOn("nbGame"),
             sets: setOn(),
             rulesMode,
             queue: gQueue(),
@@ -5152,10 +5312,13 @@
       renderRefLabels();
       $("fb").innerHTML = HINT;
       renderRoles();
-      $("howTo").open = !store.get("howToSeen", false);
-      store.set("howToSeen", true);
+      if (feature("learn-guides")) {
+        $("howTo").open = !store.get("howToSeen", false);
+        store.set("howToSeen", true);
+      }
       renderLearn();
       renderSets();
+      applyFeatures();
       analyticsLoad();
     })();
     </script>
