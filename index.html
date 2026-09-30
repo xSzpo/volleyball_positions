@@ -2472,10 +2472,44 @@
         if (me) {
           if (tap) s += fromTap(me, tap);
           s += chip(me, { me: true });
-          s += `<text class="from" x="${me.x * W}" y="${me.y < 0.8 ? me.y * H + 12 : me.y * H - 9.8}" text-anchor="middle" font-size="3.6" font-weight="700" fill="var(--net-label)" font-family="Barlow,sans-serif">from</text>`;
+          const at = fromSpot(me, rec, ball);
+          s += `<text class="from" x="${at.x}" y="${at.y}" text-anchor="middle" font-size="3.6" font-weight="700" fill="var(--net-label)" font-family="Barlow,sans-serif">from</text>`;
         }
         if (ball) s += ballSvg(ball).replaceAll("ballClip", `ballClip-${clip}`);
         return s;
+      }
+      // The "from" label goes below, above, left or right of your ring: the first side clear of every marker, the ball and the court edge.
+      function fromSpot(me, rec, ball) {
+        const X = me.x * W,
+          Y = me.y * H,
+          halfW = 4.3,
+          up = 4,
+          down = 1,
+          discs = [
+            ...rec.map((o) => ({ x: o.x * W, y: o.y * H, r: o.p === me.p ? 8.9 : MARKER_R + 1 })),
+            ...(ball ? [{ x: ball.x * W, y: ball.y * H, r: BALL_R + 0.5 }] : []),
+          ];
+        const clearance = ({ x, y }) => {
+          const box = [x - halfW, y - up, x + halfW, y + down];
+          if (box[0] < -3 || box[2] > W + 3 || box[1] < -3 || box[3] > H + 2) return -Infinity;
+          return Math.min(
+            ...discs.map((d) => {
+              const dx = Math.max(box[0] - d.x, 0, d.x - box[2]),
+                dy = Math.max(box[1] - d.y, 0, d.y - box[3]);
+              return Math.hypot(dx, dy) - d.r;
+            }),
+          );
+        };
+        const sides = [
+          { x: X, y: Y + 13.4 },
+          { x: X, y: Y - 10.4 },
+          { x: X - 13.7, y: Y + 1.5 },
+          { x: X + 13.7, y: Y + 1.5 },
+        ];
+        return (
+          sides.find((p) => clearance(p) >= 0.4) ||
+          sides.reduce((a, b) => (clearance(b) > clearance(a) ? b : a))
+        );
       }
       function fromTap(a, tap) {
         return `<line class="fromtap" x1="${a.x * W}" y1="${a.y * H}" x2="${tap.x * W}" y2="${tap.y * H}" stroke="var(--net-label)" stroke-width="0.5" opacity=".8"/>`;
@@ -5102,6 +5136,8 @@
         if (G.answered && (G.mp || G.online) && G.tap)
           s += `<circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="2.3" fill="var(--net-label)" opacity=".8"/>`;
         if (shown) {
+          const a = st.phase === "ar" && players(st.ri, "rec").find((o) => o.p === G.role);
+          if (a && G.tap) s += fromTap(a, G.tap);
           if (G.tap && me)
             s += `<line x1="${G.tap.x * W}" y1="${G.tap.y * H}" x2="${me.x * W}" y2="${me.y * H}" stroke="var(--net-label)" stroke-width="0.5" stroke-dasharray="1 1" opacity=".7"/>`;
           if (G.tap)

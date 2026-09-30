@@ -874,6 +874,7 @@ def check_attack_match(browser: Browser) -> None:
                 tap_at(page, *spot)
                 check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, tag)
                 press_next(page)
+                check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, f"{tag} feedback")
                 line = page.inner_text("#gBd")
                 parts, total = breakdown_total(line)
                 if "%" in line or not parts == total == points(page) or total < 100:
@@ -884,6 +885,54 @@ def check_attack_match(browser: Browser) -> None:
                 fail(f"match {rules} {vis}: a peek at the Attack step counted: {page.inner_text('#gShown')!r}")
             page.close()
     print("match Attack: reception picture, ball, tap line, full points", flush=True)
+
+
+MODE_ROLES = {"simple": ("MB", "OH1", "OH2", "OP", "S", "L"), "official": ("MB1", "MB2", "OH1", "OH2", "OP", "S", "L")}
+
+
+def check_from_label(browser: Browser) -> None:
+    """The "from" label stays clear of every marker, the ball and the court edge, for every rotation and role."""
+    checked = 0
+    for rules in RULES_MODES:
+        for role in MODE_ROLES[rules]:
+            page = new_page(browser, rules)
+            setup_match(page, role, ("ar",), sets=False)
+            page.click("#gStart")
+            for ri in range(6):
+                page.wait_for_selector("#gOff:enabled")
+                clash = page.evaluate(
+                    """() => {
+                        const svg = document.getElementById('courtG'), label = svg.querySelector('text.from');
+                        if (!label) return 'no label';
+                        const b = label.getBBox();
+                        const discs = [...svg.querySelectorAll('g.mk')].map((g) => {
+                            const c = g.querySelector('circle[fill^="var(--role"]');
+                            const ring = g.querySelector('.me-ring circle');
+                            return {p: g.dataset.p, x: +c.getAttribute('cx'), y: +c.getAttribute('cy'),
+                                    r: ring ? +ring.getAttribute('r') + 0.6 : +c.getAttribute('r') + 0.5};
+                        });
+                        const ball = svg.querySelector('g.ball');
+                        const at = ball && /translate[(]([-0-9.]+) ([-0-9.]+)[)] scale[(]([0-9.]+)[)]/
+                            .exec(ball.getAttribute('transform'));
+                        if (at) discs.push({p: 'ball', x: +at[1], y: +at[2], r: +at[3]});
+                        const hit = discs.filter((d) => {
+                            const dx = Math.max(b.x - d.x, 0, d.x - b.x - b.width),
+                                dy = Math.max(b.y - d.y, 0, d.y - b.y - b.height);
+                            return Math.hypot(dx, dy) < d.r;
+                        }).map((d) => d.p);
+                        if (b.x < -4 || b.x + b.width > 104 || b.y < -14 || b.y + b.height > 103) hit.push('edge');
+                        return hit.join(', ');
+                    }"""
+                )
+                on_court = any(p == role for p, _, _ in lineup(ri, rules)["rec"])
+                if clash and (clash != "no label" or on_court):
+                    fail(f"from label {rules} {role} R{ri + 1}: covers {clash}")
+                checked += on_court
+                page.click("#gOff")
+                press_next(page)
+                press_next(page)
+            page.close()
+    print(f"from label clear of markers, ball and edge on {checked} Attack courts", flush=True)
 
 
 def check_attack_drill(browser: Browser) -> None:
@@ -962,6 +1011,7 @@ def main() -> None:
         check_court_not_covered(browser)
         check_double_check(browser)
         check_attack_match(browser)
+        check_from_label(browser)
         check_attack_drill(browser)
         browser.close()
     print("MATCH TEST:", "ok" if not FAIL else f"{len(FAIL)} failures", flush=True)
