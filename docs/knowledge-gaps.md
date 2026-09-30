@@ -584,13 +584,13 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** keep the ball at the passer after the answer; draw the ball on the setter's marker.
 - **Reversible by:** `momentBall()` and `setterBall()` in `src/template.html`.
 
-### 71. Our serve shows the ball and asks the server where they go
+### 71. Our serve asks the server where they go
 
-- **Issue:** #92
-- **Problem:** Learn's Our serve still has the ball over the net; Drill and Match had none. The server was asked "Where do you stand?" but is graded on their base spot after the serve.
-- **Decision:** Drill and Match draw the ball at `SERVE_BALL`, before and after the answer. The server is asked "You serve. Where do you go after it?"; everyone else "We serve. Where do you stand?".
+- **Issue:** #92, #102
+- **Problem:** The server was asked "Where do you stand?" but is graded on their base spot after the serve.
+- **Decision:** The server is asked "You serve. Where do you go after it?"; everyone else "We serve. Where do you stand?". #92 also drew the ball over the net at Our serve in Drill and Match, as on Learn's still; the owner removed it (#102: "remove ball from the net when we serve in the match - it doesn't make sense"). Drill and Match draw no ball at Our serve, before or after the answer or on the reveal. Learn's Our serve still keeps its ball.
 - **Alternatives:** grade the server on the serve spot behind the end line.
-- **Reversible by:** `serveQuestion()` and `momentBall()` in `src/template.html`.
+- **Reversible by:** `serveQuestion()` in `src/template.html`.
 
 ### 72. Your answer after scoring is an accent dot
 
