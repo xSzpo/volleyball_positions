@@ -664,6 +664,30 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** always keep the open question until it is answered; start a new question on every change.
 - **Reversible by:** the `#dSteps` click handler in `src/template.html`.
 
+### 85. How Rotate grades each placed marker
+
+- **Issue:** #99
+- **Problem:** The issue asks for exact / close / off per marker, with right meaning every marker exact or close, but does not set the thresholds.
+- **Decision:** Exact is a tap in the marker's right zone, as the one-tap Rotate question graded it. Close is a tap outside that zone but within 0.24 of the right spot (the Drill's "close" distance, depth weighted 0.67), so a tap just over a zone line still counts. Anything else is off. The question counts as one item in stats and Review weak spots.
+- **Alternatives:** exact only within 0.14 of the spot, as the other steps; no close grade at Rotate.
+- **Reversible by:** `rotGrade()` in `src/template.html`.
+
+### 86. Rotate when you are off court
+
+- **Issue:** #99
+- **Problem:** At Rotate some roles are off court: a back-row middle when the libero is in for them, and in Official R3 and R6 the libero. They have no overlap partners.
+- **Decision:** They place the setter, then press "I'm off court" (or tap the off court pill) for themselves; the button toggles, so a second press puts you back to place. There are no partners to place. Marking yourself off when you are on court grades you off.
+- **Alternatives:** skip the question for off-court roles; ask the setter only.
+- **Reversible by:** `rotStart()` and the `#offBtn` handler in `src/template.html`.
+
+### 87. Mixed names and the weak spots list
+
+- **Issue:** #99
+- **Problem:** Mixed is not defined further, and the "Needs practice" list named rotations as "R4 (H4)", which gives away the setter's zone while the Rotate question names only R.
+- **Decision:** Mixed picks H or R at random for each question. The weak spots list names a Rotation item by R alone.
+- **Alternatives:** alternate H and R; drop Rotation items from the list.
+- **Reversible by:** `rotStart()` and `updateScore()` in `src/template.html`.
+
 ### 90. Family colours in the Name the set quiz and the set call check
 
 - **Issue:** #100

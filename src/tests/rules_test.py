@@ -201,10 +201,12 @@ def check_outside_tap(page: Page) -> None:
     open_app(page, "?ff=all&anim=0", {"role": "OH1"})
     page.click("#tabDrill")
     stats = page.evaluate("localStorage.getItem('ksv51:stats2')")
+    court = page.inner_html("#courtD")
     tap_court_with_list_open(page, "#courtD")
     if page.is_visible("#setupPanel"):
         fail("Drill: a tap on the court did not close the role list")
-    if page.is_visible("#nextBtn") or page.evaluate("localStorage.getItem('ksv51:stats2')") != stats:
+    answered = page.inner_html("#courtD") != court
+    if answered or page.evaluate("localStorage.getItem('ksv51:stats2')") != stats:
         fail("Drill: the tap that closed the role list also answered")
     page.click("#tabGame")
     page.click("#gStart")

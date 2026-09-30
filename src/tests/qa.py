@@ -276,10 +276,15 @@ def check_drill_pill(pg: Page, tag: str) -> None:
         " return [m.a * 12 + m.e, m.d * 107 + m.f]; }"
     )
     pg.mouse.click(x, y)
+    texts: list[str] = pg.eval_on_selector_all("#courtD > text", "els => els.map(e => e.textContent)")
+    if pg.inner_text("#dq").endswith("Rotation"):
+        if "you: off court" not in texts or pg.locator("#fb .rotgrades").count():
+            fail(f"{tag} a tap on the Drill off court pill at Rotate did not mark you off: {texts}")
+        pg.click("#tabLearn")
+        return
     feedback = pg.inner_text("#fb")
     if "you are off" not in feedback and "you are on court" not in feedback:
         fail(f"{tag} a tap on the Drill off court pill scored as a spot: {feedback!r}")
-    texts: list[str] = pg.eval_on_selector_all("#courtD > text", "els => els.map(e => e.textContent)")
     if ("you are off" in feedback) != ("you: off court" in texts):
         fail(f"{tag} Drill feedback pill {texts} does not match {feedback!r}")
     pg.click("#tabLearn")
@@ -498,8 +503,7 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
         asked = set()
         for _ in range(20):
             asked.add(pg.inner_text("#dq").split(" · ")[-1])
-            pg.click("#offBtn")
-            pg.click("#nextBtn")
+            drill_miss(pg)
         if asked - {DRILL_STEP_NAME[s] for s in picked}:
             fail(f"{tag} drill with {picked} asked {sorted(asked)}")
         if picked == ["start"] and not pg.is_visible("#reviewBtn"):
@@ -519,6 +523,211 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
         fail(f"{tag} a bad stored drill steps value gave {drill_picked(pg)}, not all")
     if errs:
         fail(f"{tag} drill steps JS errors: {errs[:3]}")
+    ctx.close()
+
+
+def court_xy(pg: Page, x: float, y: float) -> tuple[float, float]:
+    """The screen point of court spot (x, y) on the Drill court."""
+    point = pg.evaluate(
+        "([x, y]) => { const m = document.getElementById('courtD').getScreenCTM();"
+        " return [m.a * x * 100 + m.e, m.d * y * 100 + m.f]; }",
+        [x, y],
+    )
+    return float(point[0]), float(point[1])
+
+
+def tap_spot(pg: Page, x: float, y: float) -> None:
+    pg.mouse.click(*court_xy(pg, x, y))
+
+
+def drill_miss(pg: Page) -> None:
+    """Answer the open Drill question wrong and go on: at Rotate, every marker in the back row, left to right."""
+    if pg.inner_text("#dq").endswith("Rotation"):
+        pg.locator("#courtD").scroll_into_view_if_needed()
+        for i in range(8):
+            if pg.locator("#nextBtn").is_enabled():
+                break
+            tap_spot(pg, 0.1 + 0.2 * (i % 5), 0.93)
+        pg.click("#nextBtn")
+    else:
+        pg.click("#offBtn")
+    pg.click("#nextBtn")
+
+
+ROT_NAME = re.compile(r"^(?:Review \d+/\d+ · )?(H|R)([1-6]) · Rotation$")
+
+
+def rotate_lineup(pg: Page, ri: int, role: str) -> tuple[list[str], dict[str, tuple[float, float]]]:
+    """The markers Rotate asks for in order (setter, you, your overlap partners) and each right spot."""
+    spots = {
+        str(o["p"]): (float(o["x"]), float(o["y"])) for o in pg.evaluate(f"window.ksvLearn.players({ri}, 'start')")
+    }
+    order = [] if role == "S" else ["S"]
+    order.append(role)
+    if role not in spots:
+        return order, spots
+    grid = {(round(x * 3 - 0.5), y > 0.42): p for p, (x, y) in spots.items()}
+    col, back = round(spots[role][0] * 3 - 0.5), spots[role][1] > 0.42
+    serving = "L" not in spots
+    server = grid[(2, True)] if serving else None
+    if role == server:
+        return order, spots
+    for key in [(col, not back), (col - 1, back), (col + 1, back)]:
+        mate = grid.get(key)
+        if mate and mate != server and mate not in order:
+            order.append(mate)
+    return order, spots
+
+
+def rotate_question(pg: Page) -> tuple[int, str]:
+    """The rotation index and how the open Rotate question names it (H or R)."""
+    name = ROT_NAME.match(pg.inner_text("#dq"))
+    if not name:
+        return -1, ""
+    how, n = name.group(1), int(name.group(2))
+    if how == "R":
+        return n - 1, how
+    setters = [
+        next(o for o in pg.evaluate(f"window.ksvLearn.players({ri}, 'start')") if o["p"] == "S") for ri in range(6)
+    ]
+    zone = {(0, False): 4, (1, False): 3, (2, False): 2, (0, True): 5, (1, True): 6, (2, True): 1}
+    for ri, o in enumerate(setters):
+        if zone[(round(o["x"] * 3 - 0.5), o["y"] > 0.42)] == n:
+            return ri, how
+    return -1, how
+
+
+def markers(pg: Page) -> list[str]:
+    return [str(t) for t in pg.eval_on_selector_all("#courtD g.mk", "els => els.map(e => e.dataset.p)")]
+
+
+def answer_rotate(pg: Page, ctx: str, role: str, move: bool = False, wrong: bool = False) -> tuple[int, str]:
+    """Place every Rotate marker in the asked order, on its right spot unless wrong, and check the prompts."""
+    ri, how = rotate_question(pg)
+    if ri < 0:
+        fail(f"{ctx}: Rotate question {pg.inner_text('#dq')!r} does not name the rotation as H or R alone")
+        return ri, how
+    ctx = f"{ctx} R{ri + 1} as {how}"
+    pg.locator("#courtD").evaluate("e => e.scrollIntoView({ block: 'center' })")
+    if markers(pg):
+        fail(f"{ctx}: teammates {markers(pg)} shown before the answer")
+    order, spots = rotate_lineup(pg, ri, role)
+    for k, mate in enumerate(order):
+        who = "you" if mate == role else "the setter (S)" if mate == "S" else mate
+        prompt = pg.inner_text("#dsub")
+        if not prompt.startswith(f"{k + 1}/{len(order)}: tap where {who} stand"):
+            fail(f"{ctx}: prompt {prompt!r}, expected {k + 1}/{len(order)} {who}")
+        if pg.locator("#nextBtn").is_enabled():
+            fail(f"{ctx}: Continue enabled before every marker is placed")
+        if mate not in spots:
+            pg.click("#offBtn")
+            continue
+        x, y = spots[mate]
+        if wrong and k == 0:
+            x += -0.2 if x > 0.5 else 0.2
+        elif wrong and mate == role:
+            x, y = 1 - x if x != 0.5 else 0.17, 0.21 if y > 0.42 else 0.71
+        tap_spot(pg, x, y)
+        if move and k == 0:
+            tap_spot(pg, x, y)
+            if not pg.inner_text("#dsub").startswith(f"1/{len(order)}: tap where {who} stand"):
+                fail(f"{ctx}: a tap on the placed {mate} does not pick it up: {pg.inner_text('#dsub')!r}")
+            tap_spot(pg, 0.5, 0.93)
+            tap_spot(pg, 0.5, 0.93)
+            tap_spot(pg, x, y)
+    placed = sorted(markers(pg))
+    if placed != sorted(m for m in order if m in spots):
+        fail(f"{ctx}: placed markers {placed}, expected {order}")
+    if not pg.inner_text("#dsub").startswith("All placed") or not pg.locator("#nextBtn").is_enabled():
+        fail(f"{ctx}: Continue not ready after placing {order}: {pg.inner_text('#dsub')!r}")
+    pg.click("#nextBtn")
+    grades = pg.inner_text("#fb .rotgrades")
+    want = " · ".join(f"{'You' if m == role else m}: exact" for m in order)
+    if not wrong and grades != want:
+        fail(f"{ctx}: grades {grades!r}, expected {want!r}")
+    if wrong and not (grades.startswith(f"{order[0]}: close") and "Not there" in pg.inner_text("#fb")):
+        fail(f"{ctx}: a close setter and a wrong you graded {grades!r}: {pg.inner_text('#fb')!r}")
+    shown = sorted(markers(pg))
+    if shown != sorted(spots):
+        fail(f"{ctx}: feedback shows {shown}, not the lineup {sorted(spots)}")
+    return ri, how
+
+
+def check_drill_rotate(browser: Browser, tag: str, quick: bool) -> None:
+    """Rotate from the name alone: no teammates first, H or R only, placement order per role, grading, storage."""
+    section("DRILL rotate from the name")
+    ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) {"
+        " localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:drillSteps', '[\"start\"]'); }"
+    )
+    pg = ctx.new_page()
+    errs: list[str] = []
+    pg.on("pageerror", collect_errors(errs))
+    pg.goto(URL)
+    wait_ready(pg)
+    pg.click("#tabDrill")
+    pg.click('.vis[data-vis="drill"] button[data-v="all"]')
+    if pg.get_attribute('#dName [data-n="mixed"]', "aria-checked") != "true":
+        fail(f"{tag} Rotate names do not default to Mixed")
+    seen: set[tuple[str, int]] = set()
+    names: set[str] = set()
+    for rm in RULES:
+        pick_rules(pg, rm)
+        for role in MODE_ROLES[rm]:
+            pick_role(pg, role)
+            for n in range(3 if quick else 6):
+                ri, how = answer_rotate(pg, f"{tag} {rm} {role}", role, move=n == 0)
+                seen.add((rm, ri))
+                names.add(how)
+                pg.click("#nextBtn")
+        if rm == "official":
+            pick_role(pg, "L")
+            for _ in range(30):
+                if {("official", 2), ("official", 5)} <= seen:
+                    break
+                ri, how = answer_rotate(pg, f"{tag} {rm} L", "L")
+                seen.add((rm, ri))
+                pg.click("#nextBtn")
+    if names != {"H", "R"}:
+        fail(f"{tag} Mixed names asked only {names}")
+    if not {("official", 2), ("official", 5)} <= seen:
+        fail(f"{tag} Official R3 and R6 never came up at Rotate: {sorted(seen)}")
+    pick_rules(pg, "simple")
+    pick_role(pg, "OH1")
+    before = pg.evaluate("JSON.parse(localStorage.getItem('ksv51:stats2') || '{}')")
+    ri, _ = answer_rotate(pg, f"{tag} wrong", "OH1", wrong=True)
+    after = pg.evaluate("JSON.parse(localStorage.getItem('ksv51:stats2') || '{}')")
+    key = f"OH1|{ri}|start"
+    old = before.get(key, {"ok": 0, "miss": 0})
+    if after.get(key) != {"ok": old["ok"], "miss": old["miss"] + 1}:
+        fail(f"{tag} a wrong Rotate answer counted {old} -> {after.get(key)}, not one miss")
+    if re.search(r"\(H\d\) rotation", pg.inner_text("#weak")):
+        fail(f"{tag} the weak spots pair R and H for a Rotate question: {pg.inner_text('#weak')!r}")
+    pg.click("#nextBtn")
+    open_fold(pg, "#dOpts")
+    pg.click('#dName [data-n="h"]')
+    answer_rotate(pg, f"{tag} before H", "OH1")
+    pg.click("#nextBtn")
+    for _ in range(4):
+        answer_rotate(pg, f"{tag} H only", "OH1")
+        if not pg.inner_text("#dq").startswith("H"):
+            fail(f"{tag} Name as H asked {pg.inner_text('#dq')!r}")
+        pg.click("#nextBtn")
+    pg.reload()
+    wait_ready(pg)
+    pg.click("#tabDrill")
+    if pg.get_attribute('#dName [data-n="h"]', "aria-checked") != "true" or not pg.inner_text("#dq").startswith("H"):
+        fail(f"{tag} Name as H not restored: {pg.inner_text('#dq')!r}")
+    pg.evaluate("localStorage.setItem('ksv51:drillName', '\"x\"')")
+    pg.reload()
+    wait_ready(pg)
+    if pg.get_attribute('#dName [data-n="mixed"]', "aria-checked") != "true":
+        fail(f"{tag} a bad stored Rotate name did not read as Mixed")
+    check_page(pg, f"{tag} drill rotate")
+    if errs:
+        fail(f"{tag} drill rotate JS errors: {errs[:3]}")
     ctx.close()
 
 
@@ -674,6 +883,7 @@ def main() -> None:
         sweep_learn(pg, tag, args.quick)
         sweep_drill(pg, tag, args.quick)
         check_drill_steps(b, tag)
+        check_drill_rotate(b, tag, args.quick)
         sweep_match(pg, tag, combos, args.quick)
         sweep_sets(pg, tag)
         check_persistence(pg, tag)
