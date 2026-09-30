@@ -200,6 +200,8 @@ def check_static(page: Page) -> None:
 
 HIT_Y, APPROACH_Y, BACK_HIT_Y = 0.08, 0.17, 0.5
 MARKER_R = 0.06
+GAP = 0.14  # a marker width plus its ring
+MIN_MOVE = 0.04
 TRAILS = """() => [...document.querySelectorAll('#courtL .trail')]
   .filter((l) => l.getAttribute('visibility') === 'visible').map((l) => l.dataset.p)"""
 TRAIL_LENGTHS = """() => Object.fromEntries([...document.querySelectorAll('#courtL .trail')]
@@ -228,7 +230,7 @@ def reception_plan(ri: int, mode: str) -> tuple[list[str], dict[str, tuple[float
     attackers = [p for p in order if kind[p] in ("front", "back")]
     hitter = min((p for p in attackers if kind[p] == "front"), key=lambda p: ar[p][0])
     release = [p for p in order if kind[p] == "set" or (p in attackers and p not in RECEIVERS)]
-    release = [p for p in release if math.dist(rec[p], ar[p]) >= 0.005]
+    release = [p for p in release if math.dist(rec[p], ar[p]) >= MIN_MOVE]
     end = {p: BASE_DEF[base_zone(p, p in row["front"])][:2] for p in order}
     return release, end, hitter
 
@@ -270,18 +272,23 @@ def check_reception_stages(page: Page) -> None:
         if stage == 0:
             check_ball(page, got["L"])
         if stage == 1:
-            check_positions("after the pass", got, ar)
+            for p, spot in ar.items():
+                if math.dist((got[p][0] / 100, got[p][1] / 100), spot) >= MIN_MOVE:
+                    fail(f"after the pass: {p} at {got[p]}, expected {spot}")
         if stage == 3:
             check_positions("after the spike", got, end)
         trails = trail_movers(stages[stage])
         if sorted(page.evaluate(TRAILS)) != sorted(trails):
             fail(f"after Step {stage + 1}: trails {sorted(page.evaluate(TRAILS))}, expected {sorted(trails)}")
     page.click("#lReplay")
-    if not (anim(page) or {}).get("playing"):
+    if (anim(page) or {}).get("playing"):
         page.click("#lPlay")
-    ends = (anim(page) or {}).get("ends", [0, 0, 0, 0])
-    page.wait_for_function(f"(window.ksvLearn.anim() || {{t: 1e9}}).t > {ends[2] - 100}", timeout=15000)
-    page.click("#lPlay")
+    wait_paused(page)
+    for _ in range(3):
+        page.click("#lStep")
+        wait_paused(page)
+    if (anim(page) or {}).get("stage") != 2:
+        fail(f"Replay, pause and Step three times stopped at {anim(page)}, expected the end of stage 3")
     mid = page.evaluate(TRAIL_LENGTHS)
     if set(mid) != set(trail_movers(stages[2])) or not all(v > 0.5 for v in mid.values()):
         fail(f"paused at the end of stage 3: trails {mid}, expected the set and cover moves")
@@ -340,9 +347,10 @@ def check_reception_ends(page: Page) -> None:
             if len(stages) != 4 or sorted(stages[0]["moves"]) != sorted(release):
                 fail(f"{tag}: stages move {[st['moves'] for st in stages]}, expected {release} at the serve contact")
                 continue
-            if any(stages[0]["delays"][p] > 0 for p in release):
-                fail(f"{tag}: someone waits after the serve contact: {stages[0]['delays']}")
             kind = {p: k for p, _, _, k in row["ar"]}
+            # The setter may wait for an attacker who starts in front of the set spot to get out of the way.
+            if any(stages[0]["delays"][p] > (1000 if kind[p] == "set" else 0) for p in release):
+                fail(f"{tag}: someone waits after the serve contact: {stages[0]['delays']}")
             ar = {p: (x, y) for p, x, y, _ in row["ar"]}
             rec = {p: (x, y) for p, x, y in row["rec"]}
             track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, 'rec', 600)")
@@ -389,6 +397,31 @@ def check_reception_ends(page: Page) -> None:
                 fail(f"{tag}: the last stage is not {hitter}'s spike: {spike!r}")
 
 
+def check_path_shapes(page: Page) -> None:
+    """No run turns back, and none is longer than 1.3 times the straight line.
+
+    The middle's approach from behind the 3 m line and a front-row side switch behind the middle may be longer.
+    """
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            for phase in ("serve", "rec"):
+                stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, '{phase}')")
+                for n, stage in enumerate(stages):
+                    for p, raw in stage["paths"].items():
+                        path = [(q["x"], q["y"]) for q in raw]
+                        legs = [(b[0] - a[0], b[1] - a[1]) for a, b in zip(path, path[1:], strict=False)]
+                        if any(u[0] * v[0] + u[1] * v[1] < 0 for u, v in zip(legs, legs[1:], strict=False)):
+                            fail(f"{mode} R{ri + 1} {phase} stage {n + 1}: {p} turns back on {path}")
+                        straight = math.dist(path[0], path[-1])
+                        length = sum(math.hypot(*leg) for leg in legs)
+                        approach = any(abs(y - APPROACH_Y) < 0.005 for _, y in path[1:-1])
+                        switch = (path[0][0] - 0.5) * (path[-1][0] - 0.5) < 0 and len(path) == 3 and n == 3
+                        limit = 1.4 if switch else 1.3
+                        if straight and length > limit * straight + 1e-3 and not (phase == "rec" and approach):
+                            fail(f"{mode} R{ri + 1} {phase} stage {n + 1}: {p} runs {length:.2f} for {straight:.2f}")
+
+
 def check_no_overlap(page: Page) -> None:
     """No marker passes through another at any moment, and no run is faster than TOP_SPEED.
 
@@ -418,9 +451,9 @@ def check_no_overlap(page: Page) -> None:
                     for i, a in enumerate(names):
                         for b in names[i + 1 :]:
                             gap = math.dist((pos[a]["x"], pos[a]["y"]), (pos[b]["x"], pos[b]["y"]))
-                            if gap < 2 * MARKER_R - 1e-3 and (a, b) not in seen:
+                            if gap < GAP - 2e-3 and (a, b) not in seen:
                                 seen.add((a, b))
-                                fail(f"{mode} R{ri + 1} {phase} t={now['t']:.0f}: {a} and {b} overlap ({gap:.3f})")
+                                fail(f"{mode} R{ri + 1} {phase} t={now['t']:.0f}: {a} and {b} touch ({gap:.3f})")
 
 
 def check_never_blocks(page: Page) -> None:
@@ -700,14 +733,13 @@ def check_trails_in_play(page: Page) -> None:
     page.click('.ph[data-k="rec"]')
     seen = set()
     for _ in range(80):
-        state = anim(page)
+        state, shown = page.evaluate(
+            """() => [window.ksvLearn.anim(), [...document.querySelectorAll('#courtL .trail')]
+            .filter((l) => l.getAttribute('visibility') === 'visible' && +(l.getAttribute('opacity') ?? 1) > 0)
+            .map((l) => +l.dataset.stage)]"""
+        )
         if not state:
             break
-        shown: list[int] = page.evaluate(
-            """() => [...document.querySelectorAll('#courtL .trail')]
-            .filter((l) => l.getAttribute('visibility') === 'visible' && +(l.getAttribute('opacity') ?? 1) > 0)
-            .map((l) => +l.dataset.stage)"""
-        )
         old = [k for k in shown if k not in (state["stage"], state["stage"] - 1)]
         if old:
             fail(f"at {state['t']:.0f} ms (stage {state['stage'] + 1}) trails of stages {sorted(set(old))} still show")
@@ -740,6 +772,7 @@ def main() -> None:
         check_static(page)
         check_reception_stages(page)
         check_reception_ends(page)
+        check_path_shapes(page)
         check_no_overlap(page)
         check_passer(page)
         check_serve_run(page)

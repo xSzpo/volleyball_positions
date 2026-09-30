@@ -301,7 +301,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Four stages, from coaching sources (below) until the coach answers. 1: their serve to the libero, the setter releases (as #30). 2: the pass to the setter, the attackers to their `ar` approach spots (as #30). 3: the set goes to the leftmost front-row attacker (zone 4), the safe club-level first set. That hitter jumps to contact near the net (y 0.08). Every other attacker finishes the approach to hold the block: front row at take-off about 1.5 m off the net (y 0.17), back row behind the 3 m line (y 0.50). A 3-2 cup forms: the setter, the nearest front-row player who is not hitting, and the libero close and low, 2 to 3 m from the hitter; the rest stays deep, 4 to 6 m off, for wipes. 4: the spike; everyone goes to base defence by job (`BASE_DEF`), so a back-row setter defends zone 1. Then the Reception still picture comes back. Each stage has its own caption per player.
 - **Sources:** coachingvb.com "Hitter coverage strategy" (3-2 cup) and "Setting the starting rotation in a 5-1" (first set to the outside); Sportplan attack coverage drills (close cover low, 2-3 m); Koach Volleyball pipe guide (back-row take-off behind the 3 m line).
 - **Alternatives:** set a different hitter per rotation, or the middle; a 2-3 or 4-1 cover; keep the front row at the net after the spike.
-- **Reversible by:** `phaseStages()`, `CUP`, `DEEP`, `HIT_Y`, `APPROACH_Y`, `BACK_HIT_Y`, `baseSpots()` and `ATTACK_NOTES` in `src/template.html`. Coach question 9 on #16.
+- **Reversible by:** `phaseStages()`, `CUP_FRONT`, `SETTER_STEP`, `DEEP_Y`, `HIT_Y`, `APPROACH_Y`, `BACK_HIT_Y`, `baseSpots()` and `ATTACK_NOTES` in `src/template.html`. Coach question 9 on #16.
 - **Updated in #53:** the cup of stage 3 sent the setter up to 0.3 across the court and L on a cross-court sprint. Now the setter follows a step from the set spot (`SETTER_STEP`, within 0.2), the middle approaches for the quick and then drops in low 2 to 3 m from the hitter (`CUP_FRONT`), L covers from the guide's zone 5 spot and the back-row outside hitter stays deep (entries 44 to 46). `CUP` and `DEEP` are gone.
 
 ### 38. Where the animation controls sit on the court panel
@@ -349,7 +349,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #53
 - **Problem:** The animation held the attackers until the pass, but movement is free from the server's first movement (#44) and the guide's arrows start at the serve.
-- **Decision:** Stage 1 moves the setter and every attacker who is not a receiver to their `ar` spots at the serve contact; the receivers move after the pass. Nobody waits in stage 1 unless no route round the others is free (none does now).
+- **Decision:** Stage 1 moves the setter and every attacker who is not a receiver to their `ar` spots at the serve contact; the receivers move after the pass. Attackers never wait in stage 1. The setter may: in R2 OP starts in front of the set spot, so the setter leaves 1 s after the contact, once OP is out of the way.
 - **Alternatives:** release at the pass (#37); release everyone, receivers included, at the contact.
 - **Reversible by:** `released` and `noWait` in `buildStages()` in `src/template.html`.
 
@@ -365,7 +365,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #53
 - **Problem:** The cup ran L across the court in front of the deep outside hitter. The guide's after-reception picture already has L in zone 5 at about y 0.72, behind the zone 4 attack.
-- **Decision:** L does not move in stage 3: it covers from its `ar` spot, reached in stage 2 on a curve behind the deep outside hitter where the two cross. The caption: "Cover X from zone 5: play a ball the block sends back."
+- **Decision:** L does not move in stage 3: it covers from its `ar` spot, reached in stage 2. In R3, R4 and R6 L curves behind the deep outside hitter where the two cross; in R1 OH2 curves behind L, which runs straight; in R2 and R5 nobody crosses. The caption: "Cover X from zone 5: play a ball the block sends back."
 - **Alternatives:** L in the close cup (#37).
 - **Reversible by:** the L branch of stage 3 in `buildStages()` in `src/template.html`.
 
@@ -373,7 +373,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #53
 - **Problem:** The back-row outside hitter came forward into the cup and back again, which the guide does not draw.
-- **Decision:** The back-row outside hitter goes to y 0.87 or deeper at the set (`DEEP_Y`) and never comes forward of its reception or after-reception spot before the spike; it covers wipes deep.
+- **Decision:** The back-row outside hitter goes to y 0.86 or deeper at the set (`DEEP_Y`, the zone 6 base depth) and never comes forward of its reception or after-reception spot before the spike; it covers wipes deep.
 - **Alternatives:** the deep cup spot (#37).
 - **Reversible by:** `DEEP_Y` in `src/template.html`.
 
@@ -381,14 +381,14 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #53
 - **Problem:** Moves were straight lines of 600 to 900 ms whatever the distance, so long runs went at 10 m/s and markers passed through each other (R1 OP and OH1 at the spike).
-- **Decision:** Each move takes 2.5 s per court width (at least 400 ms), eased in and out over a quarter each, so the top speed is about 4.8 m/s (1 unit = 9 m). A planner places the movers one by one, shortest move first, each with the cheapest start delay (0 to 1.3 s) and path (straight, or round up to two players met, behind rather than in front) that keeps a marker width from everyone at every 15 ms. A stage lasts as long as its longest move. Reception now takes 8 to 10 s at 1×. A few starts wait up to 0.8 s where two runs would cross (the middle at the spike in R2 and R5, OP after the pass in R5 and R6); the setter waits 0.45 to 0.6 s at the set, so it follows the ball.
+- **Decision:** Each move takes 2.5 s per court width (at least 400 ms), eased in and out over a quarter each, so the top speed is about 4.8 m/s (1 unit = 9 m). A planner places the movers one by one, shortest move first, each with the cheapest start delay (0 to 1.3 s) and path that keeps a marker width plus its ring (`GAP`, 0.14) from everyone at every 15 ms. A path is straight or goes round one player met through one waypoint, 1.3 or 1.7 `GAP` to the side; it never turns back and is at most 1.3 times the straight line. Going round in front costs more than any wait (`NET_SIDE_COST`), so players pass behind each other. After the spike, front-row players who switch sides (R1 OP and OH1) pass behind the middle through fixed waypoints (`SWITCH_VIA`), the one going left deeper, so they cross once. Moves under 0.04 left by a `clearOf()` stop are dropped, except in the last stage, which ends exactly on base defence. A stage lasts as long as its longest move. Reception takes 6.5 to 10 s at 1×. The only waits: the setter at the contact in R2 (1 s, entry 43), L after the pass in R1 (0.3 s), OH1 at the spike in R1 (0.15 s), and the setter at the set (0.45 to 0.6 s), so it follows the ball.
 - **Alternatives:** faster runs (5 to 7 m/s, closer to a real sprint but hard to follow); straight lines with waits only; fixed choreographed routes per rotation.
-- **Reversible by:** `MS_PER_UNIT`, `EASE_PART`, `DELAYS`, `NET_SIDE_COST` and `planStage()` in `src/template.html`.
+- **Reversible by:** `MS_PER_UNIT`, `EASE_PART`, `GAP`, `MIN_MOVE`, `DELAYS`, `NET_SIDE_COST`, `SWITCH_VIA`, `detours()` and `planStage()` in `src/template.html`.
 
 ### 48. The server runs in at the serve contact
 
 - **Issue:** #53
 - **Problem:** Our serve played the serve, then the run to base as a second stage, so the server stood still while the ball flew.
-- **Decision:** One stage: the server runs in at the contact while the ball crosses the net (about 2 s). The caption says "Serve from the spot behind the end line, then run in at once." With reduced motion the caption shows that line only, not a list. In Official R3 and R6 the off-court libero's Our serve caption says to wait at the sideline while the middle serves.
+- **Decision:** One stage: the server runs in at the contact while the ball crosses the net (about 2 s). The caption says "Serve from the spot behind the end line, then run in at once." With reduced motion the caption shows that line only, not a list. In R3 and R6 the off-court libero's Our serve caption says to wait at the sideline while the middle (Official) or SUB (Simplified) serves, in both rule sets.
 - **Alternatives:** two stages (#30).
 - **Reversible by:** the `serve` branch of `buildStages()` and `OFF_SERVE` in `src/template.html`.
