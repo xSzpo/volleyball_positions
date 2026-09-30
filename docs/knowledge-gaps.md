@@ -123,3 +123,27 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The built-in default of `match-online` is off. Re-enable it in #33, after the owner's `terraform apply`.
 - **Alternatives:** keep it on and write `official` to rooms until the apply; that would teach the wrong rule set online.
 - **Reversible by:** `FEATURES["match-online"]` in `src/template.html` and `DEFAULT_OFF` in `src/tests/flags_test.py`.
+
+### 16. Learn boundaries show your own limits
+
+- **Issue:** #20
+- **Problem:** `docs/v2.md` §2.3 asks for T-bars "in the constraining player's role colour", and the mock-up draws them for the setter. It does not say whose limits are drawn when you play another role.
+- **Decision:** Learn draws your own limits: one line per overlap partner (the player in your column, and your neighbours in your row), from your marker to the line that partner sets, in their route colour. The caption names the same partners ("Overlap: stay in front of L, right of OP and left of OH1."). When a limit falls inside your marker, no line is drawn and the caption names that partner ("You stand right at the L limit."). The overlap sentence is only in Learn, not in `describe()`, because Drill and Match show `describe()` after the neighbour check and it would give the answer away.
+- **Alternatives:** draw every player's limits (busy on a phone), or only the setter's, as in the mock-up.
+- **Reversible by:** `partners()`, `overlapText()` and `boundLines()` in `src/template.html`.
+
+### 17. Learn controls before the animation
+
+- **Issue:** #20
+- **Problem:** §2.7 puts a sticky controls row under the caption, but its Replay, Pause, Step and speed buttons belong to `learn-animation` (#21). The caption also has no fixed two-line height yet, because the `describe()` texts are longer than 90 characters.
+- **Decision:** The sticky row holds only the primary `Next: … ▸`, which steps through the phases and on into the next rotation (R6 wraps to R1). The full `describe()` text stays in the caption; #21 brings the short per-stage captions and the fixed height.
+- **Alternatives:** leave the row out until #21; cut `describe()` to two lines now.
+- **Reversible by:** `.lctl` and `#lNext` in `src/template.html`.
+
+### 18. SUB texts in Simplified
+
+- **Issue:** #20
+- **Problem:** The guide has no SUB. Simplified needs texts for SUB at every step, including the steps where SUB is off court.
+- **Decision:** At Our serve in R3 and R6: "You come on for the libero, who may not serve. Serve, then run to zone 6, deep." Off court in R3 and R6: "You come on only for our serve here, because the libero may not serve. When we lose the serve, the libero comes back on for you." In the other rotations: "You play only in R3 (S5) and R6 (S2), to serve when the libero is in zone 1."
+- **Alternatives:** leave SUB out of the role texts, since SUB is not in the role picker.
+- **Reversible by:** the SUB branches of `describe()` in `src/template.html`.
