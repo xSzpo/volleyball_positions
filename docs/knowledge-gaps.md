@@ -568,6 +568,54 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** L goes to the guide's zone 5 spot first and turns to the cover (an L-shaped run, and the set waits up to 1.6 s for it); the right-side attacker keeps its approach, a 3-1 cover; the deep outside hitter in the close cover instead of L where L passes from the right.
 - **Reversible by:** `COVER`, `DEEP_COVER`, `SET_MAX_MS`, the pass stage's `onCover` and the set ball's `cover` list in `buildReception()` in `src/template.html`.
 
+### 69. The front middle at Attack is graded at its quick take-off
+
+- **Issue:** #92
+- **Problem:** The Attack step asks where you are as the pass reaches the setter. The data `ar` spot of the front middle is on the 3 m line, where the guide's attack approach starts. Learn's Reception play has the middle at its take-off by the net when the pass lands, and the owner says the middle goes to the middle of the front row.
+- **Decision:** Drill and Match grade the front middle at the take-off the Learn play uses (`passPlan()`: `APPROACH_Y`, at most 0.15 left of the set spot). The feedback draws the run to the 3 m line, then the dashed approach to the take-off. Every other role is graded on its `ar` spot, which is where Learn has it when the pass lands. `ROWS[].ar` is unchanged.
+- **Alternatives:** move the middle's `ar` spot in the data (it would no longer match the guide's drawing); ask about the moment the setter sets.
+- **Reversible by:** `answerSpots()` and `passPlan()` in `src/template.html`.
+
+### 70. The ball after an Attack answer is at the setter
+
+- **Issue:** #92
+- **Problem:** The Attack feedback had no ball. The graded moment has it at the setter, and a ball next to the set spot can cover a marker.
+- **Decision:** After the answer (solo feedback, Drill and the multiplayer reveal) the ball is at `HELD` from the set spot. It goes on the passer's side first; if that covers a marker, then towards the right sideline, then behind. Before the answer the #81 picture stays: everyone on the reception spots and the ball at the passer.
+- **Alternatives:** keep the ball at the passer after the answer; draw the ball on the setter's marker.
+- **Reversible by:** `momentBall()` and `setterBall()` in `src/template.html`.
+
+### 71. Our serve shows the ball and asks the server where they go
+
+- **Issue:** #92
+- **Problem:** Learn's Our serve still has the ball over the net; Drill and Match had none. The server was asked "Where do you stand?" but is graded on their base spot after the serve.
+- **Decision:** Drill and Match draw the ball at `SERVE_BALL`, before and after the answer. The server is asked "You serve. Where do you go after it?"; everyone else "We serve. Where do you stand?".
+- **Alternatives:** grade the server on the serve spot behind the end line.
+- **Reversible by:** `serveQuestion()` and `momentBall()` in `src/template.html`.
+
+### 72. Your answer after scoring is an accent dot
+
+- **Issue:** #92
+- **Problem:** After scoring, your tap was a small dark dot. On the Attack court it sat on the play's lines and read as part of the play.
+- **Decision:** Solo Match and Drill draw your tap as the accent dot used for "your spot" before the answer (`tapMark()`, class `yourtap`), joined to the right spot by the thin dotted line as before. Same-device and online keep the small dark dot until the reveal, which marks each player's tap with their colour and initial.
+- **Alternatives:** a label "you" on the tap.
+- **Reversible by:** `tapMark()` in `src/template.html`.
+
+### 73. Receive limits wait for the neighbour check
+
+- **Issue:** #92
+- **Problem:** The owner: "when you show answer in drill and match for recieve show the position limits compared to other players as you do it in learn section". The neighbour check comes after the Receive answer and asks for one of those limits, so lines drawn at once would give it away.
+- **Decision:** After a Receive answer Drill and Match draw your limits as Learn does (`boundLines()` from your right spot) and add the overlap sentence to the feedback. With the neighbour check on, both wait until the check is answered; the check's own note already has the whistle rule, so the sentence then leaves it out. A Next press that skips the check shows no limits. An off-court player gets neither.
+- **Alternatives:** draw the limits at once and drop the neighbour check at Receive; draw them at once and keep the check.
+- **Reversible by:** `limitsLayer()`, `limitsHtml()` and `dShowLimits()` in `src/template.html`.
+
+### 74. Which limits the multiplayer reveal draws
+
+- **Issue:** #92
+- **Problem:** The same-device and online reveal shows everyone's answers on one court. Each role's limits are two or three lines, so several roles' limits would cross each other.
+- **Decision:** Online, each phone draws the limits of its own role. Same device draws them only when every player has the same role. The reveal's text list adds each on-court role's overlap sentence.
+- **Alternatives:** draw every role's limits; none on the reveal.
+- **Reversible by:** the `limitsLayer()` call in `mpReveal()` in `src/template.html`.
+
 ### 75. What goes with the Learn rules to remember box
 
 - **Issue:** #91
