@@ -467,3 +467,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Keep Base as it is: its own screen after Reception, resting on base defence with the ball over the net and the "Our attack is over the net: defend." cue. Its play starts on the spike picture after a 700 ms lead-in and plays the same last stage. The repeat is short (2 to 4.5 s) and lets you look at base defence on its own; Drill and Match still grade the `ar` spots as Attack.
 - **Alternatives:** drop Base's play and keep only its still picture; remove the Base screen from Learn.
 - **Reversible by:** `cutPlay()` and `learnPlayers()` in `src/template.html`.
+
+### 57. Our serve is a static screen
+
+- **Issue:** #69
+- **Problem:** The Our serve play showed only the server walking from behind the end line to base. The owner: "Remove animation from 'our serve' - they add no value."
+- **Decision:** Our serve is static like Rotation: no Play, Replay, Step, speed or stage dots (the bar keeps its height, invisible), no Play nudge, nothing plays. The still picture is unchanged: everyone on the base spot, the server at base with the route from the serve spot, the ball over the net (`SERVE_BALL`), and the same still caption (exchanges, `OFF_SERVE`, `LIBERO_RULE`). Drill and Match still grade the serve spots.
+- **Alternatives:** keep the play but drop the nudge; play the serve with the whole team moving to base.
+- **Reversible by:** `animPhase()`, `phaseStages()` and `buildReception()` in `src/template.html` (the serve stage and `SERVE_HIT` are in git history before #69).

@@ -2992,8 +2992,8 @@
           });
         const pl = learnPlayers(ri, phase);
         learnTr = animPhase(phase) ? phaseStages(ri, phase) : { stages: [] };
-        // Reception rests on the whistle picture; the other plays rest where they end.
-        const played = animated() && learnTr.stages.length > 0 && phase !== "rec";
+        // Reception rests on the whistle picture; Base rests where its play ends.
+        const played = animated() && phase === "ar";
         const shown = played ? pl.map((o) => ({ ...o, ...learnTr.end[o.p] })) : pl;
         const me = shown.find((o) => o.p === role);
         let s = DEFS + courtBase(!me);
@@ -3004,7 +3004,7 @@
           .forEach((o) => {
             s += chip(o);
           });
-        const ball = phase === "rec" ? null : restBall(learnTr);
+        const ball = phase === "serve" ? SERVE_BALL : phase === "rec" ? null : restBall(learnTr);
         const bounds =
           phase === "start" || phase === "rec"
             ? boundLines(ri, pl, role, phase)
@@ -3096,7 +3096,6 @@
       const MS_PER_UNIT = 2500,
         EASE_PART = 0.25,
         MIN_GLIDE = 400;
-      const SERVE_HIT = "Serve from the spot behind the end line, then run in at once.";
       const PASS_TEXT = "Pass the serve high to the setter at the net.";
       const PASS_ATTACK = "Pass high to the setter, then get out to the 3 m line to attack.";
       const SERVE_TO = "Their serve comes to you: get behind the ball and pass it.";
@@ -3156,14 +3155,7 @@
       function animated() {
         return feature("learn-animation") && !ANIM_OFF && !motionQuery.matches;
       }
-      const animPhase = (ph) => ph !== "start";
-      // The play of Our serve starts with the server behind the end line.
-      function playStart(ri, phase) {
-        const list = players(ri, phase);
-        if (phase !== "serve") return list;
-        const sv = server(ri);
-        return list.map((o) => (o.p === sv ? { ...o, x: SERVE_SPOT[0], y: SERVE_SPOT[1] } : o));
-      }
+      const animPhase = (ph) => ph === "rec" || ph === "ar";
       // Learn's Base screen: base defence by job for the players on court at Reception.
       function learnPlayers(ri, phase) {
         if (phase !== "ar") return players(ri, phase);
@@ -3426,11 +3418,14 @@
       function phaseStages(ri, phase) {
         const key = `${rulesMode}|${ri}|${phase}`;
         if (stageCache[key]) return stageCache[key];
-        if (phase !== "rec" && phase !== "ar") {
-          stageCache[key] = buildStages(ri, phase, LEAD_MS);
+        if (!animPhase(phase)) {
+          const list = players(ri, phase);
+          const at = spots(list);
+          const order = list.map((o) => o.p);
+          stageCache[key] = { from: at, players: order, stages: [], lead: 0, total: 0, end: at };
           return stageCache[key];
         }
-        const play = buildStages(ri, "rec", 0);
+        const play = buildReception(ri);
         const n = play.stages.findIndex((st) => st.base);
         stageCache[`${rulesMode}|${ri}|rec`] = { ...play, fadeBack: true };
         stageCache[`${rulesMode}|${ri}|ar`] = cutPlay(play, n < 0 ? play.stages.length : n);
@@ -3446,144 +3441,129 @@
         const total = last ? last.start + last.dur + HOLD_MS : LEAD_MS;
         return { from, players: play.players, stages, lead: LEAD_MS, total, end: play.end };
       }
-      function buildStages(ri, phase, lead) {
-        const list = playStart(ri, phase);
+      function buildReception(ri) {
+        const list = players(ri, "rec");
         const from = spots(list);
         const order = list.map((o) => o.p);
-        const notes = ROWS[ri].move?.[phase] || {};
+        const notes = ROWS[ri].move?.rec || {};
         const stages = [];
-        if (phase === "serve") {
-          const sv = server(ri);
-          const base = players(ri, phase).find((o) => o.p === sv);
-          if (base) {
-            stages.push({
-              moves: { [sv]: { x: base.x, y: base.y } },
-              noWait: true,
-              notes: { ...notes, [sv]: SERVE_HIT, ...(from.L ? {} : { L: OFF_SERVE(sv) }) },
-              ball: { from: touch(from[sv], SERVE_BALL, HELD), to: SERVE_BALL },
-            });
-          }
-        } else if (phase === "rec") {
-          const ar = players(ri, "ar");
-          const kind = Object.fromEntries(ar.map((o) => [o.p, o.kind]));
-          const to = spots(ar);
-          const arNotes = ROWS[ri].move?.ar || {};
-          const setter = order.filter((p) => kind[p] === "set");
-          const attackers = order.filter((p) => kind[p] === "front" || kind[p] === "back");
-          const receivers = order.filter((p) => RECEIVERS.includes(p));
-          const passer = receivers.includes(PASSER[ri]) ? PASSER[ri] : receivers[0];
-          const setSpot = setter.length ? to[setter[0]] : null;
-          const front = attackers.filter((p) => kind[p] === "front");
-          const hitter = front.reduce((a, p) => (a == null || to[p].x < to[a].x ? p : a), null);
-          const hit = hitter && { x: to[hitter].x, y: HIT_Y };
-          // Movement is free from the server's first movement: everyone who does not receive leaves at once.
-          const released = [...setter, ...attackers.filter((p) => !receivers.includes(p))];
-          stages.push({
-            moves: pick(released, (p) => to[p]),
-            noWait: true,
-            notes: {
-              ...notes,
-              ...pick(released, (p) => arNotes[p]),
-              ...(passer ? { [passer]: SERVE_TO } : {}),
-            },
-            ball: passer && {
-              from: THEIR_SERVE,
-              to: touch(from[passer], setSpot || SERVE_BALL),
-              ms: SERVE_MS,
-            },
-          });
-          const second = passer ? [passer, ...order.filter((p) => p !== passer)] : order;
-          stages.push({
-            moves: pick(second, (p) => to[p]),
-            notes: {
-              ...pick(
-                receivers.filter((p) => p !== passer),
-                (p) => arNotes[p],
-              ),
-              ...(passer ? { [passer]: kind[passer] === "front" ? PASS_ATTACK : PASS_TEXT } : {}),
-              ...pick(setter, () => SET_TEXT(passer)),
-            },
-            team: passer ? `${passer} passes to the setter.` : "",
-            ball: passer &&
-              setSpot && { from: touch(from[passer], setSpot), to: touch(setSpot, hit) },
-          });
-          if (hitter && setSpot) {
-            const near = (ps) =>
-              ps.reduce(
-                (a, p) =>
-                  a == null || Math.abs(to[p].x - hit.x) < Math.abs(to[a].x - hit.x) ? p : a,
-                null,
-              );
-            const cupFront = near(
-              order.filter((p) => isFront(ri, p) && p !== hitter && kind[p] !== "set"),
+        const ar = players(ri, "ar");
+        const kind = Object.fromEntries(ar.map((o) => [o.p, o.kind]));
+        const to = spots(ar);
+        const arNotes = ROWS[ri].move?.ar || {};
+        const setter = order.filter((p) => kind[p] === "set");
+        const attackers = order.filter((p) => kind[p] === "front" || kind[p] === "back");
+        const receivers = order.filter((p) => RECEIVERS.includes(p));
+        const passer = receivers.includes(PASSER[ri]) ? PASSER[ri] : receivers[0];
+        const setSpot = setter.length ? to[setter[0]] : null;
+        const front = attackers.filter((p) => kind[p] === "front");
+        const hitter = front.reduce((a, p) => (a == null || to[p].x < to[a].x ? p : a), null);
+        const hit = hitter && { x: to[hitter].x, y: HIT_Y };
+        // Movement is free from the server's first movement: everyone who does not receive leaves at once.
+        const released = [...setter, ...attackers.filter((p) => !receivers.includes(p))];
+        stages.push({
+          moves: pick(released, (p) => to[p]),
+          noWait: true,
+          notes: {
+            ...notes,
+            ...pick(released, (p) => arNotes[p]),
+            ...(passer ? { [passer]: SERVE_TO } : {}),
+          },
+          ball: passer && {
+            from: THEIR_SERVE,
+            to: touch(from[passer], setSpot || SERVE_BALL),
+            ms: SERVE_MS,
+          },
+        });
+        const second = passer ? [passer, ...order.filter((p) => p !== passer)] : order;
+        stages.push({
+          moves: pick(second, (p) => to[p]),
+          notes: {
+            ...pick(
+              receivers.filter((p) => p !== passer),
+              (p) => arNotes[p],
+            ),
+            ...(passer ? { [passer]: kind[passer] === "front" ? PASS_ATTACK : PASS_TEXT } : {}),
+            ...pick(setter, () => SET_TEXT(passer)),
+          },
+          team: passer ? `${passer} passes to the setter.` : "",
+          ball: passer &&
+            setSpot && { from: touch(from[passer], setSpot), to: touch(setSpot, hit) },
+        });
+        if (hitter && setSpot) {
+          const near = (ps) =>
+            ps.reduce(
+              (a, p) =>
+                a == null || Math.abs(to[p].x - hit.x) < Math.abs(to[a].x - hit.x) ? p : a,
+              null,
             );
-            const approach = attackers.filter((p) => p !== hitter && p !== cupFront);
-            const deep = order.filter((p) => !kind[p] && p !== "L" && !isFront(ri, p));
-            const moves = { [hitter]: hit };
-            const via = {};
-            if (cupFront) {
-              moves[cupFront] = { x: Math.min(0.9, hit.x + CUP_FRONT.dx), y: CUP_FRONT.y };
-              via[cupFront] = [{ x: Math.min(to[cupFront].x, setSpot.x - 0.15), y: APPROACH_Y }];
-            }
-            setter.forEach((p) => {
-              moves[p] = { x: setSpot.x + SETTER_STEP.dx, y: setSpot.y + SETTER_STEP.dy };
-            });
-            approach.forEach((p) => {
-              moves[p] = { x: to[p].x, y: kind[p] === "front" ? APPROACH_Y : BACK_HIT_Y };
-            });
-            deep.forEach((p) => {
-              moves[p] = { x: to[p].x, y: Math.max(to[p].y, DEEP_Y) };
-            });
-            const spike = touch(hit, SPIKE_BALL, HELD);
-            stages.push({
-              moves,
-              via,
-              noDetour: setter,
-              keepOrder: true,
-              notes: {
-                [hitter]: ATTACK_NOTES.hit[0](hitter.startsWith("OH")),
-                ...pick(approach, (p) => ATTACK_NOTES[kind[p]]),
-                ...pick(deep, () => ATTACK_NOTES.deep),
-                ...pick(setter, () => ATTACK_NOTES.cupSet(hitter)),
-                ...(cupFront ? { [cupFront]: ATTACK_NOTES.cupFront(hitter) } : {}),
-                ...(from.L ? { L: ATTACK_NOTES.cupBack(hitter) } : {}),
-              },
-              ball: { from: touch(setSpot, hit), to: spike, sync: hitter },
-            });
-            const base = baseSpots(ri, order);
-            const zone = (p) => base[p].zone;
-            const switchVia = {};
-            order
-              .filter((p) => {
-                const x = (moves[p] ?? to[p]).x;
-                return (
-                  isFront(ri, p) && Math.abs(x - 0.5) > 0.2 && (x - 0.5) * (base[p].x - 0.5) < 0
-                );
-              })
-              .forEach((p) => {
-                switchVia[p] = [base[p].x > 0.5 ? SWITCH_VIA.right : SWITCH_VIA.left];
-              });
-            stages.push({
-              moves: pick([hitter, ...order.filter((p) => p !== hitter)], (p) => ({
-                x: base[p].x,
-                y: base[p].y,
-              })),
-              via: switchVia,
-              base: true,
-              notes: {
-                ...pick(order, (p) => ATTACK_NOTES.base(zone(p), isFront(ri, p))),
-                [hitter]: ATTACK_NOTES.hit[1](zone(hitter)),
-              },
-              ball: { from: spike, to: SPIKE_BALL },
-            });
+          const cupFront = near(
+            order.filter((p) => isFront(ri, p) && p !== hitter && kind[p] !== "set"),
+          );
+          const approach = attackers.filter((p) => p !== hitter && p !== cupFront);
+          const deep = order.filter((p) => !kind[p] && p !== "L" && !isFront(ri, p));
+          const moves = { [hitter]: hit };
+          const via = {};
+          if (cupFront) {
+            moves[cupFront] = { x: Math.min(0.9, hit.x + CUP_FRONT.dx), y: CUP_FRONT.y };
+            via[cupFront] = [{ x: Math.min(to[cupFront].x, setSpot.x - 0.15), y: APPROACH_Y }];
           }
+          setter.forEach((p) => {
+            moves[p] = { x: setSpot.x + SETTER_STEP.dx, y: setSpot.y + SETTER_STEP.dy };
+          });
+          approach.forEach((p) => {
+            moves[p] = { x: to[p].x, y: kind[p] === "front" ? APPROACH_Y : BACK_HIT_Y };
+          });
+          deep.forEach((p) => {
+            moves[p] = { x: to[p].x, y: Math.max(to[p].y, DEEP_Y) };
+          });
+          const spike = touch(hit, SPIKE_BALL, HELD);
+          stages.push({
+            moves,
+            via,
+            noDetour: setter,
+            keepOrder: true,
+            notes: {
+              [hitter]: ATTACK_NOTES.hit[0](hitter.startsWith("OH")),
+              ...pick(approach, (p) => ATTACK_NOTES[kind[p]]),
+              ...pick(deep, () => ATTACK_NOTES.deep),
+              ...pick(setter, () => ATTACK_NOTES.cupSet(hitter)),
+              ...(cupFront ? { [cupFront]: ATTACK_NOTES.cupFront(hitter) } : {}),
+              ...(from.L ? { L: ATTACK_NOTES.cupBack(hitter) } : {}),
+            },
+            ball: { from: touch(setSpot, hit), to: spike, sync: hitter },
+          });
+          const base = baseSpots(ri, order);
+          const zone = (p) => base[p].zone;
+          const switchVia = {};
+          order
+            .filter((p) => {
+              const x = (moves[p] ?? to[p]).x;
+              return isFront(ri, p) && Math.abs(x - 0.5) > 0.2 && (x - 0.5) * (base[p].x - 0.5) < 0;
+            })
+            .forEach((p) => {
+              switchVia[p] = [base[p].x > 0.5 ? SWITCH_VIA.right : SWITCH_VIA.left];
+            });
+          stages.push({
+            moves: pick([hitter, ...order.filter((p) => p !== hitter)], (p) => ({
+              x: base[p].x,
+              y: base[p].y,
+            })),
+            via: switchVia,
+            base: true,
+            notes: {
+              ...pick(order, (p) => ATTACK_NOTES.base(zone(p), isFront(ri, p))),
+              [hitter]: ATTACK_NOTES.hit[1](zone(hitter)),
+            },
+            ball: { from: spike, to: SPIKE_BALL },
+          });
         }
-        const tr = { from, players: order, stages: [], lead };
-        let t = lead;
+        const tr = { from, players: order, stages: [], lead: 0 };
+        let t = 0;
         const at = { ...from };
         stages.forEach((st, n) => {
           const standing = { ...at, ...st.moves };
-          // The last stage ends exactly on its spots: base defence, or the server at base.
+          // The last stage ends exactly on base defence.
           const least = n === stages.length - 1 ? 1e-3 : MIN_MOVE;
           Object.keys(st.moves).forEach((p) => {
             st.moves[p] = clearOf(p, st.moves[p], standing);
