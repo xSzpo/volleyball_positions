@@ -11,7 +11,9 @@ there. Checks the stage end positions, the ball on the Our serve and Base
 stills, the controls (Replay, Pause, Step, speed), that no route plays on open,
 that Next and the chips never animate or wait, the still and lead-in captions
 for exchanges and the middle pair reset, the caption length and
-height, reduced motion and ?anim=0, the movement trails (one stage at a time),
+height, reduced motion and ?anim=0, the movement trails (through the stage and a
+run carried on), that the ball never waits in a player's hands, L's run in
+front of the deep outside hitter,
 the passer, the setter's cover, the deep outside hitter, the top speed, no
 marker passing through another, the controls in the court panel on a short
 phone, and that the flag off leaves no trace.
@@ -502,6 +504,11 @@ TRAIL_LENGTHS = """() => Object.fromEntries([...document.querySelectorAll('#cour
     return [l.dataset.p, q.slice(1).reduce((s, b, i) => s + Math.hypot(b.x - q[i].x, b.y - q[i].y), 0)]; }))"""
 RECEIVERS = ("OH1", "OH2", "L")
 TOP_SPEED = 5.0  # m/s; 1 unit is 9 m
+TRAIL_FADE_MS = 400
+BALL_WAIT_MS = 400
+DEEP_LIMIT = 0.85
+CAPTION_MS = 2500
+HELD = (MARKER_R * 100 + 1 + 0.65 * MARKER_R * 100) / 100
 
 
 def base_zone(p: str, front: bool) -> int:
@@ -534,6 +541,18 @@ def trail_movers(stage: dict[str, Any]) -> list[str]:
         for p in stage["moves"]
         if abs(stage["to"][p]["x"] - stage["from"][p]["x"]) + abs(stage["to"][p]["y"] - stage["from"][p]["y"]) >= 0.01
     ]
+
+
+def trails_at(stages: list[dict[str, Any]], t: float) -> list[str]:
+    """The trails that show at t: a run's trail stays through its stage and while it carries on, then fades."""
+    shown = []
+    for k, stage in enumerate(stages):
+        after = stages[k + 1]["start"] if k + 1 < len(stages) else math.inf
+        for p in trail_movers(stage):
+            gone = max(after, stage["start"] + stage["arrive"][p])
+            if stage["start"] + stage["delays"][p] < t < gone + TRAIL_FADE_MS:
+                shown.append(p)
+    return shown
 
 
 def check_reception_stages(page: Page) -> None:
@@ -577,7 +596,7 @@ def check_reception_stages(page: Page) -> None:
             ball = page.evaluate(BALL)
             if not ball or not ball["at"] or not ball["at"][1] < 0:
                 fail(f"after the spike the ball is not over the net: {ball}")
-        trails = trail_movers(stages[stage])
+        trails = trails_at(stages, state["t"])
         if sorted(page.evaluate(TRAILS)) != sorted(trails):
             fail(f"after Step {stage + 1}: trails {sorted(page.evaluate(TRAILS))}, expected {sorted(trails)}")
     held = anim(page)
@@ -732,6 +751,110 @@ def check_reception_ends(page: Page) -> None:
                     fail(f"{tag} {play}: the last stage is not {hitter}'s spike: {final['notes'].get(hitter)!r}")
                 if not final["ball"] or not final["ball"]["to"]["y"] < 0:
                     fail(f"{tag} {play}: the last stage does not play the ball over the net: {final['ball']}")
+
+
+def check_ball_moving(page: Page) -> None:
+    """The ball never waits in a player's hands, and long runs carry on into the next stage instead.
+
+    Every rotation, both rule sets: the pass flies about 1 s and reaches the setter at the set spot, the next contact
+    follows each ball's arrival within BALL_WAIT_MS, the hold comes only after the last stage, a run carried on starts
+    the player's next move only when it ends, and L's run in stage 2 stays in front of y DEEP_LIMIT.
+    """
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            tag = f"{mode} R{ri + 1} Reception"
+            stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")
+            total = page.evaluate(f"window.ksvLearn.track({ri}, 'rec', 1)")[-1]["t"]
+            for k, (stage, after) in enumerate(zip(stages, stages[1:], strict=False)):
+                wait = after["start"] - stage["start"] - stage["ball"]["ms"]
+                if not 0 <= wait <= BALL_WAIT_MS:
+                    fail(f"{tag}: after stage {k + 1} the ball waits {wait:.0f} ms for the next contact")
+            last = stages[-1]
+            if total - last["start"] - last["dur"] > 1000:
+                fail(f"{tag}: the play holds {total - last['start'] - last['dur']:.0f} ms after the last stage")
+            pass_ms = stages[1]["ball"]["ms"]
+            if not 1000 <= pass_ms <= 1300:
+                fail(f"{tag}: the pass flies {pass_ms:.0f} ms")
+            ready = stages[0]["start"] + stages[0]["arrive"].get("S", 0)
+            if ready > stages[1]["start"] + pass_ms + 1:
+                fail(f"{tag}: the setter reaches the set spot at {ready:.0f} ms, after the pass")
+            passer = next(p for p, note in stages[0]["notes"].items() if note.startswith("Their serve comes to you"))
+            _, _, hitter = reception_plan(ri, mode)
+            for k, who in enumerate((passer, "S", hitter)):
+                stage = stages[k]
+                pos = page.evaluate(
+                    "(a) => window.ksvLearn.at(...a)", [ri, "rec", stage["start"] + stage["ball"]["ms"]]
+                )
+                off = math.dist((pos[who]["x"], pos[who]["y"]), (stage["ball"]["to"]["x"], stage["ball"]["to"]["y"]))
+                if off > HELD + 0.01:
+                    fail(f"{tag}: stage {k + 1}'s ball lands {off:.2f} from {who}")
+            ends: dict[str, float] = {}
+            for n, stage in enumerate(stages):
+                for p in stage["moves"]:
+                    begin = stage["start"] + stage["delays"][p]
+                    if begin < ends.get(p, 0) - 1:
+                        fail(f"{tag} stage {n + 1}: {p} starts a move at {begin:.0f} ms, before the last ends")
+                    ends[p] = stage["start"] + stage["arrive"][p]
+            deepest = max((q["y"] for q in stages[1]["paths"].get("L", [])), default=0)
+            if deepest > DEEP_LIMIT:
+                fail(f"{tag} stage 2: L runs back to y {deepest:.2f}")
+
+
+def check_caption_timing(page: Page) -> None:
+    """While a play runs, your caption changes only for a new line of yours and stays CAPTION_MS of play.
+
+    Every rotation, role and rule set, from the caption plan; then one Reception played at 1× on the page.
+    """
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            for phase in ("rec", "ar"):
+                total = page.evaluate(f"window.ksvLearn.track({ri}, '{phase}', 1)")[-1]["t"]
+                stages = page.evaluate(f"window.ksvLearn.stages({ri}, '{phase}')")
+                for role in roles:
+                    plan = page.evaluate("(a) => window.ksvLearn.captionPlan(...a)", [ri, phase, role])
+                    tag = f"{mode} R{ri + 1} {phase} {role}"
+                    times = [c["t"] for c in plan]
+                    if any(b - a < CAPTION_MS for a, b in zip(times, times[1:], strict=False)) or times[-1] >= total:
+                        fail(f"{tag}: captions change at {times} (play {total:.0f} ms)")
+                    others = [c["text"] for c in plan[1:] if not c["text"].startswith(f"You ({role})")]
+                    if others and any(role in st["notes"] for st in stages):
+                        fail(f"{tag}: the caption changes to someone else's line: {others}")
+    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    learn(page, 0, "rec")
+    page.evaluate(
+        """() => { window.capLog = [];
+        new MutationObserver(() => { const a = window.ksvLearn.anim();
+          if (a) window.capLog.push([a.t, document.querySelector('#lCap').innerText]); })
+          .observe(document.querySelector('#lCap'), { childList: true, subtree: true, characterData: true }); }"""
+    )
+    page.click("#lPlay")
+    wait_done(page)
+    log = page.evaluate("window.capLog")
+    times = [t for t, _ in log]
+    if len(log) < 2 or any(b - a < CAPTION_MS - 50 for a, b in zip(times, times[1:], strict=False)):
+        fail(f"R1 Reception played at 1×: the caption changes at {times}")
+
+
+def check_rest_list(page: Page) -> None:
+    """After the Reception play the rest caption keeps the reception cue and lists your lines under Then:."""
+    for mode, role in (("simple", "OH1"), ("official", "MB2")):
+        open_app(page, "?ff=all", {"role": role, "rulesMode": mode})
+        learn(page, 3, "rec")
+        if page.locator("#lCap .then").count():
+            fail(f"{mode}: the Then: list shows before the play")
+        page.click("#lPlay")
+        wait_done(page)
+        still = page.evaluate(f"window.ksvLearn.still(3, 'rec', '{role}')")
+        want = page.evaluate(f"window.ksvLearn.captions(3, 'rec', '{role}')")
+        items = page.locator("#lCap .then li").all_inner_texts()
+        if items != want or not page.inner_text("#lCap").startswith(still):
+            fail(f"{mode}: after the play the caption is {page.inner_text('#lCap')!r}, expected {still!r} then {want}")
+        page.click("#lNext")
+        page.click('.ph[data-k="rec"]')
+        if page.locator("#lCap .then").count():
+            fail(f"{mode}: the Then: list stays after leaving the screen")
 
 
 def check_path_shapes(page: Page) -> None:
@@ -984,6 +1107,16 @@ LAYOUT = """() => {
 }"""
 
 
+REST_FIT = """() => {
+  const row = document.querySelector('#lCtl').getBoundingClientRect();
+  const range = document.createRange(); range.selectNodeContents(document.querySelector('#lCap'));
+  range.setEndBefore(document.querySelector('#lCap .then'));
+  const cap = range.getBoundingClientRect();
+  const court = document.querySelector('#courtL').getBoundingClientRect();
+  return { capCovered: cap.bottom > row.top + 0.5, courtTop: court.top };
+}"""
+
+
 def check_phone(browser: Browser) -> None:
     """While a phase plays, the controls sit in the court panel and the sticky row covers nothing."""
     for height in (750, 664):
@@ -1024,6 +1157,10 @@ def check_phone(browser: Browser) -> None:
                 played += 1
                 page.wait_for_timeout(400)
             wait_done(page)
+            if page.locator("#lCap .then").count():
+                got = page.evaluate(REST_FIT)
+                if got["capCovered"] or got["courtTop"] < -0.5:
+                    fail(f"{tag}: after the play the rest caption or the court is out of view: {got}")
             if step == 1:
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         if played < 2:
@@ -1133,25 +1270,33 @@ def check_serve_static(page: Page) -> None:
 
 
 def check_trails_in_play(page: Page) -> None:
-    """While Reception plays, only the current stage's trails show, and the last stage's while they fade."""
+    """While Reception plays, a trail shows through its stage and while its run carries on, then fades out."""
     open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
     learn(page, 3, "start")
     page.click('.ph[data-k="rec"]')
+    stages: list[dict[str, Any]] = page.evaluate("window.ksvLearn.stages(3, 'rec')")
     page.click("#lPlay")
     seen = set()
     for _ in range(80):
         state, shown = page.evaluate(
             """() => [window.ksvLearn.anim(), [...document.querySelectorAll('#courtL .trail')]
             .filter((l) => l.getAttribute('visibility') === 'visible' && +(l.getAttribute('opacity') ?? 1) > 0)
-            .map((l) => +l.dataset.stage)]"""
+            .map((l) => [+l.dataset.stage, l.dataset.p])]"""
         )
         if not state:
             break
-        old = [k for k in shown if k not in (state["stage"], state["stage"] - 1)]
+        old = []
+        for k, p in shown:
+            after = stages[k + 1]["start"] if k + 1 < len(stages) else math.inf
+            if (
+                k > state["stage"]
+                or state["t"] > max(after, stages[k]["start"] + stages[k]["arrive"][p]) + TRAIL_FADE_MS
+            ):
+                old.append((k + 1, p))
         if old:
-            fail(f"at {state['t']:.0f} ms (stage {state['stage'] + 1}) trails of stages {sorted(set(old))} still show")
+            fail(f"at {state['t']:.0f} ms (stage {state['stage'] + 1}) finished trails {sorted(set(old))} still show")
             break
-        seen |= set(shown)
+        seen |= {k for k, _ in shown}
         page.wait_for_timeout(120)
     if len(seen) < 3:
         fail(f"trails showed only for stages {sorted(seen)}")
@@ -1222,6 +1367,9 @@ def main() -> None:
         check_static(page)
         check_reception_stages(page)
         check_reception_ends(page)
+        check_ball_moving(page)
+        check_caption_timing(page)
+        check_rest_list(page)
         check_path_shapes(page)
         check_switch_behind(page)
         check_no_overlap(page)
