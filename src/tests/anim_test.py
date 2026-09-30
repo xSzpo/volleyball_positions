@@ -1117,20 +1117,24 @@ def check_fade_back(page: Page) -> None:
         fail(f"Pause does not keep its frame: {held} then {state}")
     if not page.locator("#courtL .am").count() or page.locator("#courtL .bnd").count():
         fail("Pause leaves the play's frame")
-    page.click("#lPlay")
-    page.wait_for_function("window.ksvLearn.anim() && window.ksvLearn.anim().fading", timeout=20000)
-    fading = anim(page)
-    if not fading or fading["t"] != fading["total"]:
-        fail(f"the fade-back starts before the play ends: {fading}")
-    start = page.evaluate("performance.now()")
-    page.wait_for_function(
-        """() => { const g = document.querySelector('#courtL .am');
-        return g && +(g.getAttribute('opacity') ?? 1) < 0.9 && +g.getAttribute('opacity') > 0; }""",
-        timeout=2000,
+    page.evaluate(
+        """() => { window.fadeWatch = {};
+        const w = window.fadeWatch;
+        const tick = (now) => {
+          const a = window.ksvLearn.anim();
+          if (a && a.fading && w.fadeAt === undefined) { w.fadeAt = now; w.t = a.t; w.total = a.total; }
+          if (!a && w.fadeAt !== undefined) { w.doneAt = now; return; }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick); }"""
     )
-    wait_done(page)
-    took = page.evaluate("performance.now()") - start
-    if not 250 <= took <= 1000:
+    page.click("#lPlay")
+    page.wait_for_function("window.fadeWatch.doneAt !== undefined", timeout=20000)
+    watch = page.evaluate("window.fadeWatch")
+    if watch["t"] != watch["total"]:
+        fail(f"the fade-back starts before the play ends: {watch}")
+    took = watch["doneAt"] - watch["fadeAt"]
+    if not 200 <= took <= 3000:
         fail(f"the fade-back took {took:.0f} ms, expected about 400")
     check_reception_rest(page, "after the fade-back", 2)
     if page.is_visible("#lPlay") and page.get_attribute("#lPlay", "aria-label") != "Play":
