@@ -555,6 +555,59 @@ def check_sets_tab(browser: Browser) -> None:
     print("Sets tab lists exactly the sets in SETS; stored data naming Po or Til is harmless", flush=True)
 
 
+LABEL_GEOMETRY = """() => {
+  const svg = document.getElementById('netS');
+  const paths = [...svg.querySelectorAll('path')];
+  const labels = [...svg.querySelectorAll('g')].map((g) => {
+    const r = g.querySelector('rect').getBBox();
+    return { name: g.querySelector('text').textContent, x: r.x, y: r.y, w: r.width, h: r.height };
+  });
+  const covered = paths.map((path) => {
+    const n = 40, len = path.getTotalLength();
+    return Array.from({ length: n + 1 }, (_, i) => path.getPointAtLength((len * i) / n));
+  });
+  const s = [...svg.querySelectorAll('circle')].find((c) => c.getAttribute('fill') === 'var(--role-s)').getBBox();
+  const setter = { x: s.x, y: s.y, w: s.width, h: s.height };
+  return { labels, points: covered.map((pts) => pts.map((q) => [q.x, q.y])), setter };
+}"""
+
+
+def boxes_overlap(first: dict[str, float], second: dict[str, float]) -> bool:
+    """Whether two SVG boxes with x, y, w and h intersect."""
+    return (
+        first["x"] < second["x"] + second["w"]
+        and second["x"] < first["x"] + first["w"]
+        and first["y"] < second["y"] + second["h"]
+        and second["y"] < first["y"] + first["h"]
+    )
+
+
+def inside_box(point: list[float], box: dict[str, float]) -> bool:
+    """Whether an SVG point lies inside a box with x, y, w and h."""
+    return box["x"] <= point[0] <= box["x"] + box["w"] and box["y"] <= point[1] <= box["y"] + box["h"]
+
+
+def check_set_labels(browser: Browser) -> None:
+    """Each Sets diagram label covers at most half of its arc outside the setter and overlaps nothing."""
+    page = new_page(browser)
+    page.click("#tabSets")
+    shape = page.evaluate(LABEL_GEOMETRY)
+    setter_box = shape["setter"]
+    labels = shape["labels"]
+    for index, label in enumerate(labels):
+        points = [point for point in shape["points"][index] if not inside_box(point, setter_box)]
+        inside = sum(inside_box(point, label) for point in points)
+        if inside > len(points) / 2:
+            fail(f"set label {label['name']} covers {inside} of {len(points)} points of its arc")
+        if boxes_overlap(label, setter_box):
+            fail(f"set label {label['name']} overlaps the setter")
+        for other in labels[index + 1 :]:
+            if boxes_overlap(label, other):
+                fail(f"set labels {label['name']} and {other['name']} overlap")
+    page.close()
+    print("Sets diagram labels leave their arcs visible and do not overlap", flush=True)
+
+
 def in_view(page: Page, selector: str) -> bool:
     """Whether the element is fully inside the phone's viewport."""
     box = page.locator(selector).bounding_box()
@@ -753,6 +806,7 @@ def main() -> None:
         check_hints_without_guides(browser)
         check_set_calls(browser)
         check_sets_tab(browser)
+        check_set_labels(browser)
         check_tap_then_continue(browser)
         check_breakdown(browser)
         check_end_screen(browser)

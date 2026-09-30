@@ -4638,9 +4638,12 @@
             const p = setPath(st),
               on = !hi || hi === st[0];
             if (!on && hi) return;
-            const t = { 1: 0.5, 6: 0.5, 0: 0.5, 7: 0.7, A: 0.6, C: 0.4 }[st[0]] ?? 0.72;
+            const t =
+              { 1: 0.5, 6: 0.5, 0: 0.5, 2: 0.8, 4: 0.5, 7: 0.7, A: 0.6, C: 0.4 }[st[0]] ?? 0.72;
+            // The quick's arc is lower than its label, so the label sits above the peak.
+            const lift = st[0] === "4" ? 36 : 0;
             const x = (1 - t) ** 2 * p.sx + 2 * (1 - t) * t * p.cx + t * t * p.ex,
-              y = (1 - t) ** 2 * SY + 2 * (1 - t) * t * p.cy + t * t * (SY + 10);
+              y = (1 - t) ** 2 * SY + 2 * (1 - t) * t * p.cy + t * t * (SY + 10) - lift;
             const w = 40 + 19 * st[0].length;
             s += `<g><rect x="${x - w / 2}" y="${y - 24}" width="${w}" height="46" rx="4" fill="var(--panel)" stroke="${FAMCOL[st[3]]}" stroke-width="4"/><text x="${x}" y="${y + 10}" text-anchor="middle" font-size="30" font-weight="800" fill="${FAMCOL[st[3]]}" font-family="Barlow Condensed,sans-serif">${st[0]}</text></g>`;
           });

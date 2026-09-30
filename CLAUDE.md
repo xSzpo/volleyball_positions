@@ -26,7 +26,7 @@ src/
   tests/fast.sh       iteration loop: build, audit, theme_test, analytics_test, flags_test, rules_test, learn_test, anim_test, qa.py m --quick (~70 s)
   tests/full.sh       once per ticket, after review fixes: every test in parallel (qa d --quick); per-test pass/fail and time, logs in tests/_out/logs
   tests/mp_test.py    Playwright test of same-device multiplayer
-  tests/match_test.py Playwright test of solo match scoring (Show on court multiplier), the set call check, the Sets tab's set list and the rule numbers the hints cite
+  tests/match_test.py Playwright test of solo match scoring (Show on court multiplier), the set call check, the Sets tab's set list and diagram labels (clear of their arcs and each other) and the rule numbers the hints cite
   tests/online_test.py Playwright test of online multiplayer (host + guest) on the Firebase emulators
   tests/analytics_test.py Playwright test that PostHog loads only on the Pages host with a real key
   tests/flags_test.py Playwright test of the feature flags: defaults, ?ff=, no DOM trace, dependencies, PostHog override (fake SDK), stored rules and middles restored when rules-official comes on, no download UI or PDF in index.html and a stale `downloads` key ignored
