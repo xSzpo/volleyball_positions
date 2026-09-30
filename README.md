@@ -10,11 +10,8 @@ Source files live in `src/`; `index.html` is generated. See `CLAUDE.md` for the 
 
 ## Files
 
-- `index.html` – the whole app. Everything is inside this one file, including the two printable PDFs offered by the download buttons.
+- `index.html` – the whole app. Everything is inside this one file.
 - `.nojekyll` – tells GitHub Pages to serve the files as they are.
-- `downloads/` – the same cheat sheets as separate files, if you want to link or print them directly:
-  - `KSV_5-1_rotation_schema.pdf` / `.png`
-  - `KSV_front_row_sets.pdf` / `.png`
 
 ## Deploy on GitHub Pages
 

@@ -1,17 +1,11 @@
-"""Build index.html from data.py, template.html and the cheat sheet PDFs.
+"""Build index.html from data.py and template.html."""
 
-The PDFs in downloads/ are base64-embedded so the download buttons work
-without extra files.
-"""
-
-import base64
 import json
 from pathlib import Path
 
 from data import ATTACK_LINE, BASE_DEF, ROWS, RULES_MODES, SETS, SETTER_X, UNCONFIRMED_SETS, RulesMode, lineup, server
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "downloads"
 
 
 def rows(mode: RulesMode) -> list[dict[str, object]]:
@@ -47,7 +41,5 @@ data = dict(
 )
 t = (ROOT / "src" / "template.html").read_text()
 t = t.replace("__DATA__", json.dumps(data))
-t = t.replace("__PDF_SCHEMA__", base64.b64encode((OUT / "KSV_5-1_rotation_schema.pdf").read_bytes()).decode())
-t = t.replace("__PDF_SETS__", base64.b64encode((OUT / "KSV_front_row_sets.pdf").read_bytes()).decode())
 (ROOT / "index.html").write_text(t)
 print(len(t))

@@ -2,8 +2,8 @@
 
 Checks the built-in defaults, the ``?ff=`` preview override and its storage,
 that a feature that is off leaves no trace in the DOM, dependency propagation,
-the tab bar and the empty state, and the PostHog override on the Pages host
-with a fake PostHog SDK.
+the tab bar and the empty state, that the removed downloads leave no trace,
+and the PostHog override on the Pages host with a fake PostHog SDK.
 
 Usage: python src/tests/flags_test.py
 """
@@ -82,7 +82,7 @@ def check_defaults(page: Page) -> None:
     for key, on in got.items():
         if on != (key not in DEFAULT_OFF):
             fail(f"default {key} = {on}")
-    for element_id in ("tabLearn", "drill", "game", "sets", "setsQuiz", "downloads", "thumbsBox", "allRots"):
+    for element_id in ("tabLearn", "drill", "game", "sets", "setsQuiz", "thumbsBox", "allRots"):
         if not present(page, element_id):
             fail(f"default: #{element_id} missing")
     if page.is_hidden("#tabs") or page.is_visible("#ffEmpty"):
@@ -123,9 +123,9 @@ def check_override_storage(page: Page) -> None:
     open_app(page)
     if present(page, "setsQuiz") or not present(page, "sets"):
         fail("?ff=-sets-quiz not kept after a reload without ?ff=")
-    open_app(page, "?ff=-downloads")
+    open_app(page, "?ff=-rotations-table")
     stored = json.loads(page.evaluate("localStorage.getItem('ksv51:ffOverride')") or "null")
-    if stored != {"sets-quiz": False, "downloads": False}:
+    if stored != {"sets-quiz": False, "rotations-table": False}:
         fail(f"?ff= does not merge into the stored override: {stored}")
     open_app(page, "?ff=all")
     if not all(values(page).values()):
@@ -288,7 +288,7 @@ def check_posthog(browser: Browser) -> None:
     if not present(page, "drill") or present(page, "sets"):
         fail("posthog: flags applied after the first touch")
     stored = json.loads(page.evaluate("localStorage.getItem('ksv51:flags')"))
-    if not stored["sets-tab"] or stored["drill-tab"] or len(stored) != 16:
+    if not stored["sets-tab"] or stored["drill-tab"] or len(stored) != 15:
         fail(f"posthog: flags not stored: {stored}")
     page.reload()
     page.wait_for_function("!!(window.posthog && window.posthog.callback)")
@@ -301,6 +301,34 @@ def check_posthog(browser: Browser) -> None:
         fail("posthog: ?ff=all does not win over PostHog")
     if errors:
         fail(f"posthog: page errors: {errors}")
+    context.close()
+
+
+def check_downloads_removed(browser: Browser, file_page: Page) -> None:
+    """The removed downloads leave nothing in index.html, and a stored or served ``downloads`` flag is ignored."""
+    html = (ROOT / "index.html").read_text()
+    for text in ("data:application/pdf", "application/pdf", "data-dl", 'id="downloads"', "Printable", "__PDF_"):
+        if text in html:
+            fail(f"downloads: {text!r} still in index.html")
+    errors: list[str] = []
+    file_page.on("pageerror", lambda error: errors.append(str(error)))
+    file_page.evaluate(
+        "localStorage.setItem('ksv51:ffOverride', JSON.stringify({downloads: true, 'sets-quiz': false}))"
+    )
+    open_app(file_page, "?ff=downloads,-downloads")
+    got = values(file_page)
+    if "downloads" in got or got["sets-quiz"] or not got["sets-tab"]:
+        fail(f"downloads: stored override with downloads not handled: {got}")
+    if present(file_page, "downloads") or errors:
+        fail(f"downloads: section in the DOM or page errors: {errors}")
+    open_app(file_page, "?ff=reset")
+    context, page, page_errors = open_pages(browser, {"ksv51:flags": '{"downloads": true, "sets-tab": true}'})
+    page.evaluate("window.posthog.fire({'learn-tab': true, 'sets-tab': true, downloads: true})")
+    stored = json.loads(page.evaluate("localStorage.getItem('ksv51:flags')"))
+    if "downloads" in stored or "downloads" in values(page) or not present(page, "sets"):
+        fail(f"downloads: PostHog downloads flag not ignored: {stored}")
+    if page_errors:
+        fail(f"downloads: page errors on the Pages host: {page_errors}")
     context.close()
 
 
@@ -329,6 +357,7 @@ def main() -> None:
         check_players_mode_restored(browser)
         check_rules_restored(browser)
         check_posthog(browser)
+        check_downloads_removed(browser, page)
         check_first_visit_sheet(browser)
         browser.close()
     print("FLAGS TEST FAILURES:", len(FAIL))

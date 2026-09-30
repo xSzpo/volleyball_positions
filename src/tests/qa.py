@@ -480,21 +480,6 @@ def sweep_sets(pg: Page, tag: str) -> None:
     check_page(pg, f"{tag} sets")
 
 
-def check_downloads(pg: Page, tag: str) -> None:
-    section("DOWNLOADS")
-    for k in ["schema", "sets"]:
-        try:
-            with pg.expect_download(timeout=5000) as d:
-                pg.click(f'[data-dl="{k}"]')
-            path = d.value.path()
-            with open(path, "rb") as fh:
-                data = fh.read(5)
-            if data != b"%PDF-":
-                fail(f"{tag} download {k} not a PDF")
-        except Exception as e:
-            fail(f"{tag} download {k} failed: {e}")
-
-
 def check_persistence(pg: Page, tag: str) -> None:
     section("PERSISTENCE")
     pg.click("#tabLearn")
@@ -532,9 +517,7 @@ def main() -> None:
     vp, mobile, scheme = CONFIGS[args.mode]
     with sync_playwright() as p:
         b = p.chromium.launch()
-        ctxb = b.new_context(
-            viewport=vp, is_mobile=mobile, has_touch=mobile, color_scheme=scheme, accept_downloads=True
-        )
+        ctxb = b.new_context(viewport=vp, is_mobile=mobile, has_touch=mobile, color_scheme=scheme)
         pg = ctxb.new_page()
         errs: list[str] = []
         pg.on("pageerror", collect_errors(errs))
@@ -549,7 +532,6 @@ def main() -> None:
         sweep_drill(pg, tag, args.quick)
         sweep_match(pg, tag, combos, args.quick)
         sweep_sets(pg, tag)
-        check_downloads(pg, tag)
         check_persistence(pg, tag)
         if errs:
             fail(f"{tag} JS errors: {errs[:3]}")

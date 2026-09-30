@@ -864,24 +864,6 @@
       max-height: 120px;
       margin-top: 6px;
     }
-    .dl {
-      display: grid;
-      gap: 8px;
-    }
-    .dl .btn {
-      text-align: left;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .dl .btn small {
-      font:
-        500 13px Barlow,
-        sans-serif;
-      color: var(--muted);
-      text-transform: none;
-      letter-spacing: 0;
-    }
     .rules {
       margin-bottom: 16px;
       border-left: 6px solid var(--accent);
@@ -2079,19 +2061,6 @@
           </div>
         </div>
       </section>
-
-      <div class="card" id="downloads" style="margin-top:16px">
-        <h2>Printable cheat sheets</h2>
-        <div class="dl">
-          <button type="button" class="btn" data-dl="schema">
-            Rotation schema (PDF) <small>all 6 rotations</small>
-          </button>
-          <button type="button" class="btn" data-dl="sets">
-            Front row sets (PDF) <small>set calls</small>
-          </button>
-        </div>
-        <p class="hint" id="dlmsg" style="margin-top:8px"></p>
-      </div>
     </div>
     <div class="sheetback" id="setup" hidden>
       <div
@@ -2155,10 +2124,6 @@
         SETTER_X = DATA.setterX,
         UNCONFIRMED = DATA.unconfirmedSets,
         MATCH_SETS = SETS.filter((s) => !UNCONFIRMED.includes(s[0]));
-      const PDF = {
-        schema: { name: "KSV_5-1_rotation_schema.pdf", b64: "__PDF_SCHEMA__" },
-        sets: { name: "KSV_front_row_sets.pdf", b64: "__PDF_SETS__" },
-      };
 
       const COLORS = {
         S: "var(--role-s)",
@@ -2673,7 +2638,6 @@
         "match-online": false,
         "sets-tab": true,
         "sets-quiz": true,
-        downloads: true,
         "after-dig": false,
       };
       const FEATURE_NEEDS = {
@@ -2689,7 +2653,6 @@
         "match-same-device": ["match-solo"],
         "match-online": ["match-same-device"],
         "sets-quiz": ["sets-tab"],
-        downloads: ["learn-tab"],
         "after-dig": ["match-solo"],
       };
       const FEATURE_ELEMENTS = {
@@ -2707,7 +2670,6 @@
         "match-online": ["gPlayersOnline", "onBox"],
         "sets-tab": ["tabSets", "sets"],
         "sets-quiz": ["setsQuiz"],
-        downloads: ["downloads"],
       };
       const TABS = [
         ["learn", "learn-tab"],
@@ -6489,51 +6451,6 @@
         };
       });
       renderRulesMode();
-
-      // ---------- Downloads ----------
-      function b64Blob(b64) {
-        const bin = atob(b64);
-        const u = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(0 + i) & 255;
-        return new Blob([u], { type: "application/pdf" });
-      }
-      async function download(key) {
-        track("download", { file: key });
-        const f = PDF[key];
-        const blob = b64Blob(f.b64);
-        const msg = $("dlmsg");
-        msg.textContent = "";
-        let dl = null;
-        if (window.claude && typeof window.claude.use === "function") {
-          try {
-            dl = await window.claude.use("downloads");
-          } catch (e) {}
-        }
-        if (dl) {
-          try {
-            await dl.save({ filename: f.name, data: blob });
-            msg.textContent = `Saved ${f.name}.`;
-          } catch (e) {
-            if (e && e.code === "declined") return;
-            msg.textContent =
-              e && e.code === "rate_limited"
-                ? "A save prompt is already open."
-                : "Download is not available here.";
-          }
-          return;
-        }
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = f.name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 4000);
-      }
-      document.querySelectorAll("[data-dl]").forEach((b) => {
-        b.onclick = () => download(b.dataset.dl);
-      });
 
       drawVis("drill", visDrill);
       drawVis("game", visGame);

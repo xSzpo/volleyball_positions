@@ -1,4 +1,4 @@
-exclude: ^(index\.html|downloads/)
+exclude: ^index\.html$
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
