@@ -612,11 +612,15 @@ def answer_rotate(pg: Page, ctx: str, role: str, move: bool = False, wrong: bool
     if markers(pg):
         fail(f"{ctx}: teammates {markers(pg)} shown before the answer")
     order, spots = rotate_lineup(pg, ri, role)
+    own = order.index(role)
     for k, mate in enumerate(order):
         who = "you" if mate == role else "the setter (S)" if mate == "S" else mate
+        want = f"Tap where {who} stand{'' if mate == role else 's'}."
         prompt = pg.inner_text("#dsub")
-        if not prompt.startswith(f"{k + 1}/{len(order)}: tap where {who} stand"):
-            fail(f"{ctx}: prompt {prompt!r}, expected {k + 1}/{len(order)} {who}")
+        if prompt != want:
+            fail(f"{ctx}: prompt {prompt!r}, expected {want!r}")
+        if k <= own and want != ("Tap where you stand." if k == own else "Tap where the setter (S) stands."):
+            fail(f"{ctx}: step {k + 1} asks {mate}, so the prompts up to yours differ by role")
         if pg.locator("#nextBtn").is_enabled():
             fail(f"{ctx}: Continue enabled before every marker is placed")
         if mate not in spots:
@@ -624,17 +628,23 @@ def answer_rotate(pg: Page, ctx: str, role: str, move: bool = False, wrong: bool
             continue
         x, y = spots[mate]
         if wrong and k == 0:
-            x += -0.2 if x > 0.5 else 0.2
+            x += -1 / 3 if x > 0.5 else 1 / 3
         elif wrong and mate == role:
             x, y = 1 - x if x != 0.5 else 0.17, 0.21 if y > 0.42 else 0.71
         tap_spot(pg, x, y)
-        if move and k == 0:
+        if move and k == 0 and (mate != role or len(order) == 1):
             tap_spot(pg, x, y)
-            if not pg.inner_text("#dsub").startswith(f"1/{len(order)}: tap where {who} stand"):
+            if pg.inner_text("#dsub") != want:
                 fail(f"{ctx}: a tap on the placed {mate} does not pick it up: {pg.inner_text('#dsub')!r}")
             tap_spot(pg, 0.5, 0.93)
             tap_spot(pg, 0.5, 0.93)
             tap_spot(pg, x, y)
+        if mate == role and k < len(order) - 1:
+            prompt, court = pg.inner_text("#dsub"), pg.inner_html("#courtD")
+            tap_spot(pg, x, y)
+            pg.click("#offBtn")
+            if pg.inner_text("#dsub") != prompt or pg.inner_html("#courtD") != court:
+                fail(f"{ctx}: your marker moved after your partners were asked: {pg.inner_text('#dsub')!r}")
     placed = sorted(markers(pg))
     if placed != sorted(m for m in order if m in spots):
         fail(f"{ctx}: placed markers {placed}, expected {order}")
@@ -642,11 +652,11 @@ def answer_rotate(pg: Page, ctx: str, role: str, move: bool = False, wrong: bool
         fail(f"{ctx}: Continue not ready after placing {order}: {pg.inner_text('#dsub')!r}")
     pg.click("#nextBtn")
     grades = pg.inner_text("#fb .rotgrades")
-    want = " · ".join(f"{'You' if m == role else m}: exact" for m in order)
-    if not wrong and grades != want:
-        fail(f"{ctx}: grades {grades!r}, expected {want!r}")
-    if wrong and not (grades.startswith(f"{order[0]}: close") and "Not there" in pg.inner_text("#fb")):
-        fail(f"{ctx}: a close setter and a wrong you graded {grades!r}: {pg.inner_text('#fb')!r}")
+    right = " · ".join(f"{'You' if m == role else m}: right" for m in order)
+    if not wrong and grades != right:
+        fail(f"{ctx}: grades {grades!r}, expected {right!r}")
+    if wrong and not (grades.startswith(f"{order[0]}: wrong") and "Not there" in pg.inner_text("#fb")):
+        fail(f"{ctx}: the setter one zone off and a wrong you graded {grades!r}: {pg.inner_text('#fb')!r}")
     shown = sorted(markers(pg))
     if shown != sorted(spots):
         fail(f"{ctx}: feedback shows {shown}, not the lineup {sorted(spots)}")

@@ -4596,37 +4596,36 @@
         if (!p) return "All placed. Tap a marker to move it, or press Continue.";
         const who =
           p === cur.role ? "you stand" : p === "S" ? "the setter (S) stands" : `${p} stands`;
-        return `${rot.order.indexOf(p) + 1}/${rot.order.length}: tap where ${who}.`;
+        return `Tap where ${who}.`;
+      }
+      // Once your partners are asked, your own marker stays put: moving it would move their limits.
+      function rotLocked(p) {
+        return p === cur.role && rotPlaced(p) && rot.order.at(-1) !== p;
       }
       function rotRefresh() {
         $("dsub").textContent = rotPrompt();
         $("nextBtn").disabled = !!rotNext();
         drawDrill();
       }
-      // Exact is the right zone, as the one-tap Rotate question grades it.
+      // Right is the right zone only: a tap in the next zone is a different rotation spot.
       function rotGrade(ri, p, tap) {
         const right = players(ri, "start").find((o) => o.p === p);
-        if (!right || !tap) return right || tap ? "off" : "exact";
+        if (!right || !tap) return right || tap ? "wrong" : "right";
         const zone = (o) => `${Math.min(2, Math.max(0, Math.floor(o.x * 3)))}${o.y < AL ? 0 : 1}`;
-        if (zone(tap) === zone(right)) return "exact";
-        return Math.hypot(tap.x - right.x, (tap.y - right.y) * 0.67) < 0.24 ? "close" : "off";
+        return zone(tap) === zone(right) ? "right" : "wrong";
       }
       function rotScore() {
         const grades = rot.order.map((p) => ({
           p,
           g: rotGrade(cur.ri, p, p === cur.role && rot.off ? null : rot.spots[p]),
         }));
-        const ok = grades.every((o) => o.g !== "off"),
-          exact = grades.every((o) => o.g === "exact");
+        const ok = grades.every((o) => o.g === "right");
         record(ok);
         $("dsub").textContent = "Dots are your taps; the markers stand where they should.";
         $("nextBtn").textContent = "Next";
         $("nextBtn").disabled = false;
         drawDrill();
-        feedback(
-          exact ? "good" : ok ? "close" : "bad",
-          exact ? "Spot on" : ok ? "Close enough, fine-tune it" : "Not there",
-        );
+        feedback(ok ? "good" : "bad", ok ? "Spot on" : "Not there");
         $("fb").insertAdjacentHTML(
           "beforeend",
           `<p class="rotgrades" style="margin:4px 0 0">${grades.map(({ p, g }) => `${p === cur.role ? "You" : p}: ${g}`).join(" · ")}</p>`,
@@ -4878,6 +4877,7 @@
               rot.spots[q] &&
               Math.hypot(rot.spots[q].x - tap.x, rot.spots[q].y - tap.y) * W <= MARKER_R + 1,
           );
+          if (hit && rotLocked(hit)) return;
           if (hit && hit !== rot.pick) rot.pick = hit;
           else {
             const q = rotNext();
@@ -4921,6 +4921,7 @@
       $("offBtn").onclick = () => {
         if (answered) return;
         if (rot) {
+          if (rotLocked(cur.role)) return;
           rot.off = !rot.off;
           if (rot.off) {
             delete rot.spots[cur.role];
