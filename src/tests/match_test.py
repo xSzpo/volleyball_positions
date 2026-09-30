@@ -251,6 +251,7 @@ def check_our_serve(browser: Browser) -> None:
     page = new_page(browser)
     pick_role(page, "OH1")
     page.click("#tabDrill")
+    page.click("#dOpts > summary")
     for _ in range(100):
         if page.inner_text("#dq").endswith("· Our serve"):
             break
