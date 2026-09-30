@@ -66,6 +66,44 @@ Order matters: the PDFs must exist before `build.py`, because it base64-embeds t
 
 Deploy = open a PR to `main`; merging needs the `checks` job to pass (ruleset on `main`, no direct pushes). Merging deploys; Pages updates in 1-2 minutes. Phones cache aggressively; tell the user to reload or reopen the tab.
 
+## Working on v2 issues
+
+Version 2 is planned in `docs/v2.md` and split into GitHub issues (milestones **v2: Learn**, then **v2: Later**). Every issue is implemented the same way.
+
+- **Order.** Finish milestone v2: Learn before v2: Later. Within a milestone, take the lowest open issue number whose "Blocked by" issues are closed. Don't start an issue whose blocker is still open.
+- **v2 replaces v1 in place** at the same URL (the owner's decision). A v1 feature that has no v2 issue done yet is hidden behind its flag, which is off. Keep its code until its own issue ports or deletes it. Skip its tests in one visible list (`src/tests/v2_pending.py`) until then, and the issue that ports it removes it from that list.
+- **Spec.** The issue is the spec for one PR; `docs/v2.md` is the design. If the code needs a different design, change `docs/v2.md` in the same PR and say so in the issue comment. If a coach question (#16) blocks a detail, build to the plan, note the assumption, and add any new question to #16.
+- **Branch and PR.** One issue, one branch `v2/<issue>-<short-slug>`, one PR. Title imperative and plain, as in earlier merged PRs. The body follows the `pr-description` skill and starts with `Closes #<issue>`.
+- **Before the PR.**
+  1. Implement. New behaviour gets a test.
+  2. Iterate with `src/tests/fast.sh`.
+  3. Run `src/tests/full.sh` in the background. It must pass.
+  4. Update this file where the app structure, data model or tests changed.
+- **Review.** A `reviewer` agent reviews the pushed branch. Fix the real findings, then run `full.sh` again.
+- **Merge.** After `checks` passes on the PR, squash-merge and delete the branch.
+- **Issue comment after merge**, always, in this shape:
+
+  ```
+  **Done in #<PR>** (`<merge sha>`)
+
+  **Built:** 2-5 bullets, what the user can now do or see.
+  **Tests:** what was added, and the full.sh result line.
+  **Differs from the plan:** bullets, or "Nothing."
+  **Assumptions / coach:** bullets linked to #16, or "None."
+  **Follow-ups:** new issues opened, or "None."
+  **Flag:** `<key>` built-in default on; PostHog flag off. Check with `?ff=<key>`, then switch it on.
+  ```
+
+  Tick the issue's checkboxes that are done. Leave an unfinished item open in a new issue and link it; don't reopen the merged one.
+- **Flags.** Agents never switch a PostHog flag on. The owner does that after checking on a phone. Never touch the work PostHog projects.
+- **Commands.** Push and use `gh` with the owner's personal token. The default gh account is a work account and gets a 403:
+
+  ```bash
+  T=$(gh auth token --user xSzpo)
+  git -c credential.helper= -c "credential.helper=!f(){ echo username=xSzpo; echo password=$T; };f" push -u https://github.com/xSzpo/volleyball_positions.git <branch>
+  GH_TOKEN=$T gh pr create ...   # likewise gh pr merge, gh issue comment
+  ```
+
 ## Conventions and hard constraints
 
 - **Single self-contained file.** `index.html` must work from `file://` and from GitHub Pages. No build tooling beyond the Python scripts, no framework, no bundler. The only external resources are Google Fonts (Barlow, Barlow Condensed) with system fallbacks, the Firebase SDK (only for Online room) and PostHog (only on `xszpo.github.io`, see Analytics).
