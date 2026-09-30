@@ -2224,7 +2224,7 @@
       }
 
       const SERVE_RULE =
-        "The serving team may stand anywhere when the ball is served (FIVB 7.4). You stay in your row for play: a back-row player may not block.";
+        "The serving team may stand anywhere when the ball is served (FIVB 7.4). You stay in your row for play: a back-row player may not block, or attack from the front zone above the net.";
       function describe(ri, phase, role) {
         const r = ROWS[ri];
         const pl = players(ri, phase);
@@ -2479,27 +2479,32 @@
       }
       // Each line runs from your marker to the line a partner sets, in that partner's colour.
       function boundLines(ri, pl, role) {
+        const out = { lines: [], tight: [] };
         const me = pl.find((o) => o.p === role);
-        if (!me) return [];
+        if (!me) return out;
         const gap = MARKER_R + 0.5;
-        return partners(ri, role)
-          .map(({ p, side }) => {
-            const q = pl.find((o) => o.p === p);
-            if (!q) return "";
-            const vertical = side === "behind" || side === "front";
-            const sign = side === "behind" || side === "right" ? 1 : -1;
-            const [mx, my, qx, qy] = [me.x * W, me.y * H, q.x * W, q.y * H];
-            const along = vertical ? my : mx;
-            const across = vertical ? Math.abs(mx - qx) : Math.abs(my - qy);
-            let end = vertical ? qy : qx;
-            if (across < MARKER_R + 1) end -= sign * (MARKER_R + 2);
-            const start = along + sign * gap;
-            if ((end - start) * sign < 2) return "";
-            return vertical
+        partners(ri, role).forEach(({ p, side }) => {
+          const q = pl.find((o) => o.p === p);
+          if (!q) return;
+          const vertical = side === "behind" || side === "front";
+          const sign = side === "behind" || side === "right" ? 1 : -1;
+          const [mx, my, qx, qy] = [me.x * W, me.y * H, q.x * W, q.y * H];
+          const along = vertical ? my : mx;
+          const across = vertical ? Math.abs(mx - qx) : Math.abs(my - qy);
+          let end = vertical ? qy : qx;
+          if (across < MARKER_R + 1) end -= sign * (MARKER_R + 2);
+          const start = along + sign * gap;
+          if ((end - start) * sign < 2) {
+            out.tight.push(p);
+            return;
+          }
+          out.lines.push(
+            vertical
               ? route(mx, start, mx, end, p, { cls: "bnd" })
-              : route(start, my, end, my, p, { cls: "bnd" });
-          })
-          .filter(Boolean);
+              : route(start, my, end, my, p, { cls: "bnd" }),
+          );
+        });
+        return out;
       }
       const SERVE_SPOT = [0.88, 1.1];
       function serveLayer(ri, pl, role) {
@@ -2927,8 +2932,11 @@
         pl.filter((o) => o.p !== role).forEach((o) => {
           s += chip(o);
         });
-        const lines = phase === "start" || phase === "rec" ? boundLines(ri, pl, role) : [];
-        s += lines.join("");
+        const bounds =
+          phase === "start" || phase === "rec"
+            ? boundLines(ri, pl, role)
+            : { lines: [], tight: [] };
+        s += bounds.lines.join("");
         if (me) s += chip(me, { me: true });
         $("courtL").innerHTML = s;
         $("learnTag").textContent = `${ROWS[ri].name} · ${FULL[phase]}`;
@@ -2939,12 +2947,17 @@
             : phase === "serve"
               ? `<p class="guide">${SERVE_RULE} Our base spots are not in the guide.</p>`
               : "";
-        const bounds =
+        const { tight } = bounds;
+        const overlap =
           me && (phase === "start" || phase === "rec")
-            ? ` ${overlapText(ri, role)} ${lines.length ? "The lines show where you may not go when they serve." : "You stand right at these limits."}`
+            ? ` ${overlapText(ri, role)}${bounds.lines.length ? " Each line ends at a limit you may not cross." : ""}${
+                tight.length
+                  ? ` You stand right at the ${tight.join(" and ")} limit${tight.length > 1 ? "s" : ""}.`
+                  : ""
+              }`
             : "";
         $("cue").innerHTML =
-          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${bounds}</p>${guide}`;
+          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${guide}`;
         const at = PHASES.findIndex(([k]) => k === phase);
         $("lNext").textContent = `Next: ${
           at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1]

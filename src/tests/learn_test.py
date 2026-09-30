@@ -27,6 +27,16 @@ PHASE_NAMES = {"start": "Rotation", "serve": "Our serve", "rec": "Reception", "a
 ROUTE_KEY = {"S": "s", "OP": "op", "MB": "mb", "MB1": "mb", "MB2": "mb", "OH1": "oh", "OH2": "oh", "L": "l"}
 ROUTE_KEY["SUB"] = "sub"
 ROTATION_NAMES = ["R1 (S1)", "R2 (S6)", "R3 (S5)", "R4 (S4)", "R5 (S3)", "R6 (S2)"]
+# (mode, role, rotation, phase) -> (overlap sentence, partners whose limit is inside your marker)
+EXPECTED = {
+    ("official", "L", 0, "start"): ("Overlap: stay behind MB1, right of OH2 and left of S.", []),
+    ("simple", "MB", 2, "start"): ("Overlap: stay in front of S and left of OH2.", []),
+    ("simple", "S", 0, "rec"): ("Overlap: stay behind OH1 and right of L.", []),
+    ("official", "OH2", 1, "rec"): ("Overlap: stay in front of L and left of OP.", ["L"]),
+    ("simple", "L", 1, "rec"): ("Overlap: stay behind OH2 and left of S.", ["OH2", "S"]),
+}
+# Caption words -> the axis and direction your line must run from your marker.
+SIDE = {"behind": ("y", -1), "in front of": ("y", 1), "right of": ("x", -1), "left of": ("x", 1)}
 
 STATE = """() => {
   const court = document.querySelector('#courtL');
@@ -38,7 +48,9 @@ STATE = """() => {
   });
   const cue = document.querySelector('#cue');
   const title = cue.querySelector('b');
-  return { tag: document.querySelector('#learnTag').textContent, title: title ? title.textContent : '',
+  const mine = court.querySelector('.me-ring circle');
+  return { me: mine ? { x: +mine.getAttribute('cx'), y: +mine.getAttribute('cy') } : null,
+    tag: document.querySelector('#learnTag').textContent, title: title ? title.textContent : '',
     cue: cue.innerText, bounds };
 }"""
 
@@ -81,23 +93,48 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
     if re.search(r"undefined|NaN|null|\$\{", state["cue"]):
         fail(f"{tag}: cue has a template leak: {state['cue']!r}")
     here = on_court(page, role)
-    if phase == "serve" and ("may stand anywhere" not in state["cue"] or "may not block" not in state["cue"]):
+    if phase == "serve" and (
+        "may stand anywhere" not in state["cue"]
+        or "may not block" not in state["cue"]
+        or "front zone above the net" not in state["cue"]
+    ):
         fail(f"{tag}: Our serve cue lacks the serving-team rule: {state['cue']!r}")
     if phase in ("start", "rec") and here:
-        overlap = re.search(r"Overlap: stay ([^.]*)\.", state["cue"])
-        if not overlap:
-            fail(f"{tag}: no overlap sentence: {state['cue']!r}")
-        elif not state["bounds"] and "right at these limits" not in state["cue"]:
-            fail(f"{tag}: no boundary lines")
+        check_overlap(tag, state, EXPECTED.get((mode, role, rotation, phase)))
         for bound in state["bounds"]:
-            if overlap and bound["p"] not in re.findall(r"[A-Z][A-Z0-9]*", overlap.group(1)):
-                fail(f"{tag}: line for {bound['p']} not in {overlap.group(0)!r}")
             if bound["stroke"] != f"var(--route-{ROUTE_KEY[bound['p']]})":
                 fail(f"{tag}: line for {bound['p']} coloured {bound['stroke']}")
             if bound["x1"] != bound["x2"] and bound["y1"] != bound["y2"]:
                 fail(f"{tag}: line for {bound['p']} is not straight along or across the court")
     elif state["bounds"]:
         fail(f"{tag}: boundary lines outside Rotation and Reception or off court: {state['bounds']}")
+
+
+def check_overlap(tag: str, state: dict[str, Any], expected: tuple[str, list[str]] | None) -> None:
+    """Every partner in the caption has a line running to their side, or is named as a limit you stand at."""
+    overlap = re.search(r"Overlap: stay ([^.]*)\.", state["cue"])
+    if not overlap:
+        fail(f"{tag}: no overlap sentence: {state['cue']!r}")
+        return
+    tight_match = re.search(r"You stand right at the (.*) limits?\.", state["cue"])
+    tight = tight_match.group(1).split(" and ") if tight_match else []
+    sides = dict(
+        (partner, words)
+        for words, partner in re.findall(r"(behind|in front of|right of|left of) ([A-Z][A-Z0-9]*)", overlap.group(1))
+    )
+    lines = {bound["p"]: bound for bound in state["bounds"]}
+    if expected and (overlap.group(0), tight) != expected:
+        fail(f"{tag}: caption {overlap.group(0)!r}, tight {tight}, expected {expected}")
+    if set(lines) | set(tight) != set(sides) or set(lines) & set(tight):
+        fail(f"{tag}: lines {sorted(lines)} and tight {tight} do not match {overlap.group(0)!r}")
+    if lines and "Each line ends at a limit you may not cross." not in state["cue"]:
+        fail(f"{tag}: lines drawn without the line sentence: {state['cue']!r}")
+    for partner, bound in lines.items():
+        if partner not in sides or not state["me"]:
+            continue
+        axis, direction = SIDE[sides[partner]]
+        if (bound[f"{axis}2"] - state["me"][axis]) * direction <= 0:
+            fail(f"{tag}: line for {partner} ({sides[partner]}) runs the wrong way: {bound}, me {state['me']}")
 
 
 def check_walk(page: Page, mode: str, role: str) -> None:
@@ -116,14 +153,19 @@ def check_walk(page: Page, mode: str, role: str) -> None:
 
 
 def check_next_in_view(page: Page) -> None:
-    """With the longest cue the Next button stays inside the phone viewport."""
+    """On a short phone Next belongs below the fold, yet it is drawn inside the viewport."""
+    page.set_viewport_size({"width": 390, "height": 664})
     open_app(page, {"role": "S", "rulesMode": "simple"})
     learn(page, 0, "rec")
-    page.evaluate("window.scrollTo(0, document.querySelector('#courtL').getBoundingClientRect().top + scrollY)")
+    page.evaluate("window.scrollTo(0, 0)")
     box: dict[str, float] = page.evaluate(
         "(() => { const r = document.querySelector('#lNext').getBoundingClientRect();"
-        " return { top: r.top, bottom: r.bottom, height: innerHeight }; })()"
+        " const main = document.querySelector('.learnmain').getBoundingClientRect();"
+        " return { top: r.top, bottom: r.bottom, height: innerHeight, natural: main.bottom}; })()"
     )
+    page.set_viewport_size({"width": 390, "height": 844})
+    if box["natural"] <= box["height"]:
+        fail(f"Learn fits on a 664 px screen, so the sticky check proves nothing: {box}")
     if box["top"] < 0 or box["bottom"] > box["height"] + 1:
         fail(f"Next is outside the viewport: {box}")
     if box["bottom"] - box["top"] < 44:
