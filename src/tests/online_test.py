@@ -925,7 +925,7 @@ def main() -> None:
     emulator_db = os.environ["FIREBASE_DATABASE_EMULATOR_HOST"]
     emulator_auth = os.environ["FIREBASE_AUTH_EMULATOR_HOST"]
     check_rules(emulator_db)
-    url = f"{serve()}/index.html?emu={emulator_db},{emulator_auth}&nbgrace={NB_GRACE_MS}"
+    url = f"{serve()}/index.html?emu={emulator_db},{emulator_auth}&nbgrace={NB_GRACE_MS}&ff=all"
     errors: list[str] = []
     with sync_playwright() as p:
         browser = p.chromium.launch()

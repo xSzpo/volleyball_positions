@@ -62,7 +62,7 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
-    pg.goto((ROOT / "index.html").as_uri())
+    pg.goto((ROOT / "index.html").as_uri() + "?ff=all")
     pg.wait_for_timeout(300)
     pg.click("#tabGame")
     pg.check('input[name="gPlayers"][value="mp"]')

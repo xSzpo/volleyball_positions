@@ -10,7 +10,7 @@ from typing import Literal
 from playwright.sync_api import Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
-URL = (ROOT / "index.html").as_uri()
+URL = (ROOT / "index.html").as_uri() + "?ff=all"
 FAIL: list[str] = []
 OPPOSITE = {"light": "dark", "dark": "light"}
 

@@ -33,7 +33,7 @@ def fail(m: str) -> None:
     print("FAIL:", m, flush=True)
 
 
-URL = (ROOT / "index.html").as_uri()
+URL = (ROOT / "index.html").as_uri() + "?ff=all"
 ROLES = ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"]
 PHASES = ["start", "rec", "ar", "serve"]
 STEPS = ["start", "serve", "rec", "ar"]
