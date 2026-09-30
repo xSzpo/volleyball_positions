@@ -162,9 +162,10 @@ with sync_playwright() as p:
             else:
                 box = pg.locator("#courtG").bounding_box()
                 assert box is not None
+                # The bottom tenth holds the off court pill, which toggles I'm off court instead of placing a spot.
                 for _ in range(2):
                     pg.mouse.click(
-                        box["x"] + box["width"] * random.random(), box["y"] + box["height"] * random.random()
+                        box["x"] + box["width"] * random.random(), box["y"] + box["height"] * 0.9 * random.random()
                     )
                     assert pg.locator("#courtG .myspot").count() == 1, "re-tap does not move the marker"
                     assert not VERDICT.search(pg.inner_text("#gFb")), "a tap before Continue leaks the verdict"

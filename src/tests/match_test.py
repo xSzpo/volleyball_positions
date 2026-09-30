@@ -226,6 +226,30 @@ def check_our_serve(browser: Browser) -> None:
     print("our serve: front-row spot mid-zone, only the server's arrow", flush=True)
 
 
+def check_off_court_pill(browser: Browser) -> None:
+    """A tap on the off court pill toggles I'm off court; the feedback then shows the solid pill."""
+    page = new_page(browser)
+    setup_match(page, "MB2", ("rec",))
+    page.click("#gStart")
+    page.wait_for_selector("#gOff:enabled")
+    tap_at(page, 0.12, 1.07)
+    if page.get_attribute("#gOff", "aria-pressed") != "true" or page.locator("#courtG .myspot").count():
+        fail("a tap on the off court pill did not pick I'm off court")
+    tap_at(page, 0.12, 1.07)
+    if page.get_attribute("#gOff", "aria-pressed") != "false" or page.is_enabled("#gNext"):
+        fail("a second tap on the off court pill did not clear I'm off court")
+    tap_at(page, 0.12, 1.07)
+    press_next(page)
+    page.wait_for_selector("#gFb .pts")
+    if "Spot on" not in page.inner_text("#gFb"):
+        fail(f"off court via the pill scored {page.inner_text('#gFb')!r}, expected Spot on")
+    texts: list[str] = page.eval_on_selector_all("#courtG > text", "els => els.map(e => e.textContent)")
+    if "you: off court" not in texts:
+        fail(f"off court feedback court reads {texts}, expected the solid pill")
+    page.close()
+    print("off court pill: toggles I'm off court, feedback shows the solid pill", flush=True)
+
+
 def check_match_order(browser: Browser) -> None:
     """In order, one rotation runs Rotate, Our serve, Receive, After reception, with a story for each."""
     page = new_page(browser)
@@ -573,6 +597,7 @@ def main() -> None:
         check_peek(browser)
         check_best_key(browser)
         check_our_serve(browser)
+        check_off_court_pill(browser)
         check_match_order(browser)
         check_set_calls(browser)
         check_tap_then_continue(browser)

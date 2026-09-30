@@ -82,7 +82,7 @@ def tap(pg: Page, svg: str, x: float | None = None, y: float | None = None) -> N
     box = pg.locator(svg).bounding_box()
     assert box is not None
     x = random.random() if x is None else x
-    y = random.random() if y is None else y
+    y = 0.9 * random.random() if y is None else y  # the bottom tenth is the off court pill
     pg.mouse.click(box["x"] + box["width"] * x, box["y"] + box["height"] * y)
 
 
@@ -136,9 +136,21 @@ def check_header(pg: Page, tag: str) -> None:
     if "Drill rules" not in (pg.get_attribute("#roleChip", "aria-label") or ""):
         fail(f"{tag} role chip label does not name the rules")
     pg.click('.rulesmode [data-rm="official"]')
+    if not pg.evaluate("document.querySelector('.wrap').inert"):
+        fail(f"{tag} the page behind the open sheet is not inert")
+    for _ in range(12):
+        pg.keyboard.press("Tab")
+    if not pg.evaluate("document.getElementById('setupPanel').contains(document.activeElement)"):
+        fail(f"{tag} Tab left the open sheet")
+    learn_tag = pg.inner_text("#learnTag")
+    pg.evaluate("document.body.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true}))")
+    if pg.inner_text("#learnTag") != learn_tag:
+        fail(f"{tag} an arrow key behind the open sheet changed the rotation")
     pg.keyboard.press("Escape")
     if pg.is_visible("#setupPanel"):
         fail(f"{tag} Escape did not close the sheet")
+    if pg.evaluate("document.querySelector('.wrap').inert") or pg.evaluate("document.activeElement.id") != "roleChip":
+        fail(f"{tag} closing the sheet did not restore the page and focus the role chip")
     pg.click("#roleChip")
     pg.mouse.click(5, 5)
     if pg.is_visible("#setupPanel"):
@@ -201,6 +213,26 @@ def check_court_look(pg: Page, tag: str, phone: bool) -> None:
         if pg.locator(".tab small").first.is_visible():
             fail(f"{tag} tab captions shown on a phone")
     pg.click('.ph[data-k="rec"]')
+    check_drill_pill(pg, tag)
+
+
+def check_drill_pill(pg: Page, tag: str) -> None:
+    """In Drill a tap on the off court pill answers "I'm off court"; the feedback shows the solid pill when off."""
+    pg.click("#tabDrill")
+    wait_ready(pg)
+    pg.locator("#courtD").scroll_into_view_if_needed()
+    x, y = pg.evaluate(
+        "() => { const m = document.getElementById('courtD').getScreenCTM();"
+        " return [m.a * 12 + m.e, m.d * 107 + m.f]; }"
+    )
+    pg.mouse.click(x, y)
+    feedback = pg.inner_text("#fb")
+    if "you are off" not in feedback and "you are on court" not in feedback:
+        fail(f"{tag} a tap on the Drill off court pill scored as a spot: {feedback!r}")
+    texts: list[str] = pg.eval_on_selector_all("#courtD > text", "els => els.map(e => e.textContent)")
+    if ("you are off" in feedback) != ("you: off court" in texts):
+        fail(f"{tag} Drill feedback pill {texts} does not match {feedback!r}")
+    pg.click("#tabLearn")
 
 
 def check_page(pg: Page, ctx: str) -> None:

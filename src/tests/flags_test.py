@@ -272,6 +272,16 @@ def check_posthog(browser: Browser) -> None:
     context.close()
 
 
+def check_first_visit_sheet(browser: Browser) -> None:
+    """The first-visit role sheet opens over a tab, but not over the empty state."""
+    for query, want in (("?ff=reset", True), ("?ff=reset,-learn-tab,-sets-tab", False)):
+        page = browser.new_page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+        open_app(page, query)
+        if page.is_visible("#setupPanel") != want:
+            fail(f"first visit with {query}: role sheet {'hidden' if want else 'open over the empty state'}")
+        page.close()
+
+
 def main() -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -286,6 +296,7 @@ def main() -> None:
         check_bad_storage(browser, page)
         check_players_mode_restored(browser)
         check_posthog(browser)
+        check_first_visit_sheet(browser)
         browser.close()
     print("FLAGS TEST FAILURES:", len(FAIL))
     sys.exit(1 if FAIL else 0)

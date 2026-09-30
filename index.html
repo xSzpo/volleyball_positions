@@ -1602,35 +1602,6 @@
         </div>
       </div>
 
-      <div class="sheetback" id="setup" hidden>
-        <div
-          class="sheet"
-          id="setupPanel"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="setupTitle"
-        >
-          <div class="sheethead">
-            <h2 id="setupTitle">Pick your role</h2>
-            <button type="button" class="btn" id="setupDone">Done</button>
-          </div>
-          <p class="nudge" id="setupNudge" hidden>
-            Pick the role you play today. Change it any time with the button at the top.
-          </p>
-          <p class="hint" style="margin-bottom:8px">I'm playing today as</p>
-          <div class="roles" id="roles"></div>
-          <div class="rulesmode" role="radiogroup" aria-label="Rules">
-            <span class="vislabel">Rules</span>
-            <button type="button" role="radio" aria-checked="false" data-rm="official">
-              Official
-            </button><button type="button" role="radio" aria-checked="false" data-rm="drill">
-              Drill
-            </button>
-            <small id="rmSub"></small>
-          </div>
-        </div>
-      </div>
-
       <div class="tabs" role="tablist" id="tabs">
         <button type="button" class="tab" role="tab" id="tabLearn" aria-selected="true">
           Learn<small>study the spots</small>
@@ -2077,6 +2048,34 @@
           </button>
         </div>
         <p class="hint" id="dlmsg" style="margin-top:8px"></p>
+      </div>
+    </div>
+    <div class="sheetback" id="setup" hidden>
+      <div
+        class="sheet"
+        id="setupPanel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="setupTitle"
+      >
+        <div class="sheethead">
+          <h2 id="setupTitle">Pick your role</h2>
+          <button type="button" class="btn" id="setupDone">Done</button>
+        </div>
+        <p class="nudge" id="setupNudge" hidden>
+          Pick the role you play today. Change it any time with the button at the top.
+        </p>
+        <p class="hint" style="margin-bottom:8px">I'm playing today as</p>
+        <div class="roles" id="roles"></div>
+        <div class="rulesmode" role="radiogroup" aria-label="Rules">
+          <span class="vislabel">Rules</span>
+          <button type="button" role="radio" aria-checked="false" data-rm="official">
+            Official
+          </button><button type="button" role="radio" aria-checked="false" data-rm="drill">
+            Drill
+          </button>
+          <small id="rmSub"></small>
+        </div>
       </div>
     </div>
 
@@ -2624,6 +2623,10 @@
         const tabs = TABS.filter(([, k]) => feature(k)).map(([t]) => t);
         $("tabs").hidden = tabs.length < 2;
         $("ffEmpty").hidden = tabs.length > 0;
+        if (!ROLES.includes(store.get("role", null))) {
+          $("setupNudge").hidden = false;
+          setSetupOpen(tabs.length > 0, false);
+        }
         const players =
           $("game").querySelector(
             `input[name="gPlayers"][value="${store.get("gPlayers", "solo")}"]`,
@@ -2718,6 +2721,7 @@
         $("setupTitle").textContent = first ? "Pick your role" : "Role and rules";
         document.querySelector(".rulesmode").hidden = first;
         $("setup").hidden = !open;
+        document.querySelector(".wrap").inert = open;
         $("roleChip").setAttribute("aria-expanded", open);
         if (!focus) return;
         if (open) (document.querySelector('.role[aria-pressed="true"]') || $("setupDone")).focus();
@@ -2802,7 +2806,7 @@
         renderSheet();
       }
       document.addEventListener("keydown", (e) => {
-        if ($("learn").hidden || e.target.tagName === "INPUT") return;
+        if ($("learn").hidden || !$("setup").hidden || e.target.tagName === "INPUT") return;
         if (e.key === "ArrowRight") {
           ri = (ri + 1) % 6;
           renderLearn();
@@ -3168,7 +3172,7 @@
       }
       function drawDrill(tap) {
         const pl = players(cur.ri, cur.phase);
-        let s = DEFS + courtBase();
+        let s = DEFS + courtBase(answered && !pl.some((o) => o.p === cur.role));
         if (answered && cur.phase === "start") s += rotArrows();
         if (answered && cur.phase === "ar") s += arLayer(cur.ri, pl, cur.role);
         if (answered && cur.phase === "serve") s += serveLayer(cur.ri, pl, cur.role);
@@ -3243,6 +3247,7 @@
           }
         }
       }
+      const onPill = (p) => p.x <= 44 && p.y >= 102.5 && p.y <= 112.5;
       function svgPoint(svg, e) {
         const pt = svg.createSVGPoint();
         pt.x = e.clientX;
@@ -3252,6 +3257,7 @@
       $("courtD").addEventListener("pointerup", (e) => {
         if (answered || !cur) return;
         const p = svgPoint($("courtD"), e);
+        if (onPill(p)) return $("offBtn").click();
         const tap = { x: p.x / W, y: p.y / H };
         lastTap = tap;
         const me = players(cur.ri, cur.phase).find((o) => o.p === cur.role);
@@ -3803,7 +3809,7 @@
           pl = players(st.ri, st.phase),
           me = pl.find((o) => o.p === G.role),
           shown = G.answered && !G.mp && !G.online;
-        let s = DEFS + courtBase();
+        let s = DEFS + courtBase(shown && !me);
         if (shown && st.phase === "start") s += rotArrows();
         if (shown && st.phase === "ar") s += arLayer(st.ri, pl, G.role);
         if (shown && st.phase === "serve") s += serveLayer(st.ri, pl, G.role);
@@ -4051,6 +4057,7 @@
       $("courtG").addEventListener("pointerup", (e) => {
         if (!G || G.answered) return;
         const p = svgPoint($("courtG"), e);
+        if (onPill(p)) return $("gOff").click();
         gPick({ x: p.x / W, y: p.y / H });
       });
       $("gOff").onclick = () => {
