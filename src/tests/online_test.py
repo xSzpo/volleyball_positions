@@ -393,13 +393,11 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
     print("lobby shows both")
 
     assert guest.is_disabled('.rulesmode [data-rm="official"]'), "a guest can change the rules in the lobby"
-    if host.is_hidden("#setupPanel"):
-        host.click("#roleChip")
-    host.click('.rulesmode [data-rm="official"]')
-    guest.wait_for_function("document.getElementById('lSet').textContent.includes('Official')")
-    host.click('.rulesmode [data-rm="simple"]')
-    guest.wait_for_function("document.getElementById('lSet').textContent.includes('Simplified')")
-    host.click("#setupDone")
+    for mode, name in (("official", "Official"), ("simple", "Simplified")):
+        if host.is_hidden("#setupPanel"):
+            host.click("#roleChip")
+        host.click(f'.rulesmode [data-rm="{mode}"]')
+        guest.wait_for_function(f"document.getElementById('lSet').textContent.includes('{name}')")
     print("lobby rules follow the host")
 
     check_permissions(browser, url, host, code, errors)

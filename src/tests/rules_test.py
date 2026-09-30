@@ -53,7 +53,7 @@ def open_setup(page: Page) -> None:
 
 def close_setup(page: Page) -> None:
     if page.is_visible("#setupPanel"):
-        page.click("#setupDone")
+        page.click("#roleChip")
 
 
 def pick(page: Page, *, rules: str | None = None, role: str | None = None) -> None:
@@ -61,6 +61,7 @@ def pick(page: Page, *, rules: str | None = None, role: str | None = None) -> No
     if rules:
         page.click(f'.rulesmode [data-rm="{rules}"]')
     if role:
+        open_setup(page)
         page.click(f'#roles .role[data-r="{role}"]')
     close_setup(page)
 
@@ -93,8 +94,8 @@ def check_defaults(page: Page) -> None:
         if picker(page) != SIMPLE_ROLES:
             fail(f"rules-official off: role picker is {picker(page)}")
     open_app(page, "?ff=-rules-official", {"role": "MB2", "rulesMode": "official"})
-    if page.inner_text("#roleChip").strip() != "MB":
-        fail(f"rules-official off: stored MB2 shows as {page.inner_text('#roleChip')!r}, expected MB")
+    if page.get_attribute("#roleChip", "data-role") != "MB":
+        fail(f"rules-official off: stored MB2 shows as {page.get_attribute('#roleChip', 'data-role')!r}, expected MB")
     if page.evaluate("JSON.parse(localStorage.getItem('ksv51:rulesMode'))") != "official":
         fail("rules-official off: a stored Official choice was overwritten")
 
@@ -107,18 +108,20 @@ def check_switch(page: Page) -> None:
     open_setup(page)
     if "training convention" not in page.inner_text("#rmSub"):
         fail(f"Simplified switch text does not say it is a training convention: {page.inner_text('#rmSub')!r}")
-    if page.inner_text("#roleChip").strip() != "MB":
-        fail(f"stored MB2 in Simplified shows as {page.inner_text('#roleChip')!r}")
+    if page.get_attribute("#roleChip", "data-role") != "MB":
+        fail(f"stored MB2 in Simplified shows as {page.get_attribute('#roleChip', 'data-role')!r}")
     pick(page, rules="official")
     if picker(page) != OFFICIAL_ROLES:
         fail(f"Official role picker is {picker(page)}")
-    if page.inner_text("#roleChip").strip() != "MB2":
-        fail(f"back in Official the stored MB2 reads as {page.inner_text('#roleChip')!r}")
+    if page.get_attribute("#roleChip", "data-role") != "MB2":
+        fail(f"back in Official the stored MB2 reads as {page.get_attribute('#roleChip', 'data-role')!r}")
     if "Official rules" not in (page.get_attribute("#roleChip", "aria-label") or ""):
         fail("role chip label does not name Official rules")
+    if " ".join(page.inner_text("#roleChip").split()) != "Middle 2 · Official":
+        fail(f"role chip does not show the role and rules: {page.inner_text('#roleChip')!r}")
     pick(page, rules="simple")
-    if picker(page) != SIMPLE_ROLES or page.inner_text("#roleChip").strip() != "MB":
-        fail(f"Simplified after Official: picker {picker(page)}, chip {page.inner_text('#roleChip')!r}")
+    if picker(page) != SIMPLE_ROLES or page.get_attribute("#roleChip", "data-role") != "MB":
+        fail(f"Simplified after Official: picker {picker(page)}, chip {page.get_attribute('#roleChip', 'data-role')!r}")
     if "Simplified rules" not in (page.get_attribute("#roleChip", "aria-label") or ""):
         fail("role chip label does not name Simplified rules")
     page.reload()
@@ -161,6 +164,63 @@ def check_learn(page: Page) -> None:
         fail(f"MB1 in Official R3 Our serve: cue {page.inner_text('#cue')!r}")
 
 
+def check_short_phone(page: Page) -> None:
+    """At 390 x 664 the Official role list fits on screen under the header button, with no sideways scroll."""
+    page.set_viewport_size({"width": 390, "height": 664})
+    open_app(page, "?ff=all&anim=0", {"role": "MB2", "rulesMode": "official"})
+    open_setup(page)
+    fits = page.evaluate(
+        "(() => { const r = document.getElementById('setup').getBoundingClientRect();"
+        " return r.bottom <= innerHeight && r.right <= innerWidth && r.left >= 0"
+        " && document.documentElement.scrollWidth <= innerWidth; })()"
+    )
+    if not fits or picker(page) != OFFICIAL_ROLES:
+        fail(f"390 x 664: the Official role list does not fit on screen: {page.locator('#setup').bounding_box()}")
+    close_setup(page)
+    page.set_viewport_size({"width": 390, "height": 844})
+
+
+def court_point(page: Page, court: str) -> tuple[float, float]:
+    """A point on the court, above the off court pill and below the open role list."""
+    box = page.locator(court).bounding_box()
+    menu = page.locator("#setup").bounding_box()
+    assert box is not None and menu is not None
+    top = max(box["y"], menu["y"] + menu["height"] + 10)
+    return box["x"] + box["width"] * 0.5, (top + box["y"] + box["height"] * 0.85) / 2
+
+
+def tap_court_with_list_open(page: Page, court: str) -> None:
+    page.locator(court).scroll_into_view_if_needed()
+    open_setup(page)
+    x, y = court_point(page, court)
+    page.mouse.click(x, y)
+
+
+def check_outside_tap(page: Page) -> None:
+    """A tap on the Drill or Match court that closes the role list does not answer."""
+    open_app(page, "?ff=all&anim=0", {"role": "OH1"})
+    page.click("#tabDrill")
+    stats = page.evaluate("localStorage.getItem('ksv51:stats2')")
+    tap_court_with_list_open(page, "#courtD")
+    if page.is_visible("#setupPanel"):
+        fail("Drill: a tap on the court did not close the role list")
+    if page.is_visible("#nextBtn") or page.evaluate("localStorage.getItem('ksv51:stats2')") != stats:
+        fail("Drill: the tap that closed the role list also answered")
+    page.click("#tabGame")
+    page.click("#gStart")
+    tap_court_with_list_open(page, "#courtG")
+    if page.is_visible("#setupPanel"):
+        fail("Match: a tap on the court did not close the role list")
+    if page.is_enabled("#gNext"):
+        fail("Match: the tap that closed the role list also placed your spot")
+    open_setup(page)
+    x, y = court_point(page, "#courtG")
+    close_setup(page)
+    page.mouse.click(x, y)
+    if not page.is_enabled("#gNext"):
+        fail("Match: the next court tap after closing the role list did not place your spot")
+
+
 def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -171,6 +231,8 @@ def main() -> None:
         check_defaults(page)
         check_switch(page)
         check_learn(page)
+        check_short_phone(page)
+        check_outside_tap(page)
         if errors:
             fail(f"JS errors: {json.dumps(errors[:3])}")
         browser.close()

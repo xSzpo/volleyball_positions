@@ -261,7 +261,7 @@ def check_rules_restored(browser: Browser) -> None:
     )
     checked = page.get_attribute('.rulesmode [aria-checked="true"]', "data-rm")
     shown = page.evaluate(
-        "[document.getElementById('roleChip').textContent.trim(), document.querySelector('#mpList select').value]"
+        "[document.getElementById('roleChip').dataset.role, document.querySelector('#mpList select').value]"
     )
     if checked != "official" or shown != ["MB2", "MB2"]:
         fail(f"rules: after rules-official came on, rules {checked!r}, role and player 1 {shown}")
