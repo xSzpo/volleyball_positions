@@ -216,7 +216,7 @@ def check_best_key(browser: Browser) -> None:
 
 
 def check_our_serve(browser: Browser) -> None:
-    """Our serve: a front-row player stands mid-zone before the serve; only the server gets an arrow."""
+    """Our serve: no ball, a front-row player stands mid-zone before the serve; only the server gets an arrow."""
     page = new_page(browser)
     setup_match(page, "OH1", ("serve",))
     page.click("#gStart")
@@ -225,9 +225,8 @@ def check_our_serve(browser: Browser) -> None:
         fail(f"step name reads {page.inner_text('#gStepName')!r}, expected Our serve")
     if not page.inner_text("#gStory").endswith("We serve. Where do you stand?"):
         fail(f"R1 OH1 our serve question reads {page.inner_text('#gStory')!r}")
-    ball = court_picture(page, "courtG")["ball"]
-    if not ball or dist(ball, SERVE_BALL) > 0.01:
-        fail(f"our serve ball at {ball}, expected over the net at {SERVE_BALL} as in Learn")
+    if court_picture(page, "courtG")["ball"]:
+        fail("our serve draws a ball before the answer, expected none")
     tap_at(page, 0.5, 0.5)
     press_next(page)
     page.wait_for_selector("#gFb .pts")
@@ -246,8 +245,24 @@ def check_our_serve(browser: Browser) -> None:
             fail(f"our serve feedback reads {feedback!r}, expected {want!r}")
     if "at the net" in feedback:
         fail(f"our serve feedback reads {feedback!r}, the front row should not be at the net")
-    if dist(court_picture(page, "courtG")["ball"] or (0, 0), SERVE_BALL) > 0.01:
-        fail("our serve feedback lost the ball over the net")
+    if court_picture(page, "courtG")["ball"]:
+        fail("our serve feedback draws a ball, expected none")
+    page.close()
+    page = new_page(browser)
+    pick_role(page, "OH1")
+    page.click("#tabDrill")
+    page.click("#dOpts > summary")
+    for _ in range(100):
+        if page.inner_text("#dq").endswith("· Our serve"):
+            break
+        page.click("#resetBtn")
+    else:
+        fail("drill: Our serve never came up")
+    if court_picture(page, "courtD")["ball"]:
+        fail("drill our serve draws a ball before the answer, expected none")
+    tap_at(page, 0.5, 0.5, court="courtD")
+    if court_picture(page, "courtD")["ball"]:
+        fail("drill our serve feedback draws a ball, expected none")
     page.close()
     page = new_page(browser)
     setup_match(page, "S", ("serve",))
@@ -256,7 +271,10 @@ def check_our_serve(browser: Browser) -> None:
     if not page.inner_text("#gStory").endswith("You serve. Where do you go after it?"):
         fail(f"R1 server question reads {page.inner_text('#gStory')!r}, expected where they go after the serve")
     page.close()
-    print("our serve: ball over the net, server asked where they go, front-row spot mid-zone, one arrow", flush=True)
+    print(
+        "our serve: no ball in Drill and Match, server asked where they go, front-row spot mid-zone, one arrow",
+        flush=True,
+    )
 
 
 def check_off_court_pill(browser: Browser) -> None:
@@ -814,7 +832,6 @@ def check_court_not_covered(browser: Browser) -> None:
 # The Learn Reception passer, one per rotation.
 PASSER = ["L", "OH2", "OH1", "L", "OH1", "OH2"]
 HELD = 6 + 1 + 6 * 0.65  # marker radius, its edge and the ball radius, in court units
-SERVE_BALL = (30.0, -8.0)
 
 
 def attack_question(ri: int, role: str) -> str:
