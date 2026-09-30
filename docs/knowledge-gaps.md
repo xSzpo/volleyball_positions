@@ -540,3 +540,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** With no stored `ksv51:theme` the app opens light, whatever the system says. The `prefers-color-scheme: dark` CSS block is removed, so the first paint is light with no flash; the dark tokens stay under `[data-theme="dark"]`. The header button still switches, and a stored choice still wins. A change of the system scheme no longer repaints the button.
 - **Alternatives:** set `data-theme="light"` at start-up and keep the media block (the block would never apply and would duplicate the dark tokens).
 - **Reversible by:** the dark `@media (prefers-color-scheme: dark)` block in the `<style>` block and `paintThemeButton()` in `src/template.html`.
+
+### 67. Where the H in rotation names is explained
+
+- **Issue:** #78
+- **Problem:** The owner asked for `R2 (H6)` instead of `R2 (S6)`, and the issue asks the app to explain the label wherever it explains it. The app had no text that explained the `S`.
+- **Decision:** A new last entry in Rules of thumb (key `names`, for every role): "H in R2 (H6) is the setter", saying H is Danish hæver, the number is the setter's zone, and to find the setter first. It goes last so the numbers the Match hints cite do not change. No first-visit text is added.
+- **Alternatives:** a line in the first-visit header subtitle; a tooltip on the Learn title tag; the entry first in the list.
+- **Reversible by:** the `names` entry in `THUMB` in `src/template.html`.

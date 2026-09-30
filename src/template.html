@@ -1895,7 +1895,7 @@
                 <legend>Rotation order</legend>
                 <label
                   ><input type="radio" name="gOrder" value="order">
-                  In order: R1 (S1) → R6 (S2)</label
+                  In order: R1 (H1) → R6 (H2)</label
                 >
                 <label
                   ><input type="radio" name="gOrder" value="mixed">
@@ -2102,7 +2102,7 @@
       const RULE_ROWS = Object.fromEntries(
         Object.entries(DATA.rows).map(([mode, rows]) => [
           mode,
-          rows.map((r) => ({ ...r, short: r.name, name: `${r.name} (S${r.setter})` })),
+          rows.map((r) => ({ ...r, short: r.name, name: `${r.name} (H${r.setter})` })),
         ]),
       );
       // v1's Drill mode is dropped; a stored "drill" reads as Simplified.
@@ -2246,7 +2246,7 @@
             d:
               r.liberofor === "SUB"
                 ? "You come on only for our serve here, because the libero may not serve. When we lose the serve, the libero comes back on for you."
-                : "You play only in R3 (S5) and R6 (S2), to serve when the libero is in zone 1.",
+                : "You play only in R3 (H5) and R6 (H2), to serve when the libero is in zone 1.",
           };
         if (!me) {
           if (role === "L" && rulesMode === "simple")
@@ -4131,10 +4131,16 @@
           roles: ["OP"],
           d: "In R4 to R6 the opposite goes straight to zone 1 after the pass for the back-row attack. Take off behind the 3 m line.",
         },
+        {
+          k: "names",
+          t: "H in R2 (H6) is the setter",
+          roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
+          d: "H is Danish hæver, the setter, as in the club guide. The number after H is the setter's zone: in R2 (H6) the setter is in zone 6. Find the setter first to know the rotation.",
+        },
       ];
       const RLAB = ROWS.map((r) => r.name);
       function lab(t) {
-        return t.replace(/\bR([1-6])\b(?! \(S)/g, (m, n) => RLAB[n - 1]);
+        return t.replace(/\bR([1-6])\b(?! \(H)/g, (m, n) => RLAB[n - 1]);
       }
       Object.keys(RULES).forEach((k) => {
         RULES[k] = RULES[k].map(lab);
@@ -4196,7 +4202,7 @@
       }
 
       // ---------- Reference points & neighbours ----------
-      const LINEUP = ["S", "OH1", "MB1", "OP", "OH2", "MB2"]; // serving order, as in R1 (S1) zones 1..6
+      const LINEUP = ["S", "OH1", "MB1", "OP", "OH2", "MB2"]; // serving order, as in R1 (H1) zones 1..6
       function refOf(r) {
         return r === "S" ? "OP" : "S";
       }

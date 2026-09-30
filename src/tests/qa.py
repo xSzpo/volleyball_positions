@@ -231,7 +231,7 @@ def check_court_look(pg: Page, tag: str, phone: bool) -> None:
     pick_role(pg, "OH1")
     pg.click('.rot[data-i="0"]')
     pg.click('.ph[data-k="rec"]')
-    if pg.inner_text("#learnTag").strip() != "R1 (S1) · Reception":
+    if pg.inner_text("#learnTag").strip() != "R1 (H1) · Reception":
         fail(f"{tag} title tag reads {pg.inner_text('#learnTag')!r}")
     if pg.get_attribute("#courtL", "viewBox") != "-4 -14 108 127":
         fail(f"{tag} court viewBox is {pg.get_attribute('#courtL', 'viewBox')!r}")
@@ -289,6 +289,8 @@ def check_page(pg: Page, ctx: str) -> None:
     t = pg.inner_text("body")
     if re.search(r"\bundefined\b|\bNaN\b|\[object|\bnull\b", t):
         fail(f"{ctx}: bad text in page")
+    if re.search(r"\(S\d\)", t):
+        fail(f"{ctx}: a rotation label still uses S")
     w = pg.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
     if w > 1:
         fail(f"{ctx}: horizontal overflow {w}px")

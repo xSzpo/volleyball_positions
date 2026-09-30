@@ -174,7 +174,7 @@ def check_opens_at_rest(page: Page) -> None:
     learn(page, 0, "serve")
     for phase, label in (("rec", "Reception"), ("ar", "Base")):
         page.click("#lNext")
-        if page.inner_text("#learnTag") != f"R1 (S1) · {label}":
+        if page.inner_text("#learnTag") != f"R1 (H1) · {label}":
             fail(f"the tag does not move with Next: {page.inner_text('#learnTag')!r}")
         page.wait_for_timeout(300)
         if anim(page) or page.locator("#courtL .am").count():
@@ -427,7 +427,7 @@ def check_nudge_colour_only(browser: Browser) -> None:
 def check_no_autoplay(page: Page) -> None:
     """No route plays: load, reload, Next, the chips, the arrow keys, a role change and a rules change."""
     open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
-    if page.inner_text("#learnTag") != "R1 (S1) · Reception" or anim(page):
+    if page.inner_text("#learnTag") != "R1 (H1) · Reception" or anim(page):
         fail(f"a fresh load onto {page.inner_text('#learnTag')!r} plays: {anim(page)}")
     page.reload()
     page.wait_for_function("document.readyState === 'complete' && !!document.querySelector('#lNext')")
@@ -444,7 +444,7 @@ def check_no_autoplay(page: Page) -> None:
         fail("a rotation chip plays Reception")
     page.keyboard.press("ArrowLeft")
     page.wait_for_timeout(200)
-    if anim(page) or page.inner_text("#learnTag") != "R2 (S6) · Reception":
+    if anim(page) or page.inner_text("#learnTag") != "R2 (H6) · Reception":
         fail(f"the arrow key plays or does not move: {page.inner_text('#learnTag')!r}")
     page.click('.ph[data-k="serve"]')
     page.click("#roleChip")
@@ -479,13 +479,13 @@ def check_static(page: Page) -> None:
             fail(f"R{ri + 1} {phase}: animation markers on a static screen")
     learn(page, 0, "rec")
     page.click("#lNext")
-    if anim(page) or page.inner_text("#learnTag") != "R1 (S1) · Base":
+    if anim(page) or page.inner_text("#learnTag") != "R1 (H1) · Base":
         fail("Next into Base animates or does not move the tag")
     check_positions("Base", page.evaluate(MARKERS, "#courtL .mk"), reception_plan(0, "simple")[1])
     if not page.inner_text("#lNext").lower().startswith("next:"):
         fail(f"Base: Next reads {page.inner_text('#lNext')!r}")
     page.click("#lNext")
-    if anim(page) or page.inner_text("#learnTag") != "R2 (S6) · Rotation":
+    if anim(page) or page.inner_text("#learnTag") != "R2 (H6) · Rotation":
         fail("Next into the next Rotation animates")
     stages: list[dict[str, Any]] = page.evaluate("window.ksvLearn.stages(0, 'start')")
     if stages:
@@ -950,11 +950,11 @@ def check_never_blocks(page: Page) -> None:
     if hit:
         fail("a marker takes taps while a phase plays")
     page.click("#lNext")
-    if page.inner_text("#learnTag") != "R2 (S6) · Base" or anim(page):
+    if page.inner_text("#learnTag") != "R2 (H6) · Base" or anim(page):
         fail(f"Next mid-play waits or plays: tag {page.inner_text('#learnTag')!r}, {anim(page)}")
     page.click("#lPlay")
     page.click('.rot[data-i="4"]')
-    if page.inner_text("#learnTag") != "R5 (S3) · Base" or anim(page):
+    if page.inner_text("#learnTag") != "R5 (H3) · Base" or anim(page):
         fail(f"a rotation chip mid-play does not open that Base at rest: {anim(page)}")
     page.click('.ph[data-k="rec"]')
     if anim(page):
@@ -1232,7 +1232,7 @@ def check_serve_static(page: Page) -> None:
 
         def still(tag: str, ri: int, mode: str = mode) -> None:
             page.wait_for_timeout(100)
-            if not re.fullmatch(rf"R{ri + 1} \(S\d\) · Our serve", page.inner_text("#learnTag")):
+            if not re.fullmatch(rf"R{ri + 1} \(H\d\) · Our serve", page.inner_text("#learnTag")):
                 fail(f"{tag}: opens {page.inner_text('#learnTag')!r}")
             if anim(page) or page.locator("#courtL .am, #courtL .trail").count():
                 fail(f"{tag}: Our serve plays")
