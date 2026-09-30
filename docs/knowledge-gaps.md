@@ -293,3 +293,35 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The built-in default of `rules-official` is on, as `learn-animation` in #23; the PostHog flag stays off until the owner checks it on a phone. Simplified stays the default rule set; Official is one tap away in the role sheet. #11 still applies when the flag is off.
 - **Alternatives:** keep the default off until the coach answers questions 1 and 5 on #16.
 - **Reversible by:** `FEATURES["rules-official"]` in `src/template.html`.
+
+### 37. What the Reception animation shows after the pass
+
+- **Issue:** #49
+- **Problem:** The owner wants Reception to play the receive, the set and the spike, with the team moving as it really does. The guide shows the reception shape, the moves to the approach spots, the approach arrows to the net and the back row's moves "after the attacking action" (rule of thumb 03), but not who is set, where the cover stands or when each move starts.
+- **Decision:** Four stages. 1: their serve to the libero, the setter releases (as #30). 2: the pass to the setter, the attackers to their `ar` approach spots (as #30). 3: the set to the zone 4 hitter (the front-row attacker farthest left in `ar`); every front-row attacker runs the approach to the net in their lane (y 0.08) and a back-row attacker to just behind the 3 m line (y 0.48), so the block must watch them all; the two back-row players without an attack (`ar` kind `None`) close in behind the hitter (the nearer one about 1 m to the side and 2.5 m off the net, the other farther round); the setter stays at the setting spot. 4: the spike over the net; the cover and the back-row attacker go to their `ar` spots, which are their defence spots ("then defend zone 5"); the front row stays at the net to block. Then the Reception still picture comes back. Each stage has its own caption per player.
+- **Alternatives:** set a different hitter per rotation, or the middle; keep the cover still and only move them to the `ar` spots; bring the hitter back off the net after the spike.
+- **Reversible by:** `phaseStages()`, `COVER`, `HIT_Y`, `BACK_HIT_Y` and `ATTACK_NOTES` in `src/template.html`. Coach question 9 on #16.
+
+### 38. Where the animation controls sit on the court panel
+
+- **Issue:** #49
+- **Problem:** The owner wants Replay, Pause, Step and speed on the court. The strip below the end line holds the "off court" pill on the left and, at Our serve, the server on the serve spot on the right; four 44 px buttons do not fit between them.
+- **Decision:** The court panel (`#lPanel`) grows by one bar under the court drawing: the stage dots on the left, the four buttons on the right, on the same gradient. The bar keeps its height on Rotation and After reception (buttons hidden), so the caption does not jump between screens; with reduced motion or `?anim=0` it is gone. The sticky row holds only Next.
+- **Alternatives:** overlay the buttons on the strip below the end line (covers the server at Our serve); smaller buttons (under 44 px).
+- **Reversible by:** `#lPanel` and `#lAnim` in `src/template.html`.
+
+### 39. The Next button on Reception
+
+- **Issue:** #49
+- **Problem:** The owner asked to rename the button "Next: After reception ▸" to "After". The other steps still read "Next: Our serve ▸" and so on.
+- **Decision:** Only the Reception button changes: it reads "After ▸" (aria-label "Next: After reception"). The others keep "Next: … ▸", now always in full because the animation controls left the row. The phase chip reads "After" and the title tag "After reception", as before.
+- **Alternatives:** "Next: After ▸"; drop "Next:" on every button.
+- **Reversible by:** the `lNext` label in `renderLearn()` in `src/template.html`.
+
+### 40. The ball and the movement trails
+
+- **Issue:** #49
+- **Problem:** The owner wants a ball that looks like a volleyball, and faded dashed lines to trace where each player came from. Neither has a design in `docs/v2.md`.
+- **Decision:** The ball is an inline SVG volleyball (white with a blue and a yellow panel and dark seams, fixed colours in both themes), 0.65 × the marker radius, growing 15% at the top of each flight and turning once. Each move leaves a dashed line (1 unit, dash 2/1.6, 60% opacity) in the player's `--route-*` colour, drawn under the markers and growing with the move; the lines stay through the hold, Pause and Step and clear with the still picture, Replay or a screen change. A move shorter than 1% of the court leaves none.
+- **Alternatives:** a plain white ball, larger; trails only for your player.
+- **Reversible by:** `BALL_SVG`, `BALL_R`, the `.trail` lines in `animPlay()` and `paintAnim()` in `src/template.html`.

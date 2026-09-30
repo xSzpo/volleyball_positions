@@ -168,7 +168,8 @@ def check_walk(page: Page, mode: str, role: str) -> None:
         for at, phase in enumerate(PHASES):
             check_step(page, mode, role, rotation, phase)
             expected = PHASE_NAMES[PHASES[at + 1]] if at < 3 else ROTATION_NAMES[(rotation + 1) % 6]
-            if page.text_content("#lNext") != f"Next: {expected} ▸":
+            label = "After" if phase == "rec" else f"Next: {expected}"
+            if page.text_content("#lNext") != f"{label} ▸":
                 fail(f"{mode} {role} R{rotation + 1} {phase}: Next reads {page.text_content('#lNext')!r}")
             page.click("#lNext")
     if page.inner_text("#learnTag") != f"{ROTATION_NAMES[0]} · {PHASE_NAMES['start']}":
