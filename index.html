@@ -2841,6 +2841,10 @@
             to: st.moves,
             notes: st.notes,
             ball: !!st.ball,
+            paths: Object.fromEntries(Object.entries(st.mv).map(([p, m]) => [p, m.path])),
+            delays: Object.fromEntries(Object.entries(st.mv).map(([p, m]) => [p, m.delay])),
+            start: st.start,
+            dur: st.dur,
           })),
         track: (ri, phase, n) => {
           const tr = phaseStages(ri, phase);
@@ -3090,34 +3094,47 @@
         '<circle r="1" fill="none" stroke="var(--marker-edge)" stroke-width="0.14"/></g>';
       const HOLD_MS = 900,
         BALL_MS = 450,
-        FADE_MS = 150;
-      const SERVE_HIT = "Serve from the spot behind the end line: the ball must clear the net.";
+        SERVE_MS = 1000,
+        FADE_MS = 150,
+        TRAIL_FADE_MS = 400;
+      // 1 unit is 9 m; with a quarter of the glide spent speeding up and a quarter slowing down, the top speed is about 4.8 m/s.
+      const MS_PER_UNIT = 2500,
+        EASE_PART = 0.25,
+        MIN_GLIDE = 400;
+      const SERVE_HIT = "Serve from the spot behind the end line, then run in at once.";
       const PASS_TEXT = "Pass the serve high to the setter at the net.";
-      const SET_TEXT = "Take the pass at the setting spot: you play the second contact.";
+      const PASS_ATTACK = "Pass high to the setter, then get out to the 3 m line to attack.";
+      const SERVE_TO = "Their serve comes to you: get behind the ball and pass it.";
+      const SET_TEXT = (passer) =>
+        `Take ${passer}'s pass at the setting spot: you play the second contact.`;
+      const OFF_SERVE = (sv) =>
+        `Wait at the sideline while ${sv} serves: the libero may not serve.`;
       const SPIKE_BALL = { x: 0.62, y: -0.09 };
       const HIT_Y = 0.08,
         APPROACH_Y = 0.17,
-        BACK_HIT_Y = 0.5;
-      // 3-2 cup around the hitter's spot at the net: three close and low (2-3 m), two deep (4-6 m).
-      const CUP = {
-        front: { dx: 0.24, y: 0.15 },
-        set: { dx: 0.23, y: 0.31 },
-        back: { dx: 0.03, y: 0.32 },
-      };
-      const DEEP = [
-        { dx: 0.38, y: 0.55 },
-        { dx: 0.05, y: 0.62 },
-      ];
+        BACK_HIT_Y = 0.5,
+        DEEP_Y = 0.86;
+      // Where front-row players who switch sides pass behind the middle: the one going left runs deeper.
+      const SWITCH_VIA = { right: { x: 0.45, y: 0.4 }, left: { x: 0.55, y: 0.53 } };
+      // Guide rule 01: the two outside hitters and the libero receive. One passer per rotation, so each takes two.
+      const RECEIVERS = ["OH1", "OH2", "L"];
+      const PASSER = ["L", "OH2", "OH1", "L", "OH1", "OH2"];
+      // The middle's cover spot beside the hitter, and the setter's step after the set.
+      const CUP_FRONT = { dx: 0.24, y: 0.15 };
+      const SETTER_STEP = { dx: -0.1, dy: 0.1 };
       const ATTACK_NOTES = {
         hit: [
-          "Approach and jump: the setter sets you in zone 4.",
+          (left) =>
+            left
+              ? "Approach and jump: the setter sets you in zone 4."
+              : "Approach and jump in zone 4: in this rotation the opposite plays left.",
           (z) => `Spike over the net, then back off to zone ${z} and defend.`,
         ],
         front: "Run your approach too: the block must watch you.",
         back: "Approach behind the 3 m line too: the block must watch you.",
         cupFront: (hitter) => `Approach for the quick, then drop in low to cover ${hitter}.`,
-        cupSet: (hitter) => `Set ${hitter} in zone 4, then follow in low to cover the hit.`,
-        cupBack: (hitter) => `Close in low behind ${hitter}: cover a ball the block sends back.`,
+        cupSet: (hitter) => `Set ${hitter} in zone 4, then follow a step or two to cover the tip.`,
+        cupBack: (hitter) => `Cover ${hitter} from zone 5: play a ball the block sends back.`,
         deep: "Stay deep behind the cover: a ball off the block can fly far.",
         base: (z, front) =>
           front
@@ -3197,6 +3214,7 @@
           notes[sv] = "Rotate to zone 1 and serve: the libero may not serve, so you stay on.";
           team = `The libero leaves; ${on} comes on in zone ${z}. ${sv} is in zone 1 and serves.`;
         }
+        if (phase === "serve" && !order.includes("L") && !from.L) notes.L = OFF_SERVE(server(ri));
         return { notes, team, swap: leave.length + enter.length > 0 };
       }
       // Where the ball meets a player: at the marker edge toward its next target, so the label stays readable.
@@ -3209,7 +3227,7 @@
       }
       // A mover stops a marker width from anyone standing there, so no two markers overlap in a hold.
       function clearOf(p, end, standing) {
-        const gap = (2 * MARKER_R + 0.2) / 100;
+        const gap = GAP + 0.004;
         return Object.entries(standing).reduce((pos, [q, o]) => {
           const d = Math.hypot(pos.x - o.x, pos.y - o.y);
           if (q === p || d >= gap || d === 0) return pos;
@@ -3229,8 +3247,150 @@
           return { x, y, zone: z };
         });
       }
+      const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+      const pathLength = (path) => path.slice(1).reduce((s, q, i) => s + dist(path[i], q), 0);
+      // Trapezoid speed: speed up over EASE_PART of the glide, run, then slow down over the last EASE_PART.
+      function ease(u) {
+        const a = EASE_PART,
+          v = 1 / (1 - a);
+        if (u < a) return (v * u * u) / (2 * a);
+        if (u > 1 - a) return 1 - (v * (1 - u) ** 2) / (2 * a);
+        return v * (a / 2 + u - a);
+      }
+      // The point a fraction s of the way along a path, and the part of the path walked to reach it.
+      function along(path, s) {
+        let left = s * pathLength(path);
+        const walked = [path[0]];
+        for (let i = 1; i < path.length; i++) {
+          const a = path[i - 1],
+            b = path[i],
+            d = dist(a, b);
+          if (left <= d || i === path.length - 1) {
+            const k = d ? Math.min(1, left / d) : 1;
+            const at = { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+            walked.push(at);
+            return { at, walked };
+          }
+          left -= d;
+          walked.push(b);
+        }
+        return { at: path[0], walked };
+      }
+      function makeMove(path, delay) {
+        return { path, delay, glide: Math.max(MIN_GLIDE, pathLength(path) * MS_PER_UNIT) };
+      }
+      // Where a move is dt ms after its stage starts.
+      function moveAt(m, dt) {
+        return along(m.path, dt <= m.delay ? 0 : ease(Math.min(1, (dt - m.delay) / m.glide)));
+      }
+      // A marker's width plus its ring, so passing players never touch.
+      const GAP = (2 * MARKER_R + 2) / 100;
+      // Moves shorter than this are left out before the last stage: a clearOf() stop is not finished in the next stage.
+      const MIN_MOVE = 0.04;
+      const DELAYS = [0, 150, 300, 450, 600, 800, 1000, 1300];
+      // Going round in front of someone costs more than any wait, so players pass behind each other when they can.
+      const NET_SIDE_COST = 1;
+      // How often a move comes closer than a marker width to other moves, sampled every 15 ms, and where it first
+      // meets each of them.
+      function clashes(m, others) {
+        const until = Math.max(m.delay + m.glide, ...others.map((f) => f.delay + f.glide)) + 20;
+        let n = 0;
+        const met = new Map();
+        for (let dt = 0; dt <= until; dt += 15) {
+          const me = moveAt(m, dt);
+          others.forEach((f) => {
+            const b = moveAt(f, dt).at;
+            if (dist(me.at, b) >= GAP + 0.003) return;
+            n += 1;
+            if (!met.has(f)) met.set(f, { b, at: me.at, seg: me.walked.length - 1 });
+          });
+        }
+        return { n, met: [...met.values()] };
+      }
+      // Paths that step round one of the players met, on either side of that part of the path, behind first.
+      function detours(path, met) {
+        const out = [];
+        met.forEach(({ b, seg }) => {
+          const i = Math.min(seg, path.length - 1),
+            u = path[i - 1],
+            v = path[i],
+            d = dist(u, v) || 1;
+          [1.3, 1.7].forEach((wide) => {
+            const r = GAP * wide;
+            [1, -1]
+              .map((k) => ({
+                x: Math.min(1.04, Math.max(-0.04, b.x - ((v.y - u.y) / d) * r * k)),
+                y: Math.max(0.03, b.y + ((v.x - u.x) / d) * r * k),
+              }))
+              .sort((w1, w2) => w2.y - w1.y)
+              .forEach((w, k) => {
+                out.push({ path: [...path.slice(0, i), w, ...path.slice(i)], netSide: k === 1 });
+              });
+          });
+        });
+        return out.filter((d) => smooth(d.path, path));
+      }
+      // A path that never turns back and is at most 1.3 times the path it goes round.
+      function smooth(path, base) {
+        if (pathLength(path) > 1.3 * pathLength(base)) return false;
+        return path.slice(2).every((c, i) => {
+          const a = path[i],
+            b = path[i + 1];
+          return (b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y) >= 0;
+        });
+      }
+      // Each mover in turn, shortest move first, takes the cheapest start delay and path (straight, or round one player
+      // in the way without turning back) that meets nobody: movers not placed yet count as standing where they start. A
+      // second round places again anyone who still meets someone, against everyone else's final move.
+      function planStage(st, at) {
+        const movers = Object.keys(st.moves);
+        if (!st.keepOrder)
+          movers.sort((p, q) => dist(at[p], st.moves[p]) - dist(at[q], st.moves[q]));
+        const place = (p) => {
+          const others = Object.keys(st.mv)
+            .filter((q) => q !== p)
+            .map((q) => st.mv[q]);
+          const free = !st.via?.[p] && !st.noDetour?.includes(p);
+          let best = null;
+          const tryPath = (path, extra = 0, delays = DELAYS) => {
+            for (const delay of delays) {
+              const m = makeMove(path, delay);
+              const c = clashes(m, others);
+              const cost = c.n * 1000 + delay / MS_PER_UNIT + pathLength(path) + extra;
+              if (!best || cost < best.cost) best = { m, cost, n: c.n };
+              if (!c.n) break;
+            }
+          };
+          const first = [at[p], ...(st.via?.[p] || []), st.moves[p]];
+          const search = (delays) => {
+            tryPath(first, 0, delays);
+            if (!free || !best.n) return;
+            detours(first, clashes(makeMove(first, 0), others).met).forEach((d) => {
+              tryPath(d.path, d.netSide ? NET_SIDE_COST : 0, delays);
+            });
+          };
+          if (st.noWait) search([0]);
+          if (!best || best.n) search(DELAYS);
+          st.mv[p] = best.m;
+        };
+        st.mv = pick(Object.keys(at), (p) => makeMove([at[p]], 0));
+        movers.forEach(place);
+        movers.forEach((p) => {
+          const others = movers.filter((q) => q !== p).map((q) => st.mv[q]);
+          if (clashes(st.mv[p], others).n) place(p);
+        });
+        Object.keys(st.mv).forEach((p) => {
+          if (!movers.includes(p)) delete st.mv[p];
+        });
+      }
       // What happens in (ri, phase) after its still picture, in stages that end back on that picture.
+      const stageCache = {};
       function phaseStages(ri, phase) {
+        const key = `${rulesMode}|${ri}|${phase}`;
+        if (!stageCache[key]) stageCache[key] = buildStages(ri, phase);
+        return stageCache[key];
+      }
+      function buildStages(ri, phase) {
         const list = learnSpots(ri, phase);
         const from = spots(list);
         const order = list.map((o) => o.p);
@@ -3241,11 +3401,11 @@
           const base = players(ri, phase).find((o) => o.p === sv);
           if (base) {
             stages.push({
-              moves: { [sv]: from[sv] },
-              notes: { ...notes, [sv]: SERVE_HIT },
+              moves: { [sv]: { x: base.x, y: base.y } },
+              noWait: true,
+              notes: { ...notes, [sv]: SERVE_HIT, ...(from.L ? {} : { L: OFF_SERVE(sv) }) },
               ball: { from: touch(from[sv], SERVE_BALL), to: SERVE_BALL },
             });
-            stages.push({ moves: { [sv]: { x: base.x, y: base.y } }, notes: { [sv]: notes[sv] } });
           }
         } else if (phase === "rec") {
           const ar = players(ri, "ar");
@@ -3254,23 +3414,40 @@
           const arNotes = ROWS[ri].move?.ar || {};
           const setter = order.filter((p) => kind[p] === "set");
           const attackers = order.filter((p) => kind[p] === "front" || kind[p] === "back");
-          const passer = from.L ? "L" : order.find((p) => !kind[p]);
+          const receivers = order.filter((p) => RECEIVERS.includes(p));
+          const passer = receivers.includes(PASSER[ri]) ? PASSER[ri] : receivers[0];
           const setSpot = setter.length ? to[setter[0]] : null;
           const front = attackers.filter((p) => kind[p] === "front");
           const hitter = front.reduce((a, p) => (a == null || to[p].x < to[a].x ? p : a), null);
           const hit = hitter && { x: to[hitter].x, y: HIT_Y };
+          // Movement is free from the server's first movement: everyone who does not receive leaves at once.
+          const released = [...setter, ...attackers.filter((p) => !receivers.includes(p))];
           stages.push({
-            moves: pick(setter, (p) => to[p]),
-            notes: { ...notes, ...pick(setter, (p) => arNotes[p]) },
-            ball: passer && { from: THEIR_SERVE, to: touch(from[passer], setSpot || SERVE_BALL) },
-          });
-          stages.push({
-            moves: pick(attackers, (p) => to[p]),
+            moves: pick(released, (p) => to[p]),
+            noWait: true,
             notes: {
-              ...pick(attackers, (p) => arNotes[p]),
-              ...(passer ? { [passer]: PASS_TEXT } : {}),
-              ...pick(setter, () => SET_TEXT),
+              ...notes,
+              ...pick(released, (p) => arNotes[p]),
+              ...(passer ? { [passer]: SERVE_TO } : {}),
             },
+            ball: passer && {
+              from: THEIR_SERVE,
+              to: touch(from[passer], setSpot || SERVE_BALL),
+              ms: SERVE_MS,
+            },
+          });
+          const second = passer ? [passer, ...order.filter((p) => p !== passer)] : order;
+          stages.push({
+            moves: pick(second, (p) => to[p]),
+            notes: {
+              ...pick(
+                receivers.filter((p) => p !== passer),
+                (p) => arNotes[p],
+              ),
+              ...(passer ? { [passer]: kind[passer] === "front" ? PASS_ATTACK : PASS_TEXT } : {}),
+              ...pick(setter, () => SET_TEXT(passer)),
+            },
+            team: passer ? `${passer} passes to the setter.` : "",
             ball: passer &&
               setSpot && { from: touch(from[passer], setSpot), to: touch(setSpot, hit) },
           });
@@ -3284,43 +3461,58 @@
             const cupFront = near(
               order.filter((p) => isFront(ri, p) && p !== hitter && kind[p] !== "set"),
             );
-            const backs = order.filter((p) => !isFront(ri, p) && !kind[p]);
-            const cupBack = backs.includes("L") ? "L" : near(backs);
-            const cup = { ...pick(setter, () => CUP.set) };
-            if (cupFront) cup[cupFront] = CUP.front;
-            if (cupBack) cup[cupBack] = CUP.back;
-            const rest = order.filter((p) => p !== hitter && !cup[p]);
-            const approach = rest.filter((p) => kind[p] === "front" || kind[p] === "back");
-            const deep = rest.filter((p) => !approach.includes(p));
-            const around = (c) => ({ x: Math.min(0.9, hit.x + c.dx), y: c.y });
-            const moves = {
-              [hitter]: hit,
-              ...pick(approach, (p) => ({
-                x: to[p].x,
-                y: kind[p] === "front" ? APPROACH_Y : BACK_HIT_Y,
-              })),
-              ...Object.fromEntries(Object.entries(cup).map(([p, c]) => [p, around(c)])),
-              ...Object.fromEntries(
-                deep.map((p, i) => [p, around(DEEP[Math.min(i, DEEP.length - 1)])]),
-              ),
-            };
+            const approach = attackers.filter((p) => p !== hitter && p !== cupFront);
+            const deep = order.filter((p) => !kind[p] && p !== "L" && !isFront(ri, p));
+            const moves = { [hitter]: hit };
+            const via = {};
+            if (cupFront) {
+              moves[cupFront] = { x: Math.min(0.9, hit.x + CUP_FRONT.dx), y: CUP_FRONT.y };
+              via[cupFront] = [{ x: Math.min(to[cupFront].x, setSpot.x - 0.15), y: APPROACH_Y }];
+            }
+            setter.forEach((p) => {
+              moves[p] = { x: setSpot.x + SETTER_STEP.dx, y: setSpot.y + SETTER_STEP.dy };
+            });
+            approach.forEach((p) => {
+              moves[p] = { x: to[p].x, y: kind[p] === "front" ? APPROACH_Y : BACK_HIT_Y };
+            });
+            deep.forEach((p) => {
+              moves[p] = { x: to[p].x, y: Math.max(to[p].y, DEEP_Y) };
+            });
             const spike = touch(hit, SPIKE_BALL);
             stages.push({
               moves,
+              via,
+              noDetour: setter,
+              keepOrder: true,
               notes: {
-                [hitter]: ATTACK_NOTES.hit[0],
+                [hitter]: ATTACK_NOTES.hit[0](hitter.startsWith("OH")),
                 ...pick(approach, (p) => ATTACK_NOTES[kind[p]]),
                 ...pick(deep, () => ATTACK_NOTES.deep),
                 ...pick(setter, () => ATTACK_NOTES.cupSet(hitter)),
                 ...(cupFront ? { [cupFront]: ATTACK_NOTES.cupFront(hitter) } : {}),
-                ...(cupBack ? { [cupBack]: ATTACK_NOTES.cupBack(hitter) } : {}),
+                ...(from.L ? { L: ATTACK_NOTES.cupBack(hitter) } : {}),
               },
-              ball: { from: touch(setSpot, hit), to: spike, sync: true },
+              ball: { from: touch(setSpot, hit), to: spike, sync: hitter },
             });
             const base = baseSpots(ri, order);
             const zone = (p) => base[p].zone;
+            const switchVia = {};
+            order
+              .filter((p) => {
+                const x = (moves[p] ?? to[p]).x;
+                return (
+                  isFront(ri, p) && Math.abs(x - 0.5) > 0.2 && (x - 0.5) * (base[p].x - 0.5) < 0
+                );
+              })
+              .forEach((p) => {
+                switchVia[p] = [base[p].x > 0.5 ? SWITCH_VIA.right : SWITCH_VIA.left];
+              });
             stages.push({
-              moves: pick(order, (p) => ({ x: base[p].x, y: base[p].y })),
+              moves: pick([hitter, ...order.filter((p) => p !== hitter)], (p) => ({
+                x: base[p].x,
+                y: base[p].y,
+              })),
+              via: switchVia,
               notes: {
                 ...pick(order, (p) => ATTACK_NOTES.base(zone(p), isFront(ri, p))),
                 [hitter]: ATTACK_NOTES.hit[1](zone(hitter)),
@@ -3329,32 +3521,34 @@
             });
           }
         }
-        const tr = {
-          from,
-          players: order,
-          stages: stages.filter((st) => Object.keys(st.moves).length),
-        };
+        const tr = { from, players: order, stages: [] };
         let t = 0;
         const at = { ...from };
-        tr.stages.forEach((st) => {
-          st.start = t;
-          st.src = {};
-          st.glide = {};
+        stages.forEach((st, n) => {
           const standing = { ...at, ...st.moves };
+          // The last stage ends exactly on the picture the phase returns to.
+          const least = n === stages.length - 1 ? 1e-3 : MIN_MOVE;
           Object.keys(st.moves).forEach((p) => {
             st.moves[p] = clearOf(p, st.moves[p], standing);
             standing[p] = st.moves[p];
           });
+          Object.keys(st.moves).forEach((p) => {
+            if (dist(at[p], st.moves[p]) < least) delete st.moves[p];
+          });
+          if (!Object.keys(st.moves).length) return;
+          st.start = t;
+          st.src = {};
+          planStage(st, at);
           Object.entries(st.moves).forEach(([p, end]) => {
             st.src[p] = at[p];
-            st.glide[p] = Math.min(
-              900,
-              Math.max(600, Math.hypot(end.x - at[p].x, end.y - at[p].y) * 1000),
-            );
             at[p] = { x: end.x, y: end.y };
           });
-          st.dur = Math.max(600, ...Object.values(st.glide));
-          if (st.ball) st.ball.ms = st.ball.sync ? st.dur : BALL_MS;
+          st.dur = Math.max(600, ...Object.values(st.mv).map((m) => m.delay + m.glide));
+          if (st.ball) {
+            const m = st.mv[st.ball.sync];
+            st.ball.ms = m ? m.delay + m.glide : Math.min(st.dur, st.ball.ms || BALL_MS);
+          }
+          tr.stages.push(st);
           t += st.dur + HOLD_MS;
         });
         tr.total = t;
@@ -3368,21 +3562,19 @@
       // At rest the caption says why you stand where the still picture shows you.
       function captionHtml(ri, phase, tr) {
         const still = stageCaption(stillStage(ri, phase), role);
-        if (animated() || tr.stages.length < 2) return still;
+        if (animated() || !tr.stages.length) return still;
         const list = tr.stages.map((st) => stageCaption(st, role));
         if (still && !list.includes(still)) list.unshift(still);
+        if (list.length < 2) return still;
         return `<ol>${list.map((c) => `<li>${c}</li>`).join("")}</ol>`;
       }
       function posAt(tr, p, t) {
         let pos = tr.from[p];
         for (const st of tr.stages) {
-          if (!(p in st.moves) || t <= st.start) continue;
-          const u = Math.min(1, (t - st.start) / st.glide[p]),
-            e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2,
-            src = st.src[p],
-            end = st.moves[p];
-          pos = { x: src.x + (end.x - src.x) * e, y: src.y + (end.y - src.y) * e };
-          if (u < 1) break;
+          const m = st.mv[p];
+          if (!m || t <= st.start) continue;
+          pos = moveAt(m, t - st.start).at;
+          if (t - st.start < m.delay + m.glide) break;
         }
         return pos;
       }
@@ -3412,14 +3604,18 @@
           if (a.t >= start && a.t < until)
             ball = { ...b.ball, u: Math.min(1, (a.t - start) / b.ball.ms) };
         });
-        a.trails.forEach(({ el, st, p }) => {
-          if (a.t <= st.start) {
+        // Only this stage's trails show; the last stage's fade out as this one starts.
+        a.trails.forEach(({ el, k, p }) => {
+          const b = tr.stages[k],
+            m = b.mv[p];
+          const fade = k === i ? 1 : k === i - 1 ? 1 - (a.t - st.start) / TRAIL_FADE_MS : 0;
+          if (fade <= 0 || a.t <= b.start + m.delay) {
             el.setAttribute("visibility", "hidden");
             return;
           }
-          const end = a.t < st.start + st.glide[p] ? posAt(tr, p, a.t) : st.moves[p];
-          el.setAttribute("x2", end.x * W);
-          el.setAttribute("y2", end.y * H);
+          const { walked } = moveAt(m, a.t - b.start);
+          el.setAttribute("points", walked.map((q) => `${q.x * W},${q.y * H}`).join(" "));
+          el.setAttribute("opacity", 0.6 * fade);
           el.setAttribute("visibility", "visible");
         });
         a.ball.setAttribute("opacity", ball ? 1 : 0);
@@ -3495,12 +3691,11 @@
           `<g class="am" data-p="${p}">${chip({ p, x: 0, y: 0 }, { me })}</g>`;
         let s = DEFS + courtBase(off);
         const trails = [];
-        tr.stages.forEach((st) => {
-          Object.entries(st.moves).forEach(([p, end]) => {
-            const src = st.src[p];
-            if (Math.hypot(end.x - src.x, end.y - src.y) < 0.01) return;
-            trails.push({ st, p });
-            s += `<line class="trail" data-p="${p}" x1="${src.x * W}" y1="${src.y * H}" x2="${src.x * W}" y2="${src.y * H}" stroke="${routeOf(p)}" stroke-width="1" stroke-dasharray="2 1.6" stroke-linecap="round" opacity="0.6" visibility="hidden"/>`;
+        tr.stages.forEach((st, k) => {
+          Object.entries(st.mv).forEach(([p, m]) => {
+            if (pathLength(m.path) < 0.01) return;
+            trails.push({ k, p });
+            s += `<polyline class="trail" data-p="${p}" data-stage="${k}" points="" fill="none" stroke="${routeOf(p)}" stroke-width="1" stroke-dasharray="2 1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" visibility="hidden"/>`;
           });
         });
         tr.players
