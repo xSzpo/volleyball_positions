@@ -326,3 +326,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The ball is an inline SVG volleyball (white with a blue and a yellow panel and dark seams, fixed colours in both themes), 0.65 × the marker radius, growing 15% at the top of each flight and turning once; it meets a player at the marker edge, so the label stays readable. Each move leaves a dashed line (1 unit, dash 2/1.6, 60% opacity) in the player's `--route-*` colour, drawn under the markers and growing with the move; the lines stay through the hold, Pause and Step and clear with the still picture, Replay or a screen change. A move shorter than 1% of the court leaves none.
 - **Alternatives:** a plain white ball, larger; trails only for your player.
 - **Reversible by:** `BALL_SVG`, `BALL_R`, the `.trail` lines in `animPlay()` and `paintAnim()` in `src/template.html`.
+
+### 41. Rules of thumb for both rule sets
+
+- **Issue:** #23
+- **Problem:** The issue asks for Rules of thumb worded for both rule sets (MB, SUB, libero). The five v1 rules read the same in both; none says who plays the middle, and the Match hints cited rules by a fixed number that was one too low.
+- **Decision:** A new third rule on the middles, with one wording per rule set: Simplified "MB plays the front middle, L the back middle" (the pair reset into R3 and R6, SUB serves there), Official "The libero replaces the back-row middle" (which middle per rotation, the libero may never serve, the middle serves in R3 and R6 until the side-out, FIVB 19.3). It is marked "your rule" for the middles and the libero. The other five keep their v1 text. Each rule has a key; the hints cite "rule N of the Rules of thumb" from the key, and just "Remember" when `learn-guides` is off. The fold stays closed by default, as in v1.
+- **Alternatives:** keep five rules and add the middle text to rule 2; cite rules by title only.
+- **Reversible by:** `THUMB`, `thumbRef()` and `@THUMB_MIDDLES_*` in `ruleText()` in `src/template.html`.

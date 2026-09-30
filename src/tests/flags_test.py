@@ -82,7 +82,7 @@ def check_defaults(page: Page) -> None:
     for key, on in got.items():
         if on != (key not in DEFAULT_OFF):
             fail(f"default {key} = {on}")
-    for element_id in ("tabLearn", "drill", "game", "sets", "setsQuiz", "downloads", "howTo", "allRots"):
+    for element_id in ("tabLearn", "drill", "game", "sets", "setsQuiz", "downloads", "thumbsBox", "allRots"):
         if not present(page, element_id):
             fail(f"default: #{element_id} missing")
     if page.is_hidden("#tabs") or page.is_visible("#ffEmpty"):

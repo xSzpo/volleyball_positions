@@ -1263,15 +1263,6 @@
       border-left: 4px solid var(--accent);
       padding-left: 10px;
     }
-    .check4,
-    .learnsteps {
-      margin: 0;
-      padding-left: 22px;
-    }
-    .check4 li,
-    .learnsteps li {
-      margin: 8px 0;
-    }
     .nbq {
       margin: 10px 0 0;
       padding: 10px 12px;
@@ -1736,66 +1727,7 @@
             <button type="button" class="btn primary" id="lNext"></button>
           </div>
         </div>
-        <details class="card fold" id="howTo">
-          <summary>How to learn with this app</summary>
-          <div class="foldbody">
-            <ol class="learnsteps">
-              <li>
-                <b>Study once, then stop rereading.</b>
-                Pick your role and step through R1 (S1) to R6 (S2) here in Learn. For each rotation,
-                say the four checks out loud.
-              </li>
-              <li>
-                <b>Test yourself.</b>
-                Go to Drill with the setter shown. Guess first, then look at the answer. Mistakes
-                are part of how you learn.
-              </li>
-              <li>
-                <b>Play a Match in order, then mixed.</b>
-                When you score 80% or more, switch to mixed order and show nobody. Mixing the order
-                makes you think, which helps you remember.
-              </li>
-              <li>
-                <b>Little and often.</b>
-                Five minutes on three or four days a week works better than one long session. Start
-                each session with “Review weak spots” in Drill.
-              </li>
-              <li>
-                <b>Before training or a match,</b>
-                do a two-minute review of the role you will play. If you might play several roles,
-                practise each one.
-              </li>
-              <li>
-                <b>Finish on court.</b>
-                The app gets you ready; walking through the rotations with your team makes it stick.
-                Your coach and the KSV guide have the final word.
-              </li>
-            </ol>
-          </div>
-        </details>
         <div class="card" id="sheet"></div>
-        <details class="card fold" id="checks">
-          <summary>Before every serve</summary>
-          <div class="foldbody">
-            <p class="hint" style="margin-bottom:6px">
-              Four quick checks, in this order. Use them in the app and on court.
-            </p>
-            <ol class="check4">
-              <li><b>Where is the setter?</b> That tells you the rotation.</li>
-              <li>
-                <b>Who is in front of or behind me, and who is beside me?</b>
-                When we serve, there is no overlap rule: take your defence spot. When they serve,
-                that confirms your legal spot at the referee's whistle. From the server's first
-                movement you may move.
-              </li>
-              <li><b>Am I on court, or is the libero in?</b> Middles, check this every time.</li>
-              <li>
-                <b>What is my job after the pass?</b>
-                Receive, attack which lane, set, or cover.
-              </li>
-            </ol>
-          </div>
-        </details>
         <details class="card fold" id="thumbsBox">
           <summary>Rules of thumb from the guide</summary>
           <div class="foldbody"><ol class="thumbs" id="thumbs"></ol></div>
@@ -2764,7 +2696,7 @@
         "learn-tab": ["tabLearn", "learn"],
         "learn-animation": ["lCap", "lAnim", "lDots"],
         "rules-official": ["rmOfficial"],
-        "learn-guides": ["howTo", "checks", "thumbsBox"],
+        "learn-guides": ["thumbsBox"],
         "rotations-table": ["allRots"],
         "drill-tab": ["tabDrill", "drill"],
         "drill-review": ["reviewRow"],
@@ -3713,26 +3645,37 @@
       };
       const THUMB = [
         {
+          k: "overlap",
           t: "Overlap counts only when they serve, at the whistle",
           roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
           d: "When they serve, stand in order with your overlap partners when the referee whistles. From the server's first movement you may move. This is the Volleyball Danmark rule from 1 October 2026. When we serve there is no overlap rule: stand in your defence spot (rows still count for blocking and attacking; FIVB rule 7.4). Not in the guide.",
         },
         {
+          k: "receive",
           t: "Three players receive",
           roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
           d: "The two outside hitters and the libero pass the serve. Everyone else stays out of the passing lanes so the setter can set, the middle can run the quick and the opposite can attack.",
         },
         {
+          k: "middles",
+          t: "@THUMB_MIDDLES_T",
+          roles: ["MB", "MB1", "MB2", "L"],
+          d: "@THUMB_MIDDLES_D",
+        },
+        {
+          k: "outside-left",
           t: "The front-row outside hitter starts left",
           roles: ["OH1", "OH2", "OP"],
           d: "They attack from zone 4, so starting left is the shortest route to the approach. Exception R1, setter in position 1: outside hitter 1 is in zone 2, receives on the right and attacks right, while the opposite takes the left.",
         },
         {
+          k: "back-cover",
           t: "Back-row movement still follows the attack",
           roles: ["OH1", "OH2", "L"],
           d: "The arrows show where back-row players end up (libero zone 5, outside zone 6). Cover the hitter first, then finish the movement after the attack.",
         },
         {
+          k: "opposite",
           t: "The opposite moves directly to position 1",
           roles: ["OP"],
           d: "In R4 to R6 the opposite goes straight to zone 1 after the pass for the back-row attack. Take off behind the 3 m line.",
@@ -3748,6 +3691,11 @@
       THUMB.forEach((t) => {
         t.d = lab(t.d);
       });
+      // Hints cite a rule of thumb by key, so its number follows the list order.
+      function thumbRef(key) {
+        const n = THUMB.findIndex((t) => t.k === key) + 1;
+        return feature("learn-guides") ? `Remember rule ${n} of the Rules of thumb` : "Remember";
+      }
       function ruleText(x) {
         const off = rulesMode === "official";
         const T = {
@@ -3764,6 +3712,12 @@
           "@LRULES": off
             ? `${LIBERO_RULE} ${FINGER_SET.replace("you set", "the libero sets")}`
             : "",
+          "@THUMB_MIDDLES_T": off
+            ? "The libero replaces the back-row middle"
+            : "MB plays the front middle, L the back middle",
+          "@THUMB_MIDDLES_D": off
+            ? "The libero goes on for whichever middle is in the back row: MB2 in R1, R2 and R6, MB1 in R3, R4 and R5, only while the ball is out of play. The libero may never serve. So in R3 and R6 that middle is in zone 1, serves and stays on until your team loses the serve; the libero comes back on for the reception (FIVB 19.3)."
+            : "A training convention for one middle, not in the guide. MB always plays the front-row middle and the libero the back-row middle. Into R3 and R6 the pair resets: MB walks along the net from zone 2 to zone 4, L across the back from zone 5 to zone 1. The libero may never serve, so in R3 and R6 a substitute (SUB) serves and defends zone 6 until your team loses the serve.",
           "@OHSERVE": `When we serve: front → middle of zone 4; back → defend zone 6 (zone 5 in R3 and R6, when ${off ? "a middle" : "SUB"} serves).`,
         };
         return lab(x in T ? T[x] : x);
@@ -3775,7 +3729,7 @@
         }).join("");
         const thumbs = THUMB.map(
           (t, i) =>
-            `<li${t.roles.includes(role) ? ' class="mine"' : ""}><b>${t.t}</b>${t.roles.includes(role) ? ' <span class="tag">your rule</span>' : ""}<br>${t.d}</li>`,
+            `<li${t.roles.includes(role) ? ' class="mine"' : ""}><b>${ruleText(t.t)}</b>${t.roles.includes(role) ? ' <span class="tag">your rule</span>' : ""}<br>${ruleText(t.d)}</li>`,
         ).join("");
         $("sheet").innerHTML = `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role]
           .map(ruleText)
@@ -4737,13 +4691,14 @@
         }
         if (st.phase === "ar") {
           if (me.kind === "set") return "You are the setter: where do you set from?";
-          if (me.kind === "back") return "You are the back-row opposite. Remember rule 4.";
+          if (me.kind === "back")
+            return `You are the back-row opposite. ${thumbRef("opposite")}: go straight to zone 1 and take off behind the 3 m line.`;
           if (me.kind === "front")
             return G.role.startsWith("MB")
               ? "You are front-row middle: you attack. Which lane?"
-              : "You attack. Remember rule 2: the front-row outside starts left, except when the setter is in 1.";
+              : `You attack. ${thumbRef("outside-left")}: the front-row outside starts left, except when the setter is in 1.`;
           return G.role === "L"
-            ? "You don't attack: cover the hitter, then take your defensive spot. Remember rule 3."
+            ? `You don't attack: cover the hitter, then take your defensive spot. ${thumbRef("back-cover")}.`
             : "You are back row and don't attack now: cover the attack. The libero takes left back.";
         }
         return `When we serve there is no overlap rule, so everyone except the server stands in base defence before the serve: the front row in the middle of its zones, the back row deep. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;
@@ -6387,10 +6342,6 @@
       renderRefLabels();
       $("fb").innerHTML = HINT;
       renderRoles();
-      if (feature("learn-guides")) {
-        $("howTo").open = !store.get("howToSeen", false);
-        store.set("howToSeen", true);
-      }
       renderLearn();
       renderSets();
       applyFeatures();

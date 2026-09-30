@@ -274,6 +274,30 @@ def check_libero_hint(browser: Browser) -> None:
     print("libero hint: Simplified names SUB, Official the libero rule", flush=True)
 
 
+def check_hint_rule_numbers(browser: Browser) -> None:
+    """A Match hint that cites a rule of thumb by number points to that rule in the Learn list."""
+    cases = (("OH1", 0, "outside hitter starts left"), ("L", 0, "Back-row movement"), ("OP", 3, "opposite moves"))
+    for rules in ("simple", "official"):
+        for role, rotation, title in cases:
+            page = new_page(browser, rules=rules)
+            setup_match(page, role, ("ar",), sets=False)
+            page.click("#gStart")
+            for _ in range(rotation):
+                page.wait_for_selector("#gOff:enabled")
+                tap_at(page, 0.5, 0.5)
+                press_next(page)
+                press_next(page)
+            page.wait_for_selector("#gOff:enabled")
+            page.click("#gHelp")
+            hint = page.inner_text("#gFb")
+            cited = re.search(r"rule (\d+) of the Rules of thumb", hint)
+            titles: list[str] = page.eval_on_selector_all("#thumbs li > b", "els => els.map(e => e.textContent)")
+            if not cited or title not in titles[int(cited[1]) - 1]:
+                fail(f"{rules} {role} R{rotation + 1} hint {hint!r} does not cite {title!r} in {titles}")
+            page.close()
+    print("hint rule numbers: each cited rule of thumb is the right one", flush=True)
+
+
 def check_match_order(browser: Browser) -> None:
     """In order, one rotation runs Rotate, Our serve, Receive, After reception, with a story for each."""
     page = new_page(browser)
@@ -633,6 +657,7 @@ def main() -> None:
         check_off_court_pill(browser)
         check_match_order(browser)
         check_libero_hint(browser)
+        check_hint_rule_numbers(browser)
         check_set_calls(browser)
         check_tap_then_continue(browser)
         check_breakdown(browser)
