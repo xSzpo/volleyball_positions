@@ -500,3 +500,27 @@ them after deploy; each entry says what to change to reverse it.
 - **Replaces:** 7 (the chip shows only the role code) and 8 (the modal bottom sheet).
 - **Alternatives:** keep the sheet and only make the chip bigger; list the rules first; keep the list open after a rules pick; shrink the title to keep one header line.
 - **Reversible by:** the `#setup` markup in the header, `.rolechip`, `.menu` and `.role` CSS, and `renderSetupSummary()`/`setSetupOpen()` in `src/template.html`.
+
+### 62. "4" is the middle's low quick; "Po" and "Til" removed
+
+- **Issue:** #82
+- **Problem:** The guide's Front row sets page draws "4" landing just in front of the setter with a steep, high arc, and also draws "Po" and "Til". The app inferred "4" as a high set and marked "4" and "Po" "(not confirmed)". A web search (Danish and English) found no source for "Po" or "Til".
+- **Decision:** Owner input, 2026-09-30: "4" is the middle's short, low quick in front of the setter, close to the net (x 0.56, peak 0.16). The owner does not know "Po" or "Til", and no Danish source names them, so both are removed from `SETS`, the Sets tab, the quiz and the set call check. Re-add them from the guide if the coach explains them (#16, question 7). `UNCONFIRMED_SETS` is empty; the mechanism stays for a future unconfirmed set. Stored data holds no set names; an online answer naming a removed set is dropped by `onClean()`.
+- **Alternatives:** keep "Po" and "Til" from the guide drawing, marked "(not confirmed)"; keep "4" as the guide draws it.
+- **Reversible by:** adding the rows back to `SETS` in `src/data.py` (with a name in `UNCONFIRMED_SETS` to keep it out of match questions).
+
+### 63. Back-row sets A, B and C
+
+- **Issue:** #82
+- **Problem:** The owner named three back-row sets that the guide does not show: A to zone 1, B to zone 6 (the pipe) and C to zone 5. The Sets net diagram is a front view, so it cannot show depth.
+- **Decision:** A new `back` family (`--set-back`, teal `#0f766e` light and `#4fd1c5` dark, at least 4.5 on `--panel`, checked by `theme_test.py`). Seen from our side, C lands at x 0.17, B at 0.50 and A at 0.83, each with a peak of about 0.62-0.66 (a medium-high ball). They are drawn dashed with a hollow landing dot, and their chips have a dashed border; the text says they land behind the 3 m line.
+- **Alternatives:** draw them below the net as if closer to the viewer; a second, top-down diagram for back sets.
+- **Reversible by:** the `back` rows in `SETS` in `src/data.py`, and `FAMCOL`, `FAMNAME`, `.setchip.back` and the dashed path in `netSvg()` in `src/template.html`.
+
+### 64. Set call check lanes
+
+- **Issue:** #82
+- **Problem:** With "Po" and "Til" gone the middle lane had only Shoot and "4", and back-row attackers were asked any set.
+- **Decision:** `setQ()` keeps asking from each set's family and landing: zone 4 is asked 1, 0 or 2; the middle Shoot or 4; zone 2 7 or 6. A back-row attacker (`ar` kind `back`) is asked the back set of the third it attacks from (zone 1 → A, zone 6 → B, zone 5 → C), with the prompt "The setter sets this ball for you." In the current data only OP attacks from the back row (zone 1, R4-R6), so only A is asked there; B and C are in the setter's and the other players' questions and the quiz. There are always four options: the asked set, one from its family, and two others from the ten sets.
+- **Alternatives:** ask back-row attackers all three back sets; ask the middle 4 only.
+- **Reversible by:** `setLane()`, `third()` and `setQ()` in `src/template.html`.

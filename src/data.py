@@ -348,22 +348,24 @@ ROWS: list[Row] = [
     ),
 ]
 
-# Front row sets (KSV guide p.10). x: 0 = left antenna, 1 = right antenna. peak: relative height.
+# Front row sets (KSV guide p.10) and the club's back-row sets A, B, C (not in the guide).
+# x: 0 = left antenna, 1 = right antenna, seen from our side. peak: relative height.
 SETTER_X = 0.64
 SETS: list[tuple[str, float, float, str, str]] = [
     ("1", 0.02, 1.00, "left", "High ball to the left antenna (zone 4). Most time for the attacker."),
     ("0", 0.02, 0.52, "left", "Lower, faster ball to the left antenna."),
     ("2", 0.18, 0.46, "left", "Medium-fast ball landing about 1.5 m inside the left antenna."),
     ("Shoot", 0.36, 0.30, "mid", "Flat, fast ball between zone 4 and the middle."),
-    ("4", 0.56, 0.72, "mid", "Higher ball just in front of the setter. More time for the middle."),
-    ("Po", 0.56, 0.30, "mid", "Low quick just in front of the setter."),
-    ("Til", 0.75, 0.22, "right", "Short quick just behind the setter."),
+    ("4", 0.56, 0.16, "mid", "The middle's quick: short, low ball just in front of the setter, close to the net."),
     ("7", 0.97, 0.50, "right", "Lower, faster back set to the right antenna."),
     ("6", 0.97, 0.92, "right", "High back set to the right antenna (zone 2)."),
+    ("A", 0.83, 0.62, "back", "Back-row attack from zone 1 (right back), behind the 3 m line."),
+    ("B", 0.50, 0.66, "back", "Back-row attack from zone 6 (middle back, the pipe), behind the 3 m line."),
+    ("C", 0.17, 0.62, "back", "Back-row attack from zone 5 (left back), behind the 3 m line."),
 ]
 
-# Inferred from the guide's drawings only; left out of match questions until the coach confirms them.
-UNCONFIRMED_SETS: list[str] = ["Po", "4"]
+# Sets the guide does not confirm: left out of match questions and marked on the Sets tab.
+UNCONFIRMED_SETS: list[str] = []
 
 RulesMode = Literal["simple", "official"]
 RULES_MODES: tuple[RulesMode, ...] = ("simple", "official")

@@ -45,6 +45,7 @@ PORTS = (9000, 9099)
 NB_GRACE_MS = 5000
 LIVE, STALE, FRESH = "111111", "000042", "000043"
 EVIL_UID = "EvilEvilEvilEvilEvilEvil0000"
+OLD_UID = "OldOldOldOldOldOldOldOld0000"
 LABELS = {"perfect": "Spot on", "close": "Close enough", "miss": "Not there", "none": "No answer"}
 
 
@@ -843,8 +844,11 @@ def set_calls(browser: Browser, url: str, emulator_db: str, errors: list[str]) -
     host.click("#rNext")
     evil = {"name": "Evil", "role": "S", "color": "#123456", "joinedAt": 1000, "online": False}
     admin(emulator_db, "PUT", f"rooms/{code}/players/{EVIL_UID}", evil)
-    fake = {"q": "miss", "pts": 0, "done": True, "set": {"ask": "<img>", "pick": "Til", "ok": True}}
+    fake = {"q": "miss", "pts": 0, "done": True, "set": {"ask": "<img>", "pick": "Shoot", "ok": True}}
     admin(emulator_db, "PUT", f"rooms/{code}/answers/1/{EVIL_UID}", fake)
+    admin(emulator_db, "PUT", f"rooms/{code}/players/{OLD_UID}", {**evil, "name": "Old"})
+    removed = {"q": "miss", "pts": 0, "done": True, "set": {"ask": "Shoot", "pick": "Til", "ok": False}}
+    admin(emulator_db, "PUT", f"rooms/{code}/answers/1/{OLD_UID}", removed)
     for page, role in ((host, "OP"), (guest, "S")):
         page.wait_for_selector("#gOff:enabled", timeout=20000)
         tap_spot(page, role, 1, "ar")
@@ -855,11 +859,13 @@ def set_calls(browser: Browser, url: str, emulator_db: str, errors: list[str]) -
     set_answer_saved(guest, next(o for o in guest.locator("#gsc .setchip").all_inner_texts() if o != asked_set(guest)))
     guest.wait_for_selector("#gReveal", state="visible", timeout=10000)
     rows = {
-        name: next(r for r in guest.locator("#rList li").all_inner_texts() if name in r) for name in ("Anna", "Evil")
+        name: next(r for r in guest.locator("#rList li").all_inner_texts() if name in r)
+        for name in ("Anna", "Evil", "Old")
     }
     assert f"Set call: {wrong} ✗, it is {host_set} +0" in rows["Anna"], f"attacker's set call row: {rows['Anna']!r}"
     assert "Set call:" not in rows["Evil"], f"a made-up set name is shown: {rows['Evil']!r}"
-    print("wrong set call shown with the right one; made-up set names are dropped")
+    assert "Set call:" not in rows["Old"], f"a removed set name is shown: {rows['Old']!r}"
+    print("wrong set call shown with the right one; made-up and removed set names are dropped")
     for page in (host, guest):
         page.context.close()
 

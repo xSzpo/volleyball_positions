@@ -515,7 +515,7 @@ def sweep_match(pg: Page, tag: str, combos: list[tuple[str, ...]], quick: bool) 
 def sweep_sets(pg: Page, tag: str) -> None:
     section("SETS")
     pg.click("#tabSets")
-    for s_ in ["1", "0", "2", "Shoot", "4", "Po", "Til", "7", "6"]:
+    for s_ in ["1", "0", "2", "Shoot", "4", "7", "6", "A", "B", "C"]:
         pg.click(f'#setchips button[data-s="{s_}"]')
     for _ in range(12):
         btns = pg.locator("#setanswers button:enabled")
