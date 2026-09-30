@@ -673,7 +673,7 @@ def check_reception_ends(page: Page) -> None:
             # The setter may wait for an attacker who starts in front of the set spot to get out of the way, and the
             # front middle for the setter's run across its way to the front zone; it still takes off as the pass lands.
             waits = {
-                p: 1000 if kind[p] == "set" else 1500 if p in row["front"] and p.startswith("MB") else 0
+                p: 1000 if kind[p] == "set" else 1300 if p in row["front"] and p.startswith("MB") else 0
                 for p in release
             }
             if any(stages[0]["delays"][p] > waits[p] for p in release):

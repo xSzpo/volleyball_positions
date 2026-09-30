@@ -1269,7 +1269,7 @@ def check_receive_limits(browser: Browser) -> None:
 
 
 def check_middle_route(browser: Browser) -> None:
-    """Match Attack feedback: the front middle's route never reaches the 3 m line, the back-row hitter's lane."""
+    """Match Attack feedback: the front middle's route never reaches the 3 m line, and its dashed approach shows."""
     checked = 0
     for rules in RULES_MODES:
         for role in MIDDLE_ROLES[rules]:
@@ -1293,10 +1293,21 @@ def check_middle_route(browser: Browser) -> None:
                     fail(
                         f"attack route {rules} {role} R{ri + 1}: the middle's route reaches y {max(ys, default=0):.1f}"
                     )
+                dashes: list[float] = page.eval_on_selector_all(
+                    f'#courtG g.rt[data-p="{role}"] line.route[stroke-dasharray]',
+                    "els => els.map(l => Math.hypot(l.x2.baseVal.value - l.x1.baseVal.value,"
+                    " l.y2.baseVal.value - l.y1.baseVal.value))",
+                )
+                if len(dashes) != 1 or dashes[0] < 5:
+                    fail(f"attack route {rules} {role} R{ri + 1}: the dashed approach is {dashes} units long")
                 checked += 1
                 press_next(page)
             page.close()
-    print(f"Attack: the front middle's route stays in front of the 3 m line on {checked} courts", flush=True)
+    print(
+        f"Attack: the front middle's route stays in front of the 3 m line, its approach at least 5 units,"
+        f" on {checked} courts",
+        flush=True,
+    )
 
 
 MIDDLE_ROLES = {"simple": ("MB",), "official": ("MB1", "MB2")}

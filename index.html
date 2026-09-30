@@ -2414,7 +2414,8 @@
       // ---------- court drawing ----------
       const W = 100,
         H = 100,
-        MARKER_R = 6;
+        MARKER_R = 6,
+        APPROACH_SHOWN = 6;
       const ROLE_KEY = {
         S: "s",
         OP: "op",
@@ -2507,22 +2508,14 @@
       }
       // The quick: out to the middle of the front zone (solid), then the dashed approach to the take-off. Legs that double back run side by side.
       function quickRoute(r, o, mine) {
-        const [rx, ry, tx, ty, ox, oy] = [
-          r[0] * W,
-          r[1] * H,
-          o.turn.x * W,
-          o.turn.y * H,
-          o.x * W,
-          o.y * H,
-        ];
-        const l1 = Math.hypot(tx - rx, ty - ry) || 1,
-          l2 = Math.hypot(ox - tx, oy - ty) || 1;
-        const [u1x, u1y, u2x, u2y] = [
-          (tx - rx) / l1,
-          (ty - ry) / l1,
-          (ox - tx) / l2,
-          (oy - ty) / l2,
-        ];
+        const [rx, ry, ox, oy] = [r[0] * W, r[1] * H, o.x * W, o.y * H];
+        const l2 = Math.hypot(ox - o.turn.x * W, oy - o.turn.y * H) || 1;
+        const [u2x, u2y] = [(ox - o.turn.x * W) / l2, (oy - o.turn.y * H) / l2];
+        // The take-off marker covers most of a short approach, so the turn moves back along it to keep the dashes visible.
+        const reach = Math.max(l2, MARKER_R + 0.5 + APPROACH_SHOWN);
+        const [tx, ty] = [ox - u2x * reach, oy - u2y * reach];
+        const l1 = Math.hypot(tx - rx, ty - ry) || 1;
+        const [u1x, u1y] = [(tx - rx) / l1, (ty - ry) / l1];
         const side = u1x * u2x + u1y * u2y < -0.8 ? 1.8 : 0;
         const [nx, ny] = [-u1y * side, u1x * side];
         let s = "";
