@@ -2952,10 +2952,34 @@
       }
       $("roleChip").onclick = () => setSetupOpen($("setup").hidden);
       const inMenu = (el) => $("setup").contains(el) || $("roleChip").contains(el);
-      document.addEventListener("pointerdown", (e) => {
-        if (!$("setup").hidden && !inMenu(e.target))
+      let swallow = null;
+      function swallowTap() {
+        const stop = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if (e.type === "click") endSwallow();
+        };
+        swallow = stop;
+        document.addEventListener("pointerup", stop, true);
+        document.addEventListener("click", stop, true);
+      }
+      function endSwallow() {
+        if (!swallow) return;
+        document.removeEventListener("pointerup", swallow, true);
+        document.removeEventListener("click", swallow, true);
+        swallow = null;
+      }
+      document.addEventListener(
+        "pointerdown",
+        (e) => {
+          endSwallow();
+          if ($("setup").hidden || inMenu(e.target)) return;
           setSetupOpen(false, $("setup").contains(document.activeElement));
-      });
+          // The tap that closes the list must not also answer on a court or press a button.
+          swallowTap();
+        },
+        true,
+      );
       document.addEventListener("focusin", (e) => {
         if (!$("setup").hidden && !inMenu(e.target)) setSetupOpen(false, false);
       });

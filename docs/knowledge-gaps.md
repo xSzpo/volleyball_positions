@@ -52,7 +52,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** a darker halo under L only, or a dark outline on the L route.
 - **Reversible by:** changing `--route-l` in the light `:root` block of `src/template.html` (`theme_test.py` checks the ratio).
 
-### 7. What the header role chip shows
+### 7. What the header role chip shows (replaced by 60)
 
 - **Issue:** #18
 - **Problem:** The plan puts the role in a header chip but does not say whether the rules mode stays visible once the summary bar is gone.
@@ -60,7 +60,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** `OH1 · Drill` on the chip, or hide the chip on Sets.
 - **Reversible by:** `renderSetupSummary()` in `src/template.html`.
 
-### 8. How the role sheet behaves
+### 8. How the role sheet behaves (replaced by 60)
 
 - **Issue:** #18
 - **Problem:** The plan says the sheet opens on the first visit with one job and closes on a pick, but not how it closes later or whether the rules switch shows the first time.
@@ -491,10 +491,12 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** A stage lasts as long as its ball flies, plus 150 ms for the next contact: their serve 1 s, the pass at least 1 s (longer only until the setter reaches the set spot, R1 about 1.05 s), the set until the hitter arrives. The middle starts its quick approach so it reaches take-off as the pass lands (#70 kept). A run longer than its stage carries on into the next stages; the player's next move starts when it ends, and the planner avoids it. The 900 ms hold comes only after the last stage, when the ball is over the net. A detour stays in front of y 0.85 unless the run starts or ends deeper, so L crosses in front of the passer and stays in front of y 0.85. A trail shows through its stage and while its run carries on. Reception now takes about 5 to 7 s at 1×. The caption shows only your own line and changes when you get a new one; each line stays at least 2.5 s of play (5 s at 0.5×), a line due earlier waits, and lines still waiting at the end are dropped. After the play fades back, the reception cue stays and a numbered "Then:" list gives your four stage lines.
 - **Alternatives:** keep a hold between stages with the ball frozen in the air; have the passer (deep OH) move first and L go behind; slow every flight to fit the longest run; slow the play to the caption pace instead of pacing the captions.
 - **Reversible by:** `buildReception()` (`CONTACT_MS`, `PASS_MS`, the carry), `planStage()` (`carry`, `arrive`), `DEEP_LIMIT` in `detours()`, the trail fade in `paintAnim()`, and `CAPTION_MS`, `captionPlan()` and `restList` in `src/template.html`.
+
 ### 60. Role and rules as a dropdown list under the header button
 
 - **Issue:** #76
 - **Problem:** The owner: "rules and position selection should be to select from the top corner and should be more visible, should be as a unrolled list not as a pop up." The role chip showed only the role code and opened a modal bottom sheet with a backdrop.
-- **Decision:** Read "top corner" as the header's top-right button and "unrolled list" as a dropdown anchored under it, with no backdrop and no inert page. The button has the accent fill and reads the role name and the rules mode on one line ("Outside 1 · Simplified ▾"). The list shows the roles one per line with a colour swatch and a tick on yours, then the Rules switch with a one-line note (the long Simplified and Official explanations are shortened; the full wording stays in Rules of thumb). A role or rules pick closes the list at once, as do a tap outside, Escape, a second tap and Tab past the list; the Done button is gone. The title now wraps to two lines on a 390 px phone, so the header is about 18 px taller.
+- **Decision:** Read "top corner" as the header's top-right button and "unrolled list" as a dropdown anchored under it, with no backdrop and no inert page. The button has the accent fill and reads the role name and the rules mode on one line ("Outside 1 · Simplified ▾"). The list shows the roles one per line with a colour swatch and a tick on yours, then the Rules switch with a one-line note (the long Simplified and Official explanations are shortened; the full wording stays in Rules of thumb). A role or rules pick closes the list at once, as do a tap outside (which then does nothing else, so it cannot answer on a court), Escape, a second tap and Tab past the list; the Done button is gone. The title now wraps to two lines on a 390 px phone, so the header is about 18 px taller.
+- **Replaces:** 7 (the chip shows only the role code) and 8 (the modal bottom sheet).
 - **Alternatives:** keep the sheet and only make the chip bigger; list the rules first; keep the list open after a rules pick; shrink the title to keep one header line.
 - **Reversible by:** the `#setup` markup in the header, `.rolechip`, `.menu` and `.role` CSS, and `renderSetupSummary()`/`setSetupOpen()` in `src/template.html`.

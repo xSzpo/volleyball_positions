@@ -180,6 +180,47 @@ def check_short_phone(page: Page) -> None:
     page.set_viewport_size({"width": 390, "height": 844})
 
 
+def court_point(page: Page, court: str) -> tuple[float, float]:
+    """A point on the court, above the off court pill and below the open role list."""
+    box = page.locator(court).bounding_box()
+    menu = page.locator("#setup").bounding_box()
+    assert box is not None and menu is not None
+    top = max(box["y"], menu["y"] + menu["height"] + 10)
+    return box["x"] + box["width"] * 0.5, (top + box["y"] + box["height"] * 0.85) / 2
+
+
+def tap_court_with_list_open(page: Page, court: str) -> None:
+    page.locator(court).scroll_into_view_if_needed()
+    open_setup(page)
+    x, y = court_point(page, court)
+    page.mouse.click(x, y)
+
+
+def check_outside_tap(page: Page) -> None:
+    """A tap on the Drill or Match court that closes the role list does not answer."""
+    open_app(page, "?ff=all&anim=0", {"role": "OH1"})
+    page.click("#tabDrill")
+    stats = page.evaluate("localStorage.getItem('ksv51:stats2')")
+    tap_court_with_list_open(page, "#courtD")
+    if page.is_visible("#setupPanel"):
+        fail("Drill: a tap on the court did not close the role list")
+    if page.is_visible("#nextBtn") or page.evaluate("localStorage.getItem('ksv51:stats2')") != stats:
+        fail("Drill: the tap that closed the role list also answered")
+    page.click("#tabGame")
+    page.click("#gStart")
+    tap_court_with_list_open(page, "#courtG")
+    if page.is_visible("#setupPanel"):
+        fail("Match: a tap on the court did not close the role list")
+    if page.is_enabled("#gNext"):
+        fail("Match: the tap that closed the role list also placed your spot")
+    open_setup(page)
+    x, y = court_point(page, "#courtG")
+    close_setup(page)
+    page.mouse.click(x, y)
+    if not page.is_enabled("#gNext"):
+        fail("Match: the next court tap after closing the role list did not place your spot")
+
+
 def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -191,6 +232,7 @@ def main() -> None:
         check_switch(page)
         check_learn(page)
         check_short_phone(page)
+        check_outside_tap(page)
         if errors:
             fail(f"JS errors: {json.dumps(errors[:3])}")
         browser.close()
