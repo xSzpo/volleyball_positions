@@ -2322,7 +2322,7 @@
         rec: `These limits count at the whistle, not during the pass. ${WHISTLE_MOVE}`,
       };
       const LIBERO_RULE =
-        "Libero rules (FIVB 19.3): the libero replaces only a back-row player and may not serve, block, or attack a ball above the net. A completed rally must come between two replacements.";
+        "Libero rules (FIVB 19.3): the libero replaces only a back-row player, only while the ball is out of play and before the whistle for the serve. The libero may not serve, block or try to block, or attack a ball above the net. A completed rally must come between two replacements.";
       const FINGER_SET =
         "If you set with fingers from the front zone, nobody may attack that ball above the net.";
       const SERVE_RULE =
@@ -2718,7 +2718,7 @@
       const FEATURES = {
         "learn-tab": true,
         "learn-animation": true,
-        "rules-official": false,
+        "rules-official": true,
         "learn-guides": true,
         "rotations-table": true,
         "drill-tab": true,
@@ -2888,7 +2888,6 @@
       window.ksvLearn = {
         describe: (ri, phase, r) => describe(ri, phase, r),
         players: (ri, phase) => players(ri, phase),
-        cue: () => $("cue").innerText,
         captions: (ri, phase, r) =>
           phaseStages(ri, phase).stages.map((st) => stageCaption(st, r).replace(/<[^>]+>/g, "")),
         still: (ri, phase, r) => stageCaption(stillStage(ri, phase), r).replace(/<[^>]+>/g, ""),

@@ -8,7 +8,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #17
 - **Problem:** `docs/v2.md` says unbuilt features default to off, but not what the working v1 features default to, nor what the live site shows while every PostHog flag is off.
-- **Decision:** The built-in defaults are on for every v1 feature that works today and off for `learn-animation`, `rules-official` and `after-dig`, so `file://` and the tests behave as v1. On `xszpo.github.io` the PostHog values replace the defaults, so with every flag off the live site shows only the shell and an empty state.
+- **Decision:** The built-in defaults are on for every v1 feature that works today and off for `learn-animation`, `rules-official` and `after-dig`, so `file://` and the tests behave as v1. *Superseded for `learn-animation` by #23 and for `rules-official` by #36.* On `xszpo.github.io` the PostHog values replace the defaults, so with every flag off the live site shows only the shell and an empty state.
 - **Alternatives:** default everything off (tests and `file://` would need `?ff=all`), or let the defaults win until a flag is switched on.
 - **Reversible by:** changing the values in `FEATURES` in `src/template.html`, or switching the PostHog flags on.
 
@@ -252,7 +252,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** With no animation between screens, the libero and substitute exchanges and the Simplified middle pair reset into R3 and R6 no longer show as moves, and Our serve must start and end on its still picture.
 - **Decision:** The at-rest caption keeps them: when a screen follows an exchange or a reset, the player involved reads the old walk caption ("Go off at the sideline: the libero may not serve.", "Walk across the back from zone 5 to zone 1: the middle pair resets."), and everyone else reads it with that player's name. Otherwise it is your `move` note for the phase; Rotation has no caption. The rotate step and its caption are gone. This replaces the other stages of #20 and the `EXIT` walk of #21.
 - **Alternatives:** put the exchange text in the explanation below the court.
-- **Reversible by:** `stillNotes()` and `phaseStages()` in `src/template.html`.
+- **Reversible by:** `stillStage()` and `phaseStages()` in `src/template.html`.
 
 ### 32. The server stands behind the end line in the Our serve picture
 
@@ -285,3 +285,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** In Official, the explanation under the court adds the 19.3 text on every screen that follows a libero exchange: Rotation and Reception in R3 and R6. The libero's rules to remember carry it with the finger-set rule, and the libero's After reception text adds "If you set with fingers from the front zone, nobody may attack that ball above the net." Simplified shows none of it: there SUB is a training substitute.
 - **Alternatives:** on every Official screen; in the caption as a third line; in Simplified too.
 - **Reversible by:** `LIBERO_RULE`, `FINGER_SET` and `@LRULES` in `src/template.html`.
+
+### 36. rules-official on by default
+
+- **Issue:** #22
+- **Problem:** #1 kept `rules-official` off by default until Official was finished. #22 finishes it.
+- **Decision:** The built-in default of `rules-official` is on, as `learn-animation` in #23; the PostHog flag stays off until the owner checks it on a phone. Simplified stays the default rule set; Official is one tap away in the role sheet. #11 still applies when the flag is off.
+- **Alternatives:** keep the default off until the coach answers questions 1 and 5 on #16.
+- **Reversible by:** `FEATURES["rules-official"]` in `src/template.html`.

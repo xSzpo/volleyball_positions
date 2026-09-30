@@ -250,8 +250,12 @@ def check_official_walkthrough(page: Page) -> None:
     rows = walkthrough_rows()
     if len(rows) != 6:
         fail(f"Official walk-through has {len(rows)} rows")
-    for ri, (_, rotation, serve, reception, after) in enumerate(rows):
+    for ri, cells in enumerate(rows):
         tag = f"Official walk-through {ROTATION_NAMES[ri]}"
+        if len(cells) != 5:
+            fail(f"{tag}: {len(cells)} columns, expected Rot, Rotation step, Our serve, Reception, After reception")
+            continue
+        _, rotation, serve, reception, after = cells
         at: dict[str, list[dict[str, Any]]] = {
             ph: page.evaluate(f"window.ksvLearn.players({ri}, '{ph}')") for ph in PHASES
         }
@@ -286,8 +290,31 @@ def check_official_walkthrough(page: Page) -> None:
             fail(f"{tag}: OP is {kinds.get('OP')!r} after reception; the table says {after!r}")
 
 
+def us_libero_rule(text: str) -> bool:
+    """True when a text lets the libero serve, or go off and come straight back in (US rules)."""
+    if re.search(r"straight back|right back on", text, re.IGNORECASE):
+        return True
+    for clause in re.split(r"[.;:]", re.sub(r"^You \(\w+\):", "", text)):
+        serves = re.search(r"\b(libero|L)\b(?:\W+\w+){0,3}?\W+serv", clause, re.IGNORECASE)
+        if serves and not re.search(r"\b(not|never|cannot)\b.*\bserv", serves[0], re.IGNORECASE):
+            return True
+    return False
+
+
 def check_official_libero(page: Page) -> None:
     """Official libero rules: no US libero rules, the 19.3 text on exchange screens and the finger-set rule."""
+    for text, want in (
+        ("You (L): Serve, then run to zone 6.", False),
+        ("L serves from zone 1.", True),
+        ("The libero serves in R3.", True),
+        ("Go off, then come straight back in.", True),
+        ("Go off at the sideline: the libero may not serve.", False),
+        ("When they serve, the libero is in for you.", False),
+        ("The libero is in for you while your team serves.", False),
+        ("The libero may also serve here.", True),
+    ):
+        if us_libero_rule(text) != want:
+            fail(f"us_libero_rule({text!r}) is {not want}")
     open_app(page, {"role": "L", "rulesMode": "official"})
     order = [(ri, ph) for ri in range(6) for ph in PHASES]
     was_on = None
@@ -306,9 +333,8 @@ def check_official_libero(page: Page) -> None:
         MODES["official"],
     )
     texts.append(page.inner_text("#sheet"))
-    us_rule = re.compile(r"libero (serves|may serve|can serve)|straight back in", re.IGNORECASE)
     for text in texts:
-        if us_rule.search(text):
+        if us_libero_rule(text):
             fail(f"Official text teaches a US libero rule: {text!r}")
     if "FIVB 19.3" not in page.inner_text("#sheet"):
         fail("Official libero rules to remember lack the 19.3 rule")

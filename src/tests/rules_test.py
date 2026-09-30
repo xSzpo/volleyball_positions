@@ -77,20 +77,26 @@ def learn(page: Page, rotation: int, phase: str) -> None:
 
 
 def check_defaults(page: Page) -> None:
-    """Built-in flags: Simplified only, even when Official or Drill was stored."""
+    """Built-in flags: Simplified by default with Official on offer; rules-official off keeps a stored Official."""
+    for stored, want in ((None, "simple"), ("drill", "simple"), ("official", "official")):
+        open_app(page, "", {"role": "OH1"} | ({"rulesMode": stored} if stored else {}))
+        if checked_rules(page) != want:
+            fail(f"defaults, stored {stored}: rules read as {checked_rules(page)}, expected {want}")
+        if not page.evaluate("!!document.getElementById('rmOfficial')"):
+            fail(f"defaults, stored {stored}: the Official button is missing with rules-official on")
     for stored in ("official", "drill"):
-        open_app(page, "", {"role": "OH1", "rulesMode": stored})
+        open_app(page, "?ff=-rules-official", {"role": "OH1", "rulesMode": stored})
         if checked_rules(page) != "simple":
-            fail(f"defaults, stored {stored}: rules read as {checked_rules(page)}")
+            fail(f"rules-official off, stored {stored}: rules read as {checked_rules(page)}")
         if page.evaluate("!!document.getElementById('rmOfficial')"):
-            fail(f"defaults, stored {stored}: the Official button is in the DOM with rules-official off")
+            fail(f"rules-official off, stored {stored}: the Official button is in the DOM")
         if picker(page) != SIMPLE_ROLES:
-            fail(f"defaults: role picker is {picker(page)}")
-    open_app(page, "", {"role": "MB2", "rulesMode": "official"})
+            fail(f"rules-official off: role picker is {picker(page)}")
+    open_app(page, "?ff=-rules-official", {"role": "MB2", "rulesMode": "official"})
     if page.inner_text("#roleChip").strip() != "MB":
-        fail(f"defaults: stored MB2 shows as {page.inner_text('#roleChip')!r}, expected MB")
+        fail(f"rules-official off: stored MB2 shows as {page.inner_text('#roleChip')!r}, expected MB")
     if page.evaluate("JSON.parse(localStorage.getItem('ksv51:rulesMode'))") != "official":
-        fail("defaults: a stored Official choice was overwritten while the flag is off")
+        fail("rules-official off: a stored Official choice was overwritten")
 
 
 def check_switch(page: Page) -> None:
