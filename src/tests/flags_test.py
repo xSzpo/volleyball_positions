@@ -288,7 +288,7 @@ def check_posthog(browser: Browser) -> None:
     if not present(page, "drill") or present(page, "sets"):
         fail("posthog: flags applied after the first touch")
     stored = json.loads(page.evaluate("localStorage.getItem('ksv51:flags')"))
-    if not stored["sets-tab"] or stored["drill-tab"] or len(stored) != 15:
+    if not stored["sets-tab"] or stored["drill-tab"] or len(stored) != len(values(page)):
         fail(f"posthog: flags not stored: {stored}")
     page.reload()
     page.wait_for_function("!!(window.posthog && window.posthog.callback)")

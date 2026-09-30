@@ -17,7 +17,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
 
-from playwright.sync_api import Error, Page, ViewportSize, sync_playwright
+from playwright.sync_api import Browser, Error, Page, ViewportSize, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -430,6 +430,98 @@ def sweep_drill(pg: Page, tag: str, quick: bool) -> None:
     drill_steps(pg, tag + " after reset", 3)
 
 
+DRILL_STEP_NAME = {"start": "Rotation", "serve": "Our serve", "rec": "Reception", "ar": "Attack"}
+
+
+def drill_picked(pg: Page) -> list[str]:
+    return [
+        str(s) for s in pg.eval_on_selector_all('#dSteps [aria-pressed="true"]', "els => els.map(e => e.dataset.s)")
+    ]
+
+
+def check_drill_steps(browser: Browser, tag: str) -> None:
+    """The Drill steps picker: asks only the picked steps, is stored, keeps one step on and fits a 390 x 664 phone."""
+    section("DRILL steps picker")
+    ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
+    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    pg = ctx.new_page()
+    errs: list[str] = []
+    pg.on("pageerror", collect_errors(errs))
+    pg.goto(URL)
+    wait_ready(pg)
+    pg.click("#tabDrill")
+    if drill_picked(pg) != STEPS:
+        fail(f"{tag} drill steps default to {drill_picked(pg)}, not all")
+    labels = pg.eval_on_selector_all("#dSteps button", "els => els.map(e => e.textContent.trim())")
+    if labels != ["Rotate", "Our serve", "Receive", "Attack"]:
+        fail(f"{tag} drill step chips read {labels}")
+    pg.evaluate("window.scrollTo(0, 0)")
+    view = pg.evaluate("[innerWidth, innerHeight]")
+    boxes = pg.eval_on_selector_all(
+        "#dSteps button",
+        "els => els.map(e => { const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; })",
+    )
+    if len({round(b[1]) for b in boxes}) != 1:
+        fail(f"{tag} drill step chips wrap onto more than one row: {boxes}")
+    for x, y, w, h in boxes:
+        if w < 44 or h < 44 or x < 0 or x + w > view[0] or y + h > view[1]:
+            fail(f"{tag} drill step chip {x, y, w, h} under 44 px or off the {view} screen")
+    if pg.evaluate(
+        "[...document.querySelectorAll('#dSteps, #dSteps button')].some(e => e.scrollWidth > e.clientWidth)"
+    ):
+        fail(f"{tag} drill step chip text overflows its chip")
+    picker = pg.locator("#dSteps").bounding_box()
+    court = pg.locator("#courtD").bounding_box()
+    off = pg.locator("#offBtn").bounding_box()
+    assert picker and court and off
+    if picker["y"] + picker["height"] > court["y"] or picker["y"] + picker["height"] > off["y"]:
+        fail(f"{tag} drill steps picker {picker} covers the court {court} or the buttons {off}")
+    check_page(pg, f"{tag} drill steps")
+    for step in ["serve", "rec", "ar"]:
+        pg.click(f'#dSteps [data-s="{step}"]')
+    if drill_picked(pg) != ["start"] or pg.get_attribute('#dSteps [data-s="start"]', "aria-disabled") != "true":
+        fail(f"{tag} drill steps after switching three off: {drill_picked(pg)}")
+    if "Rotation" not in pg.inner_text("#dq"):
+        fail(f"{tag} the open question {pg.inner_text('#dq')!r} was not replaced by a Rotation one")
+    pg.click('#dSteps [data-s="start"]', force=True)
+    if drill_picked(pg) != ["start"]:
+        fail(f"{tag} the last drill step could be switched off: {drill_picked(pg)}")
+    for picked in (["start"], ["serve", "ar"]):
+        if picked != ["start"]:
+            for step in ["serve", "ar", "start"]:
+                pg.click(f'#dSteps [data-s="{step}"]')
+            if drill_picked(pg) != picked:
+                fail(f"{tag} could not pick drill steps {picked}: {drill_picked(pg)}")
+            weak = pg.inner_text("#weak")
+            if "No weak spots in the steps you picked." not in weak or pg.is_visible("#reviewBtn"):
+                fail(f"{tag} Rotation misses shown as weak spots for {picked}: {weak!r}")
+        asked = set()
+        for _ in range(20):
+            asked.add(pg.inner_text("#dq").split(" · ")[-1])
+            pg.click("#offBtn")
+            pg.click("#nextBtn")
+        if asked - {DRILL_STEP_NAME[s] for s in picked}:
+            fail(f"{tag} drill with {picked} asked {sorted(asked)}")
+        if picked == ["start"] and not pg.is_visible("#reviewBtn"):
+            fail(f"{tag} 20 Rotation misses gave no Review weak spots")
+    pg.click("#reviewBtn")
+    if not re.search(r"Review 1/\d · .* · (Our serve|Attack)$", pg.inner_text("#dq")):
+        fail(f"{tag} Review weak spots opened {pg.inner_text('#dq')!r}, not a picked step")
+    pg.reload()
+    wait_ready(pg)
+    pg.click("#tabDrill")
+    if drill_picked(pg) != ["serve", "ar"]:
+        fail(f"{tag} drill steps not restored from storage: {drill_picked(pg)}")
+    pg.evaluate("localStorage.setItem('ksv51:drillSteps', '[\"nope\", 3]')")
+    pg.reload()
+    wait_ready(pg)
+    if drill_picked(pg) != STEPS:
+        fail(f"{tag} a bad stored drill steps value gave {drill_picked(pg)}, not all")
+    if errs:
+        fail(f"{tag} drill steps JS errors: {errs[:3]}")
+    ctx.close()
+
+
 def match_combos(quick: bool, all_combos: bool) -> list[tuple[str, ...]]:
     """The step combinations to play: every single step, all steps and two picked with the seed."""
     every = [c for r in range(1, 5) for c in itertools.combinations(STEPS, r)]
@@ -581,6 +673,7 @@ def main() -> None:
         check_court_look(pg, tag, mobile)
         sweep_learn(pg, tag, args.quick)
         sweep_drill(pg, tag, args.quick)
+        check_drill_steps(b, tag)
         sweep_match(pg, tag, combos, args.quick)
         sweep_sets(pg, tag)
         check_persistence(pg, tag)
