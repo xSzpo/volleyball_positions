@@ -1,5 +1,6 @@
 """Playwright end-to-end test of same-device multiplayer in index.html."""
 
+import contextlib
 import random
 import re
 import sys
@@ -220,8 +221,10 @@ with sync_playwright() as p:
     assert pg.is_visible("#gPass"), "role change at the top ended the same-device match"
     pg.click("#pQuit")
     pg.reload()
-    pg.wait_for_timeout(300)
+    pg.wait_for_load_state("load")
     pg.click("#tabGame")
+    with contextlib.suppress(Exception):
+        pg.wait_for_function('document.querySelector(\'input[name="gPlayers"][value="mp"]\')?.checked', timeout=5000)
     assert pg.is_checked('input[name="gPlayers"][value="mp"]'), "same-device choice not remembered"
     assert pg.input_value('#mpList input[data-k="0"]'), "player names not remembered"
     # remove works after reload, when the list exists before the Rules switch is wired up

@@ -3347,6 +3347,8 @@
         APPROACH_Y = 0.17;
       // Where front-row players who switch sides pass behind the middle: the one going left runs deeper.
       const SWITCH_VIA = { right: { x: 0.45, y: 0.4 }, left: { x: 0.55, y: 0.53 } };
+      // A run to base this far across the centre line is captioned as a cross, not a step back.
+      const CROSS_DX = 0.3;
       // Guide rule 01: the two outside hitters and the libero receive. One passer per rotation, so each takes two.
       const RECEIVERS = ["OH1", "OH2", "L"];
       const PASSER = ["L", "OH2", "OH1", "L", "OH1", "OH2"];
@@ -3366,7 +3368,10 @@
             left
               ? "Approach and jump: the setter sets you in zone 4."
               : "Approach and jump in zone 4: in this rotation the opposite plays left.",
-          (z) => `Spike over the net, then back off to zone ${z} and defend.`,
+          (z, cross) =>
+            cross
+              ? `Spike over the net, then cross behind the middle to zone ${z}.`
+              : `Spike over the net, then back off to zone ${z} and defend.`,
         ],
         deepFront: "Come in to the middle and cover deep: a ball off the block can fly far.",
         deepBack: "Cover deep in the middle: a ball off the block can fly far.",
@@ -3377,10 +3382,16 @@
           `Set ${hitter} in zone 4, then follow in to cover ${hitter} close on the right.`,
         cupBack: (hitter) => `Cover ${hitter} close behind: dig a ball the block sends back.`,
         deep: "Cover deep behind the close cover: a ball off the block can fly far.",
-        base: (z, front) =>
+        base: (z, front, cross) =>
           front
-            ? `Back off the net to zone ${z}: block or defend the next ball.`
-            : `Go to zone ${z} and defend while they play the ball.`,
+            ? cross === "behind"
+              ? `Cross behind the middle to zone ${z}: block or defend the next ball.`
+              : cross
+                ? `Cross to zone ${z}: block or defend the next ball.`
+                : `Back off the net to zone ${z}: block or defend the next ball.`
+            : cross
+              ? `Cross the court to zone ${z} and defend while they play the ball.`
+              : `Go to zone ${z} and defend while they play the ball.`,
       };
       const SWAP_NOTES = {
         serve: [
@@ -3807,14 +3818,15 @@
           const base = baseSpots(ri, order);
           const zone = (p) => base[p].zone;
           const switchVia = {};
-          order
-            .filter((p) => {
-              const x = (moves[p] ?? to[p]).x;
-              return isFront(ri, p) && Math.abs(x - 0.5) > 0.2 && (x - 0.5) * (base[p].x - 0.5) < 0;
-            })
-            .forEach((p) => {
+          const cross = {};
+          order.forEach((p) => {
+            const x = (moves[p] ?? to[p]).x;
+            if ((x - 0.5) * (base[p].x - 0.5) >= 0) return;
+            if (isFront(ri, p) && Math.abs(x - 0.5) > 0.2) {
               switchVia[p] = [base[p].x > 0.5 ? SWITCH_VIA.right : SWITCH_VIA.left];
-            });
+              cross[p] = "behind";
+            } else if (Math.abs(x - base[p].x) > CROSS_DX) cross[p] = "side";
+          });
           stages.push({
             moves: pick([hitter, ...order.filter((p) => p !== hitter)], (p) => ({
               x: base[p].x,
@@ -3823,8 +3835,8 @@
             via: switchVia,
             base: true,
             notes: {
-              ...pick(order, (p) => ATTACK_NOTES.base(zone(p), isFront(ri, p))),
-              [hitter]: ATTACK_NOTES.hit[1](zone(hitter)),
+              ...pick(order, (p) => ATTACK_NOTES.base(zone(p), isFront(ri, p), cross[p])),
+              [hitter]: ATTACK_NOTES.hit[1](zone(hitter), cross[hitter]),
             },
             ball: { from: spike, to: SPIKE_BALL },
           });
