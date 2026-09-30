@@ -475,3 +475,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Our serve is static like Rotation: no Play, Replay, Step, speed or stage dots (the bar keeps its height, invisible), no Play nudge, nothing plays. The still picture is unchanged: everyone on the base spot, the server at base with the route from the serve spot, the ball over the net (`SERVE_BALL`), and the same still caption (exchanges, `OFF_SERVE`, `LIBERO_RULE`). Drill and Match still grade the serve spots.
 - **Alternatives:** keep the play but drop the nudge; play the serve with the whole team moving to base.
 - **Reversible by:** `animPhase()`, `phaseStages()` and `buildReception()` in `src/template.html` (the serve stage and `SERVE_HIT` are in git history before #69).
+
+### 58. The middle's quick approach runs during the pass
+
+- **Issue:** #70
+- **Problem:** In the Reception play the middle stood at the 3 m line (its `ar` spot, y 0.44) when the pass reached the setter and ran its approach during the set. The owner: for a quick the middle takes off as the setter touches the ball, and standing in the centre at the 3 m line blocks the back-row hitter's run-up.
+- **Decision:** Stage 1 is unchanged (the middle leaves the net for its `ar` spot at the serve contact). In stage 2 the middle runs straight from there to take-off at `APPROACH_Y` (0.17), 0.15 left of the set spot, and the pass reaches the setter as the middle arrives (the ball is synced to the middle's run). In stage 3 the middle fakes the quick and only drops back to cover beside the hitter (`CUP_FRONT`, now y 0.20 so the move never goes towards the net). Captions: "Run in for the quick in front of the setter as the pass comes." and "Fake the quick, then drop in low to cover <hitter>." Drill and Match still grade the `ar` spot.
+- **Alternatives:** run the approach straight from the reception spot during the serve, never stopping at the 3 m line; keep the cover at y 0.15 with a small step towards the net.
+- **Reversible by:** `buildReception()` (`takeOff`, the stage 2 `sync`), `CUP_FRONT` and `ATTACK_NOTES.quick`/`cupFront` in `src/template.html`.

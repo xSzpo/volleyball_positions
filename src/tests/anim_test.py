@@ -566,6 +566,10 @@ def check_reception_stages(page: Page) -> None:
             check_ball(page, got["L"])
         if stage == 1:
             for p, spot in ar.items():
+                if p == "MB":
+                    if abs(got[p][1] / 100 - APPROACH_Y) > 0.06:
+                        fail(f"after the pass: MB at {got[p]}, not at the quick take-off")
+                    continue
                 if math.dist((got[p][0] / 100, got[p][1] / 100), spot) >= MIN_MOVE:
                     fail(f"after the pass: {p} at {got[p]}, expected {spot}")
         if stage == 3:
@@ -650,7 +654,8 @@ def check_ball(page: Page, passer: list[float]) -> None:
 def check_reception_ends(page: Page) -> None:
     """Every rotation, both rule sets: release at the serve, the set and cover, then the spike and base defence.
 
-    The setter covers from within 0.2 of the set spot, the middle approaches for the quick and covers close,
+    The setter covers from within 0.2 of the set spot, the middle is at its quick take-off when the pass reaches
+    the setter and then only drops back to cover close,
     L covers from the guide's zone 5 spot and the back-row outside hitter stays deep.
     """
     zones = {z: spot[:2] for z, spot in BASE_DEF.items()}
@@ -689,8 +694,12 @@ def check_reception_ends(page: Page) -> None:
             middle = next(p for p in s3["moves"] if p.startswith("MB"))
             if not 0.22 <= math.dist(at_set[middle], hit) <= 0.34:
                 fail(f"{tag}: {middle} does not cover close to {hitter}: {at_set[middle]}")
-            if min(v["y"] for v in s3["paths"][middle]) > APPROACH_Y + 0.005:
-                fail(f"{tag}: {middle} never approaches for the quick: {s3['paths'][middle]}")
+            take_off = (stages[1]["paths"].get(middle) or [{"y": 1.0}])[-1]
+            if abs(take_off["y"] - APPROACH_Y) > 0.06:
+                fail(f"{tag}: {middle} is not ready for the quick when the pass reaches the setter: {take_off}")
+            netward = [v["y"] for v in s3["paths"][middle]]
+            if any(b < a - 0.005 for a, b in zip(netward, netward[1:], strict=False)):
+                fail(f"{tag}: {middle} runs towards the net during the set: {s3['paths'][middle]}")
             for p, spot in at_set.items():
                 if p in (hitter, middle) or kind[p] not in ("front", "back"):
                     continue
@@ -722,7 +731,7 @@ def check_reception_ends(page: Page) -> None:
 def check_path_shapes(page: Page) -> None:
     """No run turns back, and none is longer than 1.3 times the straight line.
 
-    The middle's approach from behind the 3 m line and a front-row side switch behind the middle may be longer.
+    A front-row side switch behind the middle may be longer.
     """
     for mode, roles in MODES.items():
         open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
@@ -737,11 +746,10 @@ def check_path_shapes(page: Page) -> None:
                             fail(f"{mode} R{ri + 1} {phase} stage {n + 1}: {p} turns back on {path}")
                         straight = math.dist(path[0], path[-1])
                         length = sum(math.hypot(*leg) for leg in legs)
-                        approach = any(abs(y - APPROACH_Y) < 0.005 for _, y in path[1:-1])
                         to_base = phase == "ar" or (phase == "rec" and n == len(stages) - 1)
                         switch = (path[0][0] - 0.5) * (path[-1][0] - 0.5) < 0 and len(path) == 3 and to_base
                         limit = 1.4 if switch else 1.3
-                        if straight and length > limit * straight + 1e-3 and not (phase == "rec" and approach):
+                        if straight and length > limit * straight + 1e-3:
                             fail(f"{mode} R{ri + 1} {phase} stage {n + 1}: {p} runs {length:.2f} for {straight:.2f}")
 
 
