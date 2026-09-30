@@ -2454,6 +2454,71 @@
         });
         return s;
       }
+      // The Attack step asks a move: before the answer everyone stands on the reception spots, the pass on its way.
+      function fromLayer(ri, role, tap, clip) {
+        const rec = players(ri, "rec"),
+          me = rec.find((o) => o.p === role),
+          passer = rec.find((o) => o.p === PASSER[ri]),
+          set = players(ri, "ar").find((o) => o.kind === "set");
+        let s = "",
+          ball = null;
+        if (passer && set) {
+          ball = touch(passer, set, HELD);
+          s += `<g class="pass"><line x1="${ball.x * W}" y1="${ball.y * H}" x2="${set.x * W}" y2="${set.y * H}" stroke="var(--net-label)" stroke-width="0.6" stroke-dasharray="1.6 1.3"/><circle cx="${set.x * W}" cy="${set.y * H}" r="1.4" fill="var(--net-label)"/></g>`;
+        }
+        rec.forEach((o) => {
+          if (o.p !== role) s += chip(o, { dim: true });
+        });
+        if (me) {
+          if (tap) s += fromTap(me, tap);
+          s += chip(me, { me: true });
+          const at = fromSpot(me, rec, ball);
+          s += `<text class="from" x="${at.x}" y="${at.y}" text-anchor="middle" font-size="3.6" font-weight="700" fill="var(--net-label)" font-family="Barlow,sans-serif">from</text>`;
+        }
+        if (ball) s += ballSvg(ball).replaceAll("ballClip", `ballClip-${clip}`);
+        return s;
+      }
+      // The "from" label goes below, above, left or right of your ring: the first side clear of every marker, the ball and the court edge.
+      function fromSpot(me, rec, ball) {
+        const X = me.x * W,
+          Y = me.y * H,
+          halfW = 4.3,
+          up = 4,
+          down = 1,
+          discs = [
+            ...rec.map((o) => ({ x: o.x * W, y: o.y * H, r: o.p === me.p ? 8.9 : MARKER_R + 1 })),
+            ...(ball ? [{ x: ball.x * W, y: ball.y * H, r: BALL_R + 0.5 }] : []),
+          ];
+        const clearance = ({ x, y }) => {
+          const box = [x - halfW, y - up, x + halfW, y + down];
+          if (box[0] < -3 || box[2] > W + 3 || box[1] < -3 || box[3] > H + 2) return -Infinity;
+          return Math.min(
+            ...discs.map((d) => {
+              const dx = Math.max(box[0] - d.x, 0, d.x - box[2]),
+                dy = Math.max(box[1] - d.y, 0, d.y - box[3]);
+              return Math.hypot(dx, dy) - d.r;
+            }),
+          );
+        };
+        const sides = [
+          { x: X, y: Y + 13.4 },
+          { x: X, y: Y - 10.4 },
+          { x: X - 13.7, y: Y + 1.5 },
+          { x: X + 13.7, y: Y + 1.5 },
+        ];
+        return (
+          sides.find((p) => clearance(p) >= 0.4) ||
+          sides.reduce((a, b) => (clearance(b) > clearance(a) ? b : a))
+        );
+      }
+      function fromTap(a, tap) {
+        return `<line class="fromtap" x1="${a.x * W}" y1="${a.y * H}" x2="${tap.x * W}" y2="${tap.y * H}" stroke="var(--net-label)" stroke-width="0.5" opacity=".8"/>`;
+      }
+      function arQuestion(ri, role) {
+        return PASSER[ri] === role
+          ? "You pass to the setter. Where do you go?"
+          : `${PASSER[ri]} passes to the setter. Where do you go?`;
+      }
       const COLUMN = { 4: 5, 3: 6, 2: 1, 5: 4, 6: 3, 1: 2 };
       const ZONE_ROWS = [
         [4, 3, 2],
@@ -4180,6 +4245,7 @@
       }
       // Solo scores each moment with the most revealing setting shown before the answer.
       function gVisMult() {
+        if (G?.queue[G.i]?.phase === "ar") return 1;
         return VIS_MULT[G && !G.mp && !G.online ? G.visMax : gVis()] ?? 1;
       }
       function gVisText() {
@@ -4370,7 +4436,7 @@
         $("dq").textContent =
           `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${ROWS[cur.ri].name} · ${FULL[cur.phase]}`;
         $("dsub").textContent =
-          `${cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? "Where do you go after the pass?" : cur.phase === "serve" ? "We serve. Where do you stand?" : "Where do you stand?"}`;
+          `${cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? arQuestion(cur.ri, cur.role) : cur.phase === "serve" ? "We serve. Where do you stand?" : "Where do you stand?"}`;
         $("fb").className = "fb";
         $("fb").innerHTML = HINT;
         drawDrill();
@@ -4382,14 +4448,22 @@
         if (answered && cur.phase === "start") s += rotArrows();
         if (answered && cur.phase === "ar") s += arLayer(cur.ri, pl, cur.role);
         if (answered && cur.phase === "serve") s += serveLayer(cur.ri, pl, cur.role);
-        (answered ? pl.filter((o) => o.p !== cur.role) : visible(visDrill, pl, cur.role)).forEach(
-          (o) => {
-            s += chip(o, {
-              dim: answered || visDrill === "all",
-              small: !answered && visDrill === "ref",
-            });
-          },
-        );
+        if (!answered && cur.phase === "ar") s += fromLayer(cur.ri, cur.role, null, "d");
+        if (answered && cur.phase === "ar" && tap) {
+          const a = players(cur.ri, "rec").find((o) => o.p === cur.role);
+          if (a) s += fromTap(a, tap);
+        }
+        (answered
+          ? pl.filter((o) => o.p !== cur.role)
+          : cur.phase === "ar"
+            ? []
+            : visible(visDrill, pl, cur.role)
+        ).forEach((o) => {
+          s += chip(o, {
+            dim: answered || visDrill === "all",
+            small: !answered && visDrill === "ref",
+          });
+        });
         if (answered && dNb?.done) s += nbLayer(pl, cur.role, dNb.a);
         if (answered) {
           const me = pl.find((o) => o.p === cur.role);
@@ -4964,7 +5038,7 @@
             start: `We won the rally and rotate into ${R}. Where are you?`,
             serve: `We serve in ${R}. Where do you stand?`,
             rec: `${R}: we lost the rally. The opponent serves. Take your reception spot.`,
-            ar: `${R}: good pass! The ball goes to the setter. Where do you go now?`,
+            ar: `${R}: ${arQuestion(st.ri, G.role)}`,
           }[st.phase];
         if (st.phase === "start")
           return G.mixed
@@ -4980,7 +5054,7 @@
           return G.i === 0
             ? `${pre}The opponent serves. Take your reception spot.`
             : `${pre}We lost the rally. The opponent serves. Take your reception spot.`;
-        return `${pre}Good pass! The ball goes to the setter. Where do you go now?`;
+        return `${pre}${arQuestion(st.ri, G.role)}`;
       }
       function gShow() {
         const st = G.queue[G.i];
@@ -5047,7 +5121,13 @@
           s += `<circle cx="${jx * W}" cy="${jy * H}" r="15.3" fill="var(--accent)" fill-opacity=".25" stroke="var(--net-label)" stroke-width="0.6" stroke-dasharray="1.6 1.3"/>`;
         }
         const vis = gVis();
-        (shown ? pl.filter((o) => o.p !== G.role) : visible(vis, pl, G.role)).forEach((o) => {
+        if (!shown && st.phase === "ar") s += fromLayer(st.ri, G.role, G.tap, "g");
+        (shown
+          ? pl.filter((o) => o.p !== G.role)
+          : st.phase === "ar"
+            ? []
+            : visible(vis, pl, G.role)
+        ).forEach((o) => {
           s += chip(o, { dim: shown || vis === "all", small: !shown && vis === "ref" });
         });
         if (shown && G.nb?.done) s += nbLayer(pl, G.role, G.nb.a);
@@ -5056,6 +5136,8 @@
         if (G.answered && (G.mp || G.online) && G.tap)
           s += `<circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="2.3" fill="var(--net-label)" opacity=".8"/>`;
         if (shown) {
+          const a = st.phase === "ar" && players(st.ri, "rec").find((o) => o.p === G.role);
+          if (a && G.tap) s += fromTap(a, G.tap);
           if (G.tap && me)
             s += `<line x1="${G.tap.x * W}" y1="${G.tap.y * H}" x2="${me.x * W}" y2="${me.y * H}" stroke="var(--net-label)" stroke-width="0.5" stroke-dasharray="1 1" opacity=".7"/>`;
           if (G.tap)
@@ -5183,7 +5265,12 @@
         else G.streak = 0;
         const streakB = G.streak > 1 ? Math.min(G.streak - 1, 5) * 10 : 0;
         const vm = gVisMult();
-        if (!G.mp && !G.online && VIS_ORDER.indexOf(G.visMax) > VIS_ORDER.indexOf(G.vis0))
+        if (
+          !G.mp &&
+          !G.online &&
+          st.phase !== "ar" &&
+          VIS_ORDER.indexOf(G.visMax) > VIS_ORDER.indexOf(G.vis0)
+        )
           G.peeks++;
         const pts = Math.round((Math.round(base * mult) + speed + streakB) * vm);
         G.score += pts;

@@ -805,6 +805,7 @@ def set_calls(browser: Browser, url: str, emulator_db: str, errors: list[str]) -
     guest = phone(browser, url, errors)
     pick_role(host, "OP")
     open_online(host, "Anna", only="ar")
+    host.click('.vis[data-vis="game"] [data-v="all"]')
     host.check("#setGame")
     host.click("#onCreate")
     host.wait_for_selector("#gLobby", state="visible", timeout=20000)
@@ -820,6 +821,13 @@ def set_calls(browser: Browser, url: str, emulator_db: str, errors: list[str]) -
 
     for page, role in ((guest, "S"), (host, "OP")):
         page.wait_for_selector("#gOff:enabled", timeout=20000)
+        picture = page.evaluate(
+            "() => ['g.mk', '.me-ring', 'g.ball', 'g.pass', 'text.from']"
+            ".map((s) => document.querySelectorAll('#courtG ' + s).length)"
+        )
+        assert picture == [6, 1, 1, 1, 1], f"{role}: Attack does not show the reception picture: {picture}"
+        ringed = page.get_attribute("#courtG g.mk:has(.me-ring)", "data-p")
+        assert ringed == role, f"Attack rings {ringed}, not {role}"
         tap_spot(page, role, 0, "ar")
         page.wait_for_selector("#gsc")
         assert page.is_visible("#gNext"), "Continue is hidden while the set call check is open"
@@ -838,6 +846,8 @@ def set_calls(browser: Browser, url: str, emulator_db: str, errors: list[str]) -
     stored = admin(emulator_db, "GET", f"rooms/{code}/answers/0/{sam}")
     assert set(stored["bd"]) == {"base", "speed", "streak", "mult", "nb", "set"}, f"breakdown stored as {stored}"
     assert stored["bd"]["set"] == 30, f"set bonus not in the breakdown: {stored['bd']}"
+    assert stored["bd"]["mult"] == 1, f"Show on court Everyone scaled an Attack moment: {stored['bd']}"
+    assert "%" not in rows["Sam"] and "%" not in rows["Anna"], f"Attack rows show a multiplier: {rows}"
     assert "bd" not in admin(emulator_db, "GET", f"rooms/{code}/players/{sam}/results/0"), "breakdown in results"
     print("set call answered by the setter, skipped by the attacker; the reveal waited for both")
 

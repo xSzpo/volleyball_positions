@@ -1,4 +1,4 @@
-"""Playwright test of solo match scoring in index.html.
+"""Playwright test of solo match scoring and the Attack step picture in index.html.
 
 Usage: python src/tests/match_test.py
 """
@@ -6,12 +6,13 @@ Usage: python src/tests/match_test.py
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 from playwright.sync_api import Browser, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from data import SETS, UNCONFIRMED_SETS, lineup  # noqa: E402
+from data import RULES_MODES, SETS, UNCONFIRMED_SETS, Row, lineup  # noqa: E402
 
 # The app opens in Simplified KSV.
 ROWS = [lineup(ri, "simple") for ri in range(6)]
@@ -66,15 +67,15 @@ def setup_match(
         page.set_checked("#setGame", sets)
 
 
-def tap_at(page: Page, x: float, y: float) -> None:
-    """Taps the match court at normalised court coordinates."""
-    page.locator("#courtG").scroll_into_view_if_needed()
+def tap_at(page: Page, x: float, y: float, court: str = "courtG") -> None:
+    """Taps a court at normalised court coordinates."""
+    page.locator(f"#{court}").scroll_into_view_if_needed()
     cx, cy = page.evaluate(
-        """([x, y]) => {
-            const m = document.getElementById('courtG').getScreenCTM();
+        """([x, y, id]) => {
+            const m = document.getElementById(id).getScreenCTM();
             return [m.a * x * 100 + m.e, m.d * y * 100 + m.f];
         }""",
-        [x, y],
+        [x, y, court],
     )
     page.mouse.click(cx, cy)
 
@@ -706,8 +707,10 @@ def check_breakdown(browser: Browser) -> None:
                 fail(f"R{ri + 1} {phase}: breakdown {line!r} adds up to {parts}, total {total}, scored {points(page)}")
             if ri == 1 and "help used, 60%" not in line:
                 fail(f"help not shown in the breakdown: {line!r}")
-            if "Setter 70% →" not in line:
+            if phase == "rec" and "Setter 70% →" not in line:
                 fail(f"shown setter not in the breakdown: {line!r}")
+            if phase == "ar" and "%" in line.replace("help used, 60%", ""):
+                fail(f"R{ri + 1} Attack: Show on court scales the points: {line!r}")
             if not in_view(page, "#gNext"):
                 fail(f"R{ri + 1} {phase}: Continue is below the fold")
             press_next(page)
@@ -776,6 +779,201 @@ def check_court_not_covered(browser: Browser) -> None:
     print("court not covered while answering", flush=True)
 
 
+# The Learn Reception passer, one per rotation.
+PASSER = ["L", "OH2", "OH1", "L", "OH1", "OH2"]
+HELD = 6 + 1 + 6 * 0.65  # marker radius, its edge and the ball radius, in court units
+
+
+def attack_question(ri: int, role: str) -> str:
+    return (
+        "You pass to the setter. Where do you go?"
+        if PASSER[ri] == role
+        else f"{PASSER[ri]} passes to the setter. Where do you go?"
+    )
+
+
+def court_picture(page: Page, court: str) -> dict[str, Any]:
+    """Reads the markers, the ball, the pass line and the from label off a court."""
+    picture: dict[str, Any] = page.evaluate(
+        """(id) => {
+            const svg = document.getElementById(id);
+            const num = (el, a) => el ? Number(el.getAttribute(a)) : null;
+            const ball = svg.querySelector('g.ball');
+            const at = ball && /translate[(]([-0-9.]+) ([-0-9.]+)[)]/.exec(ball.getAttribute('transform') || '');
+            const pass = svg.querySelector('g.pass line');
+            const tap = svg.querySelector('line.fromtap');
+            return {
+                markers: [...svg.querySelectorAll('g.mk')].map((g) => {
+                    const c = g.querySelector('circle[fill^="var(--role"]');
+                    return {p: g.dataset.p, x: num(c, 'cx'), y: num(c, 'cy'),
+                            me: !!g.querySelector('.me-ring'), faded: g.classList.contains('faded')};
+                }),
+                ball: at ? [Number(at[1]), Number(at[2])] : null,
+                pass: pass ? [num(pass, 'x2'), num(pass, 'y2')] : null,
+                from: svg.querySelectorAll('text.from').length,
+                tap: tap ? [num(tap, 'x1'), num(tap, 'y1'), num(tap, 'x2'), num(tap, 'y2')] : null,
+            };
+        }""",
+        court,
+    )
+    return picture
+
+
+def check_from_picture(pic: dict[str, Any], row: Row, ri: int, role: str, tag: str) -> None:
+    """Everyone on the reception spots, you ringed, the ball at the passer and the pass line to the set spot."""
+    rec = {p: (x * 100, y * 100) for p, x, y in row["rec"]}
+    got = {m["p"]: m for m in pic["markers"]}
+    if sorted(got) != sorted(rec) or len(pic["markers"]) != len(rec):
+        fail(f"{tag}: markers {sorted(m['p'] for m in pic['markers'])}, expected the reception six {sorted(rec)}")
+        return
+    for p, (x, y) in rec.items():
+        m = got[p]
+        if abs(m["x"] - x) > 0.01 or abs(m["y"] - y) > 0.01:
+            fail(f"{tag}: {p} drawn at ({m['x']}, {m['y']}), not on its reception spot ({x:.1f}, {y:.1f})")
+        if m["me"] != (p == role) or m["faded"] == (p == role):
+            fail(f"{tag}: {p} ringed {m['me']}, faded {m['faded']}")
+    if pic["from"] != 1:
+        fail(f"{tag}: {pic['from']} from labels")
+    set_spot = next((x * 100, y * 100) for _, x, y, kind in row["ar"] if kind == "set")
+    passer = rec[PASSER[ri]]
+    if not pic["ball"] or abs(dist(pic["ball"], passer) - HELD) > 0.02:
+        fail(f"{tag}: ball at {pic['ball']}, not held by {PASSER[ri]} at {passer}")
+    if not pic["pass"] or dist(pic["pass"], set_spot) > 0.01:
+        fail(f"{tag}: pass line ends at {pic['pass']}, not at the set spot {set_spot}")
+
+
+def dist(a: tuple[float, float] | list[float], b: tuple[float, float] | list[float]) -> float:
+    return float(((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5)
+
+
+def check_tap_line(pic: dict[str, Any], row: Row, role: str, spot: tuple[float, float], tag: str) -> None:
+    start = next((x * 100, y * 100) for p, x, y in row["rec"] if p == role)
+    line = pic["tap"]
+    if not line or dist(line[:2], start) > 0.01 or dist(line[2:], (spot[0] * 100, spot[1] * 100)) > 1:
+        fail(f"{tag}: the tap line runs {line}, not from {start} to the tap")
+
+
+def check_attack_match(browser: Browser) -> None:
+    """Match Attack: the reception picture for every Show on court value, the tap line and scoring at ×1."""
+    for rules in RULES_MODES:
+        rows = [lineup(ri, rules) for ri in range(6)]
+        for vis in ("none", "ref", "all"):
+            page = new_page(browser, rules)
+            setup_match(page, "OH1", ("ar",), vis, sets=False)
+            page.click("#gStart")
+            for ri in range(6):
+                tag = f"match {rules} {vis} R{ri + 1}"
+                page.wait_for_selector("#gOff:enabled")
+                if ri == 0 and vis == "none":
+                    page.click('#gVisPlay [data-v="all"]')
+                check_from_picture(court_picture(page, "courtG"), rows[ri], ri, "OH1", tag)
+                story = page.inner_text("#gStory")
+                if not story.endswith(attack_question(ri, "OH1")):
+                    fail(f"{tag}: question reads {story!r}")
+                spot = next((x, y) for p, x, y, _ in rows[ri]["ar"] if p == "OH1")
+                tap_at(page, *spot)
+                check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, tag)
+                press_next(page)
+                check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, f"{tag} feedback")
+                line = page.inner_text("#gBd")
+                parts, total = breakdown_total(line)
+                if "%" in line or not parts == total == points(page) or total < 100:
+                    fail(f"{tag}: Attack scored {line!r}, expected full points")
+                press_next(page)
+            page.wait_for_selector("#gEnd", state="visible")
+            if "Peeked" in page.inner_text("#gShown"):
+                fail(f"match {rules} {vis}: a peek at the Attack step counted: {page.inner_text('#gShown')!r}")
+            page.close()
+    print("match Attack: reception picture, ball, tap line, full points", flush=True)
+
+
+MODE_ROLES = {"simple": ("MB", "OH1", "OH2", "OP", "S", "L"), "official": ("MB1", "MB2", "OH1", "OH2", "OP", "S", "L")}
+
+
+def check_from_label(browser: Browser) -> None:
+    """The "from" label stays clear of every marker, the ball and the court edge, for every rotation and role."""
+    checked = 0
+    for rules in RULES_MODES:
+        for role in MODE_ROLES[rules]:
+            page = new_page(browser, rules)
+            setup_match(page, role, ("ar",), sets=False)
+            page.click("#gStart")
+            for ri in range(6):
+                page.wait_for_selector("#gOff:enabled")
+                clash = page.evaluate(
+                    """() => {
+                        const svg = document.getElementById('courtG'), label = svg.querySelector('text.from');
+                        if (!label) return 'no label';
+                        const b = label.getBBox();
+                        const discs = [...svg.querySelectorAll('g.mk')].map((g) => {
+                            const c = g.querySelector('circle[fill^="var(--role"]');
+                            const ring = g.querySelector('.me-ring circle');
+                            return {p: g.dataset.p, x: +c.getAttribute('cx'), y: +c.getAttribute('cy'),
+                                    r: ring ? +ring.getAttribute('r') + 0.6 : +c.getAttribute('r') + 0.5};
+                        });
+                        const ball = svg.querySelector('g.ball');
+                        const at = ball && /translate[(]([-0-9.]+) ([-0-9.]+)[)] scale[(]([0-9.]+)[)]/
+                            .exec(ball.getAttribute('transform'));
+                        if (at) discs.push({p: 'ball', x: +at[1], y: +at[2], r: +at[3]});
+                        const hit = discs.filter((d) => {
+                            const dx = Math.max(b.x - d.x, 0, d.x - b.x - b.width),
+                                dy = Math.max(b.y - d.y, 0, d.y - b.y - b.height);
+                            return Math.hypot(dx, dy) < d.r;
+                        }).map((d) => d.p);
+                        if (b.x < -4 || b.x + b.width > 104 || b.y < -14 || b.y + b.height > 103) hit.push('edge');
+                        return hit.join(', ');
+                    }"""
+                )
+                on_court = any(p == role for p, _, _ in lineup(ri, rules)["rec"])
+                if clash and (clash != "no label" or on_court):
+                    fail(f"from label {rules} {role} R{ri + 1}: covers {clash}")
+                checked += on_court
+                page.click("#gOff")
+                press_next(page)
+                press_next(page)
+            page.close()
+    print(f"from label clear of markers, ball and edge on {checked} Attack courts", flush=True)
+
+
+def check_attack_drill(browser: Browser) -> None:
+    """Drill Attack: the reception picture in every rotation, both rule sets and every Show on court value.
+
+    Reset my progress draws each next question, so the weights stay even and every rotation comes up.
+    """
+    for rules in RULES_MODES:
+        rows = [lineup(ri, rules) for ri in range(6)]
+        page = new_page(browser, rules)
+        pick_role(page, "OH1")
+        page.click("#tabDrill")
+        if page.get_attribute("#dOpts", "open") is None:
+            page.click("#dOpts > summary")
+        page.set_checked("#nbDrill", False)
+        for vis in ("none", "ref", "all"):
+            page.click(f'.vis[data-vis="drill"] [data-v="{vis}"]')
+            seen: set[int] = set()
+            for _ in range(400):
+                if len(seen) == 6:
+                    break
+                question = page.inner_text("#dq")
+                if not question.endswith("· Attack"):
+                    page.click("#resetBtn")
+                    continue
+                ri = int(question[1]) - 1
+                tag = f"drill {rules} {vis} R{ri + 1}"
+                seen.add(ri)
+                check_from_picture(court_picture(page, "courtD"), rows[ri], ri, "OH1", tag)
+                if page.inner_text("#dsub") != attack_question(ri, "OH1"):
+                    fail(f"{tag}: question reads {page.inner_text('#dsub')!r}")
+                spot = next((x, y) for p, x, y, _ in rows[ri]["ar"] if p == "OH1")
+                tap_at(page, *spot, court="courtD")
+                check_tap_line(court_picture(page, "courtD"), rows[ri], "OH1", spot, tag)
+                page.click("#resetBtn")
+            if len(seen) < 6:
+                fail(f"drill {rules} {vis}: Attack came up only in {sorted(seen)}")
+        page.close()
+    print("drill Attack: reception picture, ball, tap line", flush=True)
+
+
 def check_double_check(browser: Browser) -> None:
     """A double tap on Continue keeps the feedback on screen."""
     page = new_page(browser)
@@ -812,6 +1010,9 @@ def main() -> None:
         check_end_screen(browser)
         check_court_not_covered(browser)
         check_double_check(browser)
+        check_attack_match(browser)
+        check_from_label(browser)
+        check_attack_drill(browser)
         browser.close()
     print("MATCH TEST:", "ok" if not FAIL else f"{len(FAIL)} failures", flush=True)
     sys.exit(1 if FAIL else 0)
