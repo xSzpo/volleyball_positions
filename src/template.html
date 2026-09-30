@@ -2374,7 +2374,7 @@
           if (me.turn)
             return {
               t: "Quick in the middle",
-              d: `${rp && rp[2] < AL - 0.1 ? "Come off the net to the 3 m line" : "Get to the 3 m line"}, then run in (dashed line) and take off in front of the setter as the pass arrives.`,
+              d: `${rp && rp[2] < me.turn.y - 0.03 ? "Step off the net to the middle of the front zone" : "Get to the middle of the front zone"}, not the 3 m line: that is the back-row hitter's lane. Then run in (dashed line) and take off in front of the setter as the pass arrives.`,
             };
           if (me.kind === "front") {
             const lane = me.x < 0.34 ? "left (zone 4)" : me.x < 0.67 ? "middle" : "right (zone 2)";
@@ -2414,7 +2414,8 @@
       // ---------- court drawing ----------
       const W = 100,
         H = 100,
-        MARKER_R = 6;
+        MARKER_R = 6,
+        APPROACH_SHOWN = 6;
       const ROLE_KEY = {
         S: "s",
         OP: "op",
@@ -2505,24 +2506,16 @@
         });
         return s;
       }
-      // The quick: out to the 3 m line (solid), then the dashed approach to the take-off. Legs that double back run side by side.
+      // The quick: out to the middle of the front zone (solid), then the dashed approach to the take-off. Legs that double back run side by side.
       function quickRoute(r, o, mine) {
-        const [rx, ry, tx, ty, ox, oy] = [
-          r[0] * W,
-          r[1] * H,
-          o.turn.x * W,
-          o.turn.y * H,
-          o.x * W,
-          o.y * H,
-        ];
-        const l1 = Math.hypot(tx - rx, ty - ry) || 1,
-          l2 = Math.hypot(ox - tx, oy - ty) || 1;
-        const [u1x, u1y, u2x, u2y] = [
-          (tx - rx) / l1,
-          (ty - ry) / l1,
-          (ox - tx) / l2,
-          (oy - ty) / l2,
-        ];
+        const [rx, ry, ox, oy] = [r[0] * W, r[1] * H, o.x * W, o.y * H];
+        const l2 = Math.hypot(ox - o.turn.x * W, oy - o.turn.y * H) || 1;
+        const [u2x, u2y] = [(ox - o.turn.x * W) / l2, (oy - o.turn.y * H) / l2];
+        // The take-off marker covers most of a short approach, so the turn moves back along it to keep the dashes visible.
+        const reach = Math.max(l2, MARKER_R + 0.5 + APPROACH_SHOWN);
+        const [tx, ty] = [ox - u2x * reach, oy - u2y * reach];
+        const l1 = Math.hypot(tx - rx, ty - ry) || 1;
+        const [u1x, u1y] = [(tx - rx) / l1, (ty - ry) / l1];
         const side = u1x * u2x + u1y * u2y < -0.8 ? 1.8 : 0;
         const [nx, ny] = [-u1y * side, u1x * side];
         let s = "";
@@ -2557,7 +2550,7 @@
         };
         return { set, hitter: hitter.p, hit, quick };
       }
-      // The spots Drill and Match grade. At Attack that is where the Learn Reception play has everyone as the pass lands; the quick middle's route turns at its 3 m line spot.
+      // The spots Drill and Match grade. At Attack that is where the Learn Reception play has everyone as the pass lands; the quick middle's route turns at its `ar` spot.
       function answerSpots(ri, phase) {
         const pl = players(ri, phase);
         const tr = phase === "ar" && phaseStages(ri, "rec"),
@@ -3377,7 +3370,7 @@
         ],
         deepFront: "Come in to the middle and cover deep: a ball off the block can fly far.",
         deepBack: "Cover deep in the middle: a ball off the block can fly far.",
-        quick: "Run in for the quick in front of the setter as the pass comes.",
+        quick: "Run in from mid front zone for the quick in front of the setter.",
         cupFront: (hitter) =>
           `Fake the quick, then cover ${hitter} close, between the setter and L.`,
         cupSet: (hitter) =>
@@ -4261,7 +4254,7 @@
           k: "receive",
           t: "Three players receive",
           roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
-          d: "The two outside hitters and the libero pass the serve. Everyone else stays out of the passing lanes so the setter can set, the middle can run the quick and the opposite can attack.",
+          d: "The two outside hitters and the libero pass the serve. Everyone else stays out of the passing lanes so the setter can set, the middle can run the quick and the opposite can attack. The middle opens for the quick in the middle of the front zone, not on the 3 m line: that is the back-row hitter's lane.",
         },
         {
           k: "middles",

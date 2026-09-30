@@ -17,6 +17,7 @@ from data import ATTACK_LINE as AL  # noqa: E402
 from data import (  # noqa: E402
     BASE_DEF,
     MIDDLES,
+    QUICK_START_Y,
     ROWS,
     RULES_MODES,
     SETS,
@@ -124,6 +125,8 @@ def check_row(i: int, mode: RulesMode) -> None:
     for p, _x, y, k in r["ar"]:
         if k == "back" and y <= AL:
             issues.append(f"{tag}: back-row attacker {p} in front of 3m line")
+        if k == "front" and p in MIDDLES and y != QUICK_START_Y:
+            issues.append(f"{tag}: front middle {p} opens for the quick at y {y}, not QUICK_START_Y")
     # serve
     sf, sb = r["serve"]
     serving = server(i, mode)
@@ -157,6 +160,7 @@ def check_row(i: int, mode: RulesMode) -> None:
 MOVE_MAX = 78
 # The set goes to zone 4, so a back-row attacker covers deep.
 AR_WORDS = {"set": ["setting spot"], "front": ["3 m line"], "back": ["cover"], None: ["cover"]}
+QUICK_WORDS = ["middle of the front zone", "quick"]
 
 
 def check_moves(i: int, mode: RulesMode) -> None:
@@ -183,8 +187,10 @@ def check_moves(i: int, mode: RulesMode) -> None:
             issues.append(f"{mode} {r['name']} serve {p}: caption does not send them to zone {zone}: {text!r}")
     for p, _, _, kind in r["ar"]:
         text = r["move"]["ar"].get(p, "")
-        if not all(word in text for word in AR_WORDS[kind]):
-            issues.append(f"{mode} {r['name']} ar {p} ({kind}): caption lacks {AR_WORDS[kind]}: {text!r}")
+        quick = kind == "front" and p in (*MIDDLES, "MB")
+        words = QUICK_WORDS if quick else AR_WORDS[kind]
+        if not all(word in text for word in words) or (quick and "3 m" in text):
+            issues.append(f"{mode} {r['name']} ar {p} ({kind}): caption lacks {words}: {text!r}")
 
 
 def cell_lineup(cell: str) -> list[str] | None:

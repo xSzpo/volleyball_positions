@@ -8,6 +8,8 @@ after-reception positions are measured from KSV_M3.pdf pages 4-9.
 from typing import Literal, TypedDict
 
 ATTACK_LINE = 0.42
+# The front middle opens for the quick here, in front of the 3 m line: the back-row hitter's lane stays clear.
+QUICK_START_Y = 0.26
 
 # Base defence when we serve, taken before the serve (not in the guide): zone -> (x, y, kind).
 BASE_DEF: dict[int, tuple[float, float, str | None]] = {
@@ -56,7 +58,7 @@ ROWS: list[Row] = [
         ],
         ar=[
             ("OP", 0.07, 0.44, "front"),
-            ("MB1", 0.50, 0.44, "front"),
+            ("MB1", 0.50, QUICK_START_Y, "front"),
             ("OH1", 0.90, 0.44, "front"),
             ("L", 0.18, 0.66, None),
             ("OH2", 0.50, 0.86, None),
@@ -84,7 +86,7 @@ ROWS: list[Row] = [
             "ar": {
                 "S": "Leave zone 1 for the setting spot as soon as the serve is hit.",
                 "OP": "Stay at the left sideline on the 3 m line, then attack in zone 4.",
-                "MB1": "Come off the net to the 3 m line to approach in the middle.",
+                "MB1": "Step off the net to the middle of the front zone to open for the quick.",
                 "OH1": "Move up to the 3 m line at the right and attack in zone 2.",
                 "L": "Run on to cover OP close behind, then defend zone 5.",
                 "OH2": "Run on to cover deep in the middle, then defend zone 6.",
@@ -107,7 +109,7 @@ ROWS: list[Row] = [
         ],
         ar=[
             ("OH2", 0.07, 0.44, "front"),
-            ("MB1", 0.50, 0.44, "front"),
+            ("MB1", 0.50, QUICK_START_Y, "front"),
             ("OP", 0.93, 0.44, "front"),
             ("L", 0.20, 0.72, None),
             ("OH1", 0.50, 0.87, None),
@@ -135,7 +137,7 @@ ROWS: list[Row] = [
             "ar": {
                 "S": "Step up to the setting spot, right of the middle.",
                 "OH2": "Move up to the 3 m line at the left and attack in zone 4.",
-                "MB1": "Get to the 3 m line in the middle to approach.",
+                "MB1": "Get to the middle of the front zone to open for the quick.",
                 "OP": "Leave the net for the 3 m line at the right and attack in zone 2.",
                 "L": "Run on to cover OH2 close behind, then defend zone 5.",
                 "OH1": "Run on to cover deep in the middle, then defend zone 6.",
@@ -158,7 +160,7 @@ ROWS: list[Row] = [
         ],
         ar=[
             ("OH2", 0.07, 0.44, "front"),
-            ("MB2", 0.50, 0.44, "front"),
+            ("MB2", 0.50, QUICK_START_Y, "front"),
             ("OP", 0.93, 0.44, "front"),
             ("L", 0.15, 0.74, None),
             ("OH1", 0.52, 0.76, None),
@@ -186,7 +188,7 @@ ROWS: list[Row] = [
             "ar": {
                 "S": "Run forward to the setting spot, right of the middle.",
                 "OH2": "Move up to the 3 m line at the left and attack in zone 4.",
-                "MB2": "Cut across to the 3 m line in the middle to approach.",
+                "MB2": "Cut across to the middle of the front zone to open for the quick.",
                 "OP": "Stay at the right sideline on the 3 m line, then attack in zone 2.",
                 "L": "Run round behind OH1 to cover OH2 close behind, then defend zone 5.",
                 "OH1": "Stay in the middle to cover deep, then defend zone 6.",
@@ -209,7 +211,7 @@ ROWS: list[Row] = [
         ],
         ar=[
             ("OH2", 0.07, 0.44, "front"),
-            ("MB2", 0.48, 0.44, "front"),
+            ("MB2", 0.48, QUICK_START_Y, "front"),
             ("OP", 0.93, 0.70, "back"),
             ("L", 0.13, 0.77, None),
             ("OH1", 0.50, 0.73, None),
@@ -237,7 +239,7 @@ ROWS: list[Row] = [
             "ar": {
                 "S": "Run along the net from zone 4 to the setting spot.",
                 "OH2": "Move up to the 3 m line at the left and attack in zone 4.",
-                "MB2": "Come off the net to the 3 m line to approach in the middle.",
+                "MB2": "Step off the net to the middle of the front zone to open for the quick.",
                 "OP": "Come in to cover deep, right of the middle: the set goes to zone 4.",
                 "L": "Run round behind OH1 to cover OH2 close behind, then defend zone 5.",
                 "OH1": "Stay in the middle to cover deep, then defend zone 6.",
@@ -260,7 +262,7 @@ ROWS: list[Row] = [
         ],
         ar=[
             ("OH1", 0.07, 0.44, "front"),
-            ("MB2", 0.50, 0.44, "front"),
+            ("MB2", 0.50, QUICK_START_Y, "front"),
             ("OP", 0.93, 0.69, "back"),
             ("L", 0.20, 0.72, None),
             ("OH2", 0.50, 0.87, None),
@@ -288,7 +290,7 @@ ROWS: list[Row] = [
             "ar": {
                 "S": "Stay at the net: you are already at the setting spot.",
                 "OH1": "Move up to the 3 m line at the left and attack in zone 4.",
-                "MB2": "Cut in to the 3 m line in the middle to approach.",
+                "MB2": "Cut in to the middle of the front zone to open for the quick.",
                 "OP": "Come in to cover deep, right of the middle: the set goes to zone 4.",
                 "L": "Run on to cover OH1 close behind, then defend zone 5.",
                 "OH2": "Run on to cover deep in the middle, then defend zone 6.",
@@ -311,7 +313,7 @@ ROWS: list[Row] = [
         ],
         ar=[
             ("OH1", 0.07, 0.44, "front"),
-            ("MB1", 0.48, 0.44, "front"),
+            ("MB1", 0.48, QUICK_START_Y, "front"),
             ("OP", 0.93, 0.78, "back"),
             ("L", 0.16, 0.74, None),
             ("OH2", 0.52, 0.76, None),
@@ -339,7 +341,7 @@ ROWS: list[Row] = [
             "ar": {
                 "S": "Stay at the net: you are already at the setting spot.",
                 "OH1": "Move up to the 3 m line at the left and attack in zone 4.",
-                "MB1": "Come off the net to the 3 m line to approach in the middle.",
+                "MB1": "Step off the net to the middle of the front zone to open for the quick.",
                 "OP": "Come in to cover deep, right of the middle: the set goes to zone 4.",
                 "L": "Run round behind OH2 to cover OH1 close behind, then defend zone 5.",
                 "OH2": "Stay in the middle to cover deep, then defend zone 6.",

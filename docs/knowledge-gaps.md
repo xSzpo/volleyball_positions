@@ -703,3 +703,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Before the answer, the path and every button are drawn in `--ink`, solid, for every set. After the answer, the path and buttons show their family colours as feedback (in same-device and online Match, only on the solo feedback path; "Saved." stays neutral). The explore view is unchanged.
 - **Alternatives:** keep everything neutral after the answer too; use `--muted` instead of `--ink`.
 - **Reversible by:** `newSetQ()`, `answerSet()`, `setHtml()` and `setMark()` in `src/template.html` before #100.
+
+### 91. Where the middle opens for the quick
+
+- **Issue:** #104
+- **Problem:** The front middle's `ar` spot sat on the 3 m line (y 0.44), so Learn's Reception play and the Drill and Match Attack route sent the middle back to the 3 m line before the quick. The owner: the middle's approach starts in the middle of the front zone; a back-row outside hitter told them that standing on the 3 m line blocks the back-row spike.
+- **Decision:** The owner's call. The front middle's `ar` spot is `QUICK_START_Y` 0.26 in `src/data.py` (x unchanged), in front of the 3 m line and just behind the middle of the front zone, so the approach to take-off (`APPROACH_Y` 0.17) stays visible as a dashed line. In R2 and R3 the middle waits after the serve contact while the setter runs across its way (up to 1.3 s: 1.3 s in R2, 0.15 s in R3), and still takes off as the pass lands. In R2 that wait is longer than the serve stage (1.15 s), so the middle leaves as the pass starts, after the setter has crossed. The middle's `move.ar` captions, `ATTACK_NOTES.quick`, the Attack feedback and the "Three players receive" rule of thumb say it opens in the middle of the front zone, not on the 3 m line. Grading follows the Learn play as before.
+- **Alternatives:** y 0.21 (the exact middle of the front zone, as `BASE_DEF`), which leaves almost no approach before take-off; a take-off closer to the net.
+- **Reversible by:** `QUICK_START_Y` in `src/data.py`.
