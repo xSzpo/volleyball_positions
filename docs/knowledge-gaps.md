@@ -556,3 +556,27 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** A new last entry in Rules of thumb (key `names`, for every role): "H in R2 (H6) is the setter", saying H is Danish hæver, the number is the setter's zone, and to find the setter first. It goes last so the numbers the Match hints cite do not change. No first-visit text is added.
 - **Alternatives:** a line in the first-visit header subtitle; a tooltip on the Learn title tag; the entry first in the list.
 - **Reversible by:** the `names` entry in `THUMB` in `src/template.html`.
+
+### 75. What goes with the Learn rules to remember box
+
+- **Issue:** #91
+- **Problem:** The owner asked to remove the "rules to remember" box from Learn. Its lists (`RULES`) and six `ruleText()` keys were used only there, including the libero's Official rules (`@LRULES`, see entry 35).
+- **Decision:** The box, `RULES` and the keys only it read (`@MB1SERVE`, `@MB2SERVE`, `@LSLOT`, `@LSERVE`, `@LRULES`, `@OHSERVE`) are deleted; nothing replaces them. The libero rule (19.3) still shows in the hint on the Official R3 and R6 Rotation and Reception screens, and the finger-set rule in L's Base hint and Attack text in Drill and Match. Rules of thumb and the all-rotations table stay.
+- **Alternatives:** move the lists into a fold like Rules of thumb; keep only the libero's list.
+- **Reversible by:** the `#sheet` card and `RULES` in `src/template.html` before #91.
+
+### 76. The title volleyball and a title that already wraps
+
+- **Issue:** #91
+- **Problem:** The task asks for the header on one line at 390 px. At 390 px the title "Where do I stand?" already wraps onto two lines beside the role button ("Outside 1 · Simplified ▾") and the theme button.
+- **Decision:** "One line" is read as one header row: title, role button and theme button side by side, with no sideways scroll. The ball goes after "stand?", 0.7 em (the cap height of Barlow Condensed), decorative (`aria-hidden`), and adds no line to the title. The title keeps its two lines at 390 px.
+- **Alternatives:** a smaller title so it fits one line; the ball before the title.
+- **Reversible by:** `#titleBall` and `.titleball` in `src/template.html`.
+
+### 77. Where the Learn hint goes below Next
+
+- **Issue:** #91
+- **Problem:** The owner asked to move the hint below the blue Next button. The hint also carries the Official libero rule and the finger-set rule.
+- **Decision:** The hint (`#cue`) stays in the Learn card, right after the sticky Next row, with the libero and finger-set rules in it. Next sticks to the bottom only while its own place is below the screen, so it never covers the hint.
+- **Alternatives:** the hint as its own card under the Learn card; the libero rules kept above Next.
+- **Reversible by:** the order of `#lCtl` and `#cue` in `src/template.html`.
