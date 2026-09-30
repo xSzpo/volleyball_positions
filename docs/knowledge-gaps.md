@@ -298,9 +298,10 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #49
 - **Problem:** The owner wants Reception to play the receive, the set and the spike, with the team moving as it really does. The guide shows the reception shape, the moves to the approach spots, the approach arrows to the net and the back row's moves "after the attacking action" (rule of thumb 03), but not who is set, where the cover stands or when each move starts.
-- **Decision:** Four stages. 1: their serve to the libero, the setter releases (as #30). 2: the pass to the setter, the attackers to their `ar` approach spots (as #30). 3: the set to the zone 4 hitter (the front-row attacker farthest left in `ar`); every front-row attacker runs the approach to the net in their lane (y 0.08) and a back-row attacker to just behind the 3 m line (y 0.48), so the block must watch them all; the two back-row players without an attack (`ar` kind `None`) close in behind the hitter (the nearer one about 1 m to the side and 2.5 m off the net, the other farther round); the setter stays at the setting spot. 4: the spike over the net; the cover and the back-row attacker go to their `ar` spots, which are their defence spots ("then defend zone 5"); the front row stays at the net to block. Then the Reception still picture comes back. Each stage has its own caption per player.
-- **Alternatives:** set a different hitter per rotation, or the middle; keep the cover still and only move them to the `ar` spots; bring the hitter back off the net after the spike.
-- **Reversible by:** `phaseStages()`, `COVER`, `HIT_Y`, `BACK_HIT_Y` and `ATTACK_NOTES` in `src/template.html`. Coach question 9 on #16.
+- **Decision:** Four stages, from coaching sources (below) until the coach answers. 1: their serve to the libero, the setter releases (as #30). 2: the pass to the setter, the attackers to their `ar` approach spots (as #30). 3: the set goes to the leftmost front-row attacker (zone 4), the safe club-level first set. That hitter jumps to contact near the net (y 0.08). Every other attacker finishes the approach to hold the block: front row at take-off about 1.5 m off the net (y 0.17), back row behind the 3 m line (y 0.50). A 3-2 cup forms: the setter, the nearest front-row player who is not hitting, and the libero close and low, 2 to 3 m from the hitter; the rest stays deep, 4 to 6 m off, for wipes. 4: the spike; everyone goes to base defence by job (`BASE_DEF`), so a back-row setter defends zone 1. Then the Reception still picture comes back. Each stage has its own caption per player.
+- **Sources:** coachingvb.com "Hitter coverage strategy" (3-2 cup) and "Setting the starting rotation in a 5-1" (first set to the outside); Sportplan attack coverage drills (close cover low, 2-3 m); Koach Volleyball pipe guide (back-row take-off behind the 3 m line).
+- **Alternatives:** set a different hitter per rotation, or the middle; a 2-3 or 4-1 cover; keep the front row at the net after the spike.
+- **Reversible by:** `phaseStages()`, `CUP`, `DEEP`, `HIT_Y`, `APPROACH_Y`, `BACK_HIT_Y`, `baseSpots()` and `ATTACK_NOTES` in `src/template.html`. Coach question 9 on #16.
 
 ### 38. Where the animation controls sit on the court panel
 
@@ -314,7 +315,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #49
 - **Problem:** The owner asked to rename the button "Next: After reception ▸" to "After". The other steps still read "Next: Our serve ▸" and so on.
-- **Decision:** Only the Reception button changes: it reads "After ▸" (aria-label "Next: After reception"). The others keep "Next: … ▸", now always in full because the animation controls left the row. The phase chip reads "After" and the title tag "After reception", as before.
+- **Decision:** Only the Reception button changes: it reads "After ▸" (aria-label "Next: After reception"). The others keep "Next: … ▸", now always in full because the animation controls left the row. The phase chip reads "After" and the title tag "After reception", as before. Reception now plays on to the spike and base defence, but the After reception screen still shows the earlier moment at the pass (the attackers on their approach spots); Next goes back in time by one contact there.
 - **Alternatives:** "Next: After ▸"; drop "Next:" on every button.
 - **Reversible by:** the `lNext` label in `renderLearn()` in `src/template.html`.
 
@@ -322,6 +323,6 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #49
 - **Problem:** The owner wants a ball that looks like a volleyball, and faded dashed lines to trace where each player came from. Neither has a design in `docs/v2.md`.
-- **Decision:** The ball is an inline SVG volleyball (white with a blue and a yellow panel and dark seams, fixed colours in both themes), 0.65 × the marker radius, growing 15% at the top of each flight and turning once. Each move leaves a dashed line (1 unit, dash 2/1.6, 60% opacity) in the player's `--route-*` colour, drawn under the markers and growing with the move; the lines stay through the hold, Pause and Step and clear with the still picture, Replay or a screen change. A move shorter than 1% of the court leaves none.
+- **Decision:** The ball is an inline SVG volleyball (white with a blue and a yellow panel and dark seams, fixed colours in both themes), 0.65 × the marker radius, growing 15% at the top of each flight and turning once; it meets a player at the marker edge, so the label stays readable. Each move leaves a dashed line (1 unit, dash 2/1.6, 60% opacity) in the player's `--route-*` colour, drawn under the markers and growing with the move; the lines stay through the hold, Pause and Step and clear with the still picture, Replay or a screen change. A move shorter than 1% of the court leaves none.
 - **Alternatives:** a plain white ball, larger; trails only for your player.
 - **Reversible by:** `BALL_SVG`, `BALL_R`, the `.trail` lines in `animPlay()` and `paintAnim()` in `src/template.html`.

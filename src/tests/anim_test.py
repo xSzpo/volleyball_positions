@@ -12,6 +12,7 @@ leaves no trace.
 Usage: python src/tests/anim_test.py
 """
 
+import math
 import re
 import sys
 from pathlib import Path
@@ -196,23 +197,34 @@ def check_static(page: Page) -> None:
             fail(f"{key} has animation stages: {stages}")
 
 
-HIT_Y, BACK_HIT_Y = 0.08, 0.48
+HIT_Y, APPROACH_Y, BACK_HIT_Y = 0.08, 0.17, 0.5
+MARKER_R = 0.06
 TRAILS = """() => [...document.querySelectorAll('#courtL .trail')]
   .filter((l) => l.getAttribute('visibility') === 'visible').map((l) => l.dataset.p)"""
+TRAIL_LENGTHS = """() => Object.fromEntries([...document.querySelectorAll('#courtL .trail')]
+  .filter((l) => l.getAttribute('visibility') === 'visible')
+  .map((l) => [l.dataset.p, Math.hypot(l.getAttribute('x2') - l.getAttribute('x1'),
+    l.getAttribute('y2') - l.getAttribute('y1'))]))"""
+
+
+def base_zone(p: str, front: bool) -> int:
+    """Base defence by job: OH 4, MB 3, S/OP 2 in the front row; S/OP 1, L 5, OH 6 in the back row."""
+    job = p.rstrip("12")
+    if front:
+        return {"OH": 4, "MB": 3}.get(job, 2)
+    return {"L": 5, "OH": 6, "S": 1, "OP": 1}.get(job, 6)
 
 
 def reception_plan(ri: int, mode: str) -> tuple[list[list[str]], dict[str, tuple[float, float]], str]:
-    """The movers per Reception stage, the end positions and the hitter, from the after-reception data."""
+    """The movers per Reception stage, the base defence end positions and the zone 4 hitter."""
     row = lineup(ri, mode)  # type: ignore[arg-type]
     ar = {p: (x, y) for p, x, y, _ in row["ar"]}
     kind = {p: k for p, _, _, k in row["ar"]}
     order = [p for p, _, _ in row["rec"]]
     attackers = [p for p in order if kind[p] in ("front", "back")]
-    cover = [p for p in order if kind[p] is None]
-    back = [p for p in attackers if kind[p] == "back"]
     hitter = min((p for p in attackers if kind[p] == "front"), key=lambda p: ar[p][0])
-    moves = [[p for p in order if kind[p] == "set"], attackers, attackers + cover, back + cover]
-    end = {p: (ar[p][0], HIT_Y) if kind[p] == "front" else ar[p] for p in order}
+    moves = [[p for p in order if kind[p] == "set"], attackers, order, order]
+    end = {p: BASE_DEF[base_zone(p, p in row["front"])][:2] for p in order}
     return moves, end, hitter
 
 
@@ -252,7 +264,7 @@ def check_reception_stages(page: Page) -> None:
             fail(f"stage {stage + 1}: dots {page.locator('#lDots i.on').count()} on, stage {state['stage']}")
         got = page.evaluate(MARKERS, "#courtL .am")
         if stage == 0:
-            check_ball(page)
+            check_ball(page, got["L"])
         if stage == 1:
             check_positions("after the pass", got, after_pass)
         if stage == 3:
@@ -261,32 +273,40 @@ def check_reception_stages(page: Page) -> None:
         if sorted(page.evaluate(TRAILS)) != sorted(trails):
             fail(f"after Step {stage + 1}: trails {sorted(page.evaluate(TRAILS))}, expected {sorted(trails)}")
     page.click("#lReplay")
-    page.click("#lPlay")
-    if set(page.evaluate(TRAILS)) - set(moves[0]):
-        fail(f"Replay keeps the old trails: {page.evaluate(TRAILS)}")
-    page.click("#lPlay")
+    if not (anim(page) or {}).get("playing"):
+        page.click("#lPlay")
+    ends = (anim(page) or {}).get("ends", [0, 0, 0, 0])
+    page.wait_for_function(f"(window.ksvLearn.anim() || {{t: 1e9}}).t > {(ends[1] + ends[2]) / 2}", timeout=15000)
+    mid = page.evaluate(TRAIL_LENGTHS)
+    if not set(trail_movers(stages[0]) + trail_movers(stages[1])) <= set(mid) or not all(v > 1 for v in mid.values()):
+        fail(f"mid stage 3: trails {mid}, expected at least the setter and the attackers")
+    page.click("#lReplay")
+    state = anim(page)
+    fresh = page.evaluate(TRAIL_LENGTHS)
+    if not state or state["t"] > 200 or any(v > 1 for v in fresh.values()):
+        fail(f"Replay keeps the old trails: {fresh} at {state and state['t']}")
+    if not (anim(page) or {}).get("playing"):
+        page.click("#lPlay")
     wait_done(page)
     if page.locator("#courtL .trail").count():
         fail("the trails stay on the still picture")
     check_positions("back on the still picture", page.evaluate(MARKERS, "#courtL .mk"), rec)
     captions: list[str] = page.evaluate("window.ksvLearn.captions(0, 'rec', 'L')")
     if captions[1] != "You (L): Pass the serve high to the setter at the net." or captions[-1] != (
-        "You (L): Go back to zone 5 and defend while they play the ball."
+        "You (L): Go to zone 5 and defend while they play the ball."
     ):
         fail(f"Reception captions for L: {captions}")
-    if (
-        hitter != "OP"
-        or "set the ball high to op" not in page.evaluate("window.ksvLearn.captions(0, 'rec', 'S')")[2].lower()
-    ):
+    if hitter != "OP" or "set op in zone 4" not in page.evaluate("window.ksvLearn.captions(0, 'rec', 'S')")[2].lower():
         fail(f"R1: the setter does not set the zone 4 hitter {hitter}")
 
 
-def check_ball(page: Page) -> None:
-    """The ball is a volleyball with seams, about two thirds of a player marker."""
+def check_ball(page: Page, passer: list[float]) -> None:
+    """The ball is a volleyball with seams, about two thirds of a marker, and stops at the passer's edge."""
     ball: dict[str, Any] = page.evaluate(
         """() => { const g = document.querySelector('#courtL .ball');
-        const m = (g.getAttribute('transform') || '').match(/scale\\(([\\d.]+)\\)/);
-        return { opacity: g.getAttribute('opacity'), r: m ? +m[1] : 0,
+        const t = g.getAttribute('transform') || '';
+        const m = t.match(/scale\\(([\\d.]+)\\)/), at = t.match(/translate\\((-?[\\d.]+)[ ,](-?[\\d.]+)\\)/);
+        return { opacity: g.getAttribute('opacity'), r: m ? +m[1] : 0, at: at ? [+at[1], +at[2]] : null,
           seams: g.querySelectorAll('path.seam').length,
           panels: [...g.querySelectorAll('path[fill]')].map((e) => e.getAttribute('fill')) }; }"""
     )
@@ -294,25 +314,72 @@ def check_ball(page: Page) -> None:
         fail(f"the ball is not shown at 0.6 to 0.7 of the marker radius: {ball}")
     if ball["seams"] < 3 or len(ball["panels"]) < 2:
         fail(f"the ball has no volleyball seams or panels: {ball}")
+    if not ball["at"] or math.dist(ball["at"], passer) < MARKER_R * 100:
+        fail(f"the ball covers the passer's label: ball at {ball['at']}, passer at {passer}")
 
 
 def check_reception_ends(page: Page) -> None:
-    """In every rotation and both rule sets, Reception ends with the spike on the after-reception spots."""
+    """Every rotation, both rule sets: set and 3-2 cup, then the spike and base defence in every zone."""
+    zones = {z: spot[:2] for z, spot in BASE_DEF.items()}
     for mode, roles in MODES.items():
         open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             tag = f"{mode} R{ri + 1} Reception"
+            row = lineup(ri, mode)  # type: ignore[arg-type]
             moves, end, hitter = reception_plan(ri, mode)
             stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")
             if [sorted(st["moves"]) for st in stages] != [sorted(m) for m in moves]:
                 fail(f"{tag}: stages move {[st['moves'] for st in stages]}, expected {moves}")
                 continue
+            kind = {p: k for p, _, _, k in row["ar"]}
+            at_set = {p: (v["x"], v["y"]) for p, v in stages[2]["to"].items()}
+            hit = at_set[hitter]
+            if abs(hit[1] - HIT_Y) > 0.005:
+                fail(f"{tag}: {hitter} hits at {hit}")
+            for p, spot in at_set.items():
+                if p == hitter:
+                    continue
+                gap = math.dist(spot, hit)
+                if kind[p] == "front" and abs(spot[1] - APPROACH_Y) > 0.005 and not 0.22 <= gap <= 0.34:
+                    fail(f"{tag}: {p} neither finishes the approach nor covers close: {spot}")
+                if kind[p] == "back" and abs(spot[1] - BACK_HIT_Y) > 0.005 and not 0.22 <= gap <= 0.34:
+                    fail(f"{tag}: {p} does not take off behind the 3 m line: {spot}")
+            close_cover = [p for p, spot in at_set.items() if p != hitter and 0.22 <= math.dist(spot, hit) <= 0.34]
+            setter = next(p for p in kind if kind[p] == "set")
+            if len(close_cover) != 3 or setter not in close_cover or "L" not in close_cover:
+                fail(f"{tag}: the close cover is {close_cover}, expected the setter, L and a front player")
             track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, 'rec', 1)")
-            last = {p: [v["x"] * 100, v["y"] * 100] for p, v in track[-1]["pos"].items()}
-            check_positions(f"{tag} end", last, end)
+            last = {p: (v["x"], v["y"]) for p, v in track[-1]["pos"].items()}
+            check_positions(f"{tag} end", {p: [x * 100, y * 100] for p, (x, y) in last.items()}, end)
+            held = sorted(z for z, spot in zones.items() for p in last if math.dist(last[p], spot) < 0.005)
+            if held != [1, 2, 3, 4, 5, 6]:
+                fail(f"{tag}: after the spike the defence holds zones {held}")
+            if "S" in row["back"] and math.dist(last["S"], zones[1]) > 0.005:
+                fail(f"{tag}: the back-row setter ends at {last['S']}, not zone 1")
             spike = stages[-1]["notes"].get(hitter, "")
             if not spike.startswith("Spike over the net"):
                 fail(f"{tag}: the last stage is not {hitter}'s spike: {spike!r}")
+
+
+def check_no_overlap(page: Page) -> None:
+    """No two markers overlap whenever the players stand still, in any animated phase, rotation and rule set."""
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            for phase in ("serve", "rec"):
+                track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, '{phase}', 300)")
+                seen: set[tuple[str, str]] = set()
+                for now, then in zip(track, track[1:], strict=False):
+                    if now["pos"] != then["pos"]:
+                        continue
+                    pos = now["pos"]
+                    names = sorted(pos)
+                    for i, a in enumerate(names):
+                        for b in names[i + 1 :]:
+                            gap = math.dist((pos[a]["x"], pos[a]["y"]), (pos[b]["x"], pos[b]["y"]))
+                            if gap < 2 * MARKER_R - 1e-6 and (a, b) not in seen:
+                                seen.add((a, b))
+                                fail(f"{mode} R{ri + 1} {phase} t={now['t']:.0f}: {a} and {b} overlap ({gap:.3f})")
 
 
 def check_never_blocks(page: Page) -> None:
@@ -574,6 +641,7 @@ def main() -> None:
         check_static(page)
         check_reception_stages(page)
         check_reception_ends(page)
+        check_no_overlap(page)
         check_never_blocks(page)
         check_speed(page)
         check_still_captions(page)

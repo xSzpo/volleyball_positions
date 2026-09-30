@@ -3143,7 +3143,7 @@
       const ANIM_OFF = new URLSearchParams(location.search).get("anim") === "0";
       const motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
       const SERVE_BALL = { x: 0.3, y: -0.08 };
-      const THEIR_SERVE = { x: 0.3, y: -0.12 };
+      const THEIR_SERVE = { x: 0.3, y: -0.09 };
       const BALL_R = MARKER_R * 0.65;
       // A unit volleyball, scaled to BALL_R: three curved panels with dark seams.
       const BALL_SVG =
@@ -3162,39 +3162,35 @@
       const SERVE_HIT = "Serve from the spot behind the end line: the ball must clear the net.";
       const PASS_TEXT = "Pass the serve high to the setter at the net.";
       const SET_TEXT = "Take the pass at the setting spot: you play the second contact.";
-      const SPIKE_BALL = { x: 0.62, y: -0.1 };
+      const SPIKE_BALL = { x: 0.62, y: -0.09 };
       const HIT_Y = 0.08,
-        BACK_HIT_Y = 0.48;
-      // Where the cover closes in, from the hitter's spot at the net: the nearer cover first.
-      const COVER = [
-        { dx: 0.13, y: 0.3 },
-        { dx: 0.3, y: 0.4 },
+        APPROACH_Y = 0.17,
+        BACK_HIT_Y = 0.5;
+      // 3-2 cup around the hitter's spot at the net: three close and low (2-3 m), two deep (4-6 m).
+      const CUP = {
+        front: { dx: 0.24, y: 0.15 },
+        set: { dx: 0.23, y: 0.31 },
+        back: { dx: 0.03, y: 0.32 },
+      };
+      const DEEP = [
+        { dx: 0.38, y: 0.55 },
+        { dx: 0.05, y: 0.62 },
       ];
-      const defendZone = (x) => (x < 1 / 3 ? 5 : x > 2 / 3 ? 1 : 6);
       const ATTACK_NOTES = {
         hit: [
           "Approach and jump: the setter sets you in zone 4.",
-          "Spike over the net, then land ready to block.",
+          (z) => `Spike over the net, then back off to zone ${z} and defend.`,
         ],
-        front: [
-          "Run your approach too: the block must watch you.",
-          "Land at the net and get ready to block.",
-        ],
-        back: [
-          "Approach behind the 3 m line too: the block must watch you.",
-          (z) => `Go back to zone ${z} and defend while they play the ball.`,
-        ],
-        cover: [
-          (hitter) => `Close in behind ${hitter} to cover the hit if the block sends it back.`,
-          (z) => `Go back to zone ${z} and defend while they play the ball.`,
-        ],
-        set: [
-          (hitter) => `Set the ball high to ${hitter} in zone 4.`,
-          (front) =>
-            front
-              ? "Stay at the net: you block on the right."
-              : "Stay near the net to cover a tip over the block.",
-        ],
+        front: "Run your approach too: the block must watch you.",
+        back: "Approach behind the 3 m line too: the block must watch you.",
+        cupFront: (hitter) => `Approach for the quick, then drop in low to cover ${hitter}.`,
+        cupSet: (hitter) => `Set ${hitter} in zone 4, then follow in low to cover the hit.`,
+        cupBack: (hitter) => `Close in low behind ${hitter}: cover a ball the block sends back.`,
+        deep: "Stay deep behind the cover: a ball off the block can fly far.",
+        base: (z, front) =>
+          front
+            ? `Back off the net to zone ${z}: block or defend the next ball.`
+            : `Go to zone ${z} and defend while they play the ball.`,
       };
       const SWAP_NOTES = {
         serve: [
@@ -3271,6 +3267,36 @@
         }
         return { notes, team, swap: leave.length + enter.length > 0 };
       }
+      // Where the ball meets a player: at the marker edge toward its next target, so the label stays readable.
+      function touch(at, next) {
+        const dx = next ? next.x - at.x : 0,
+          dy = next ? next.y - at.y : -1,
+          d = Math.hypot(dx, dy) || 1,
+          k = (MARKER_R + BALL_R * 0.3) / 100 / d;
+        return { x: at.x + dx * k, y: at.y + dy * k };
+      }
+      // A mover stops a marker width from anyone standing there, so no two markers overlap in a hold.
+      function clearOf(p, end, standing) {
+        const gap = (2 * MARKER_R + 0.2) / 100;
+        return Object.entries(standing).reduce((pos, [q, o]) => {
+          const d = Math.hypot(pos.x - o.x, pos.y - o.y);
+          if (q === p || d >= gap || d === 0) return pos;
+          return { x: o.x + ((pos.x - o.x) * gap) / d, y: o.y + ((pos.y - o.y) * gap) / d };
+        }, end);
+      }
+      // Base defence by job for the players on court: OH 4, MB 3, S/OP 2 in front; S/OP 1, L 5, OH 6 behind.
+      function baseSpots(ri, ps) {
+        const zoneFor = (p) => {
+          const job = p.replace(/[0-9]/g, "");
+          if (isFront(ri, p)) return job === "OH" ? 4 : job === "MB" ? 3 : 2;
+          return job === "L" ? 5 : job === "OH" ? 6 : job === "S" || job === "OP" ? 1 : 6;
+        };
+        return pick(ps, (p) => {
+          const z = zoneFor(p),
+            [x, y] = BASE_DEF[z];
+          return { x, y, zone: z };
+        });
+      }
       // What happens in (ri, phase) after its still picture, in stages that end back on that picture.
       function phaseStages(ri, phase) {
         const list = learnSpots(ri, phase);
@@ -3285,7 +3311,7 @@
             stages.push({
               moves: { [sv]: from[sv] },
               notes: { ...notes, [sv]: SERVE_HIT },
-              ball: { from: from[sv], to: SERVE_BALL },
+              ball: { from: touch(from[sv], SERVE_BALL), to: SERVE_BALL },
             });
             stages.push({ moves: { [sv]: { x: base.x, y: base.y } }, notes: { [sv]: notes[sv] } });
           }
@@ -3298,10 +3324,13 @@
           const attackers = order.filter((p) => kind[p] === "front" || kind[p] === "back");
           const passer = from.L ? "L" : order.find((p) => !kind[p]);
           const setSpot = setter.length ? to[setter[0]] : null;
+          const front = attackers.filter((p) => kind[p] === "front");
+          const hitter = front.reduce((a, p) => (a == null || to[p].x < to[a].x ? p : a), null);
+          const hit = hitter && { x: to[hitter].x, y: HIT_Y };
           stages.push({
             moves: pick(setter, (p) => to[p]),
             notes: { ...notes, ...pick(setter, (p) => arNotes[p]) },
-            ball: passer && { from: THEIR_SERVE, to: from[passer] },
+            ball: passer && { from: THEIR_SERVE, to: touch(from[passer], setSpot || SERVE_BALL) },
           });
           stages.push({
             moves: pick(attackers, (p) => to[p]),
@@ -3310,45 +3339,61 @@
               ...(passer ? { [passer]: PASS_TEXT } : {}),
               ...pick(setter, () => SET_TEXT),
             },
-            ball: passer && setSpot && { from: from[passer], to: setSpot },
+            ball: passer &&
+              setSpot && { from: touch(from[passer], setSpot), to: touch(setSpot, hit) },
           });
-          const front = attackers.filter((p) => kind[p] === "front");
-          const hitter = front.reduce((a, p) => (a == null || to[p].x < to[a].x ? p : a), null);
           if (hitter && setSpot) {
-            const hitAt = (p) => ({ x: to[p].x, y: kind[p] === "front" ? HIT_Y : BACK_HIT_Y });
-            const hit = hitAt(hitter);
-            const cover = order.filter((p) => !kind[p]).sort((a, b) => to[a].x - to[b].x);
-            const coverAt = (p, i) => {
-              const c = COVER[Math.min(i, COVER.length - 1)];
-              return { x: Math.min(0.9, hit.x + c.dx), y: c.y };
+            const near = (ps) =>
+              ps.reduce(
+                (a, p) =>
+                  a == null || Math.abs(to[p].x - hit.x) < Math.abs(to[a].x - hit.x) ? p : a,
+                null,
+              );
+            const cupFront = near(
+              order.filter((p) => isFront(ri, p) && p !== hitter && kind[p] !== "set"),
+            );
+            const backs = order.filter((p) => !isFront(ri, p) && !kind[p]);
+            const cupBack = backs.includes("L") ? "L" : near(backs);
+            const cup = { ...pick(setter, () => CUP.set) };
+            if (cupFront) cup[cupFront] = CUP.front;
+            if (cupBack) cup[cupBack] = CUP.back;
+            const rest = order.filter((p) => p !== hitter && !cup[p]);
+            const approach = rest.filter((p) => kind[p] === "front" || kind[p] === "back");
+            const deep = rest.filter((p) => !approach.includes(p));
+            const around = (c) => ({ x: Math.min(0.9, hit.x + c.dx), y: c.y });
+            const moves = {
+              [hitter]: hit,
+              ...pick(approach, (p) => ({
+                x: to[p].x,
+                y: kind[p] === "front" ? APPROACH_Y : BACK_HIT_Y,
+              })),
+              ...Object.fromEntries(Object.entries(cup).map(([p, c]) => [p, around(c)])),
+              ...Object.fromEntries(
+                deep.map((p, i) => [p, around(DEEP[Math.min(i, DEEP.length - 1)])]),
+              ),
             };
-            const roleOf = (p) => (p === hitter ? "hit" : kind[p]);
+            const spike = touch(hit, SPIKE_BALL);
             stages.push({
-              moves: {
-                ...pick(attackers, hitAt),
-                ...Object.fromEntries(cover.map((p, i) => [p, coverAt(p, i)])),
-              },
+              moves,
               notes: {
-                ...pick(attackers, (p) => ATTACK_NOTES[roleOf(p)][0]),
-                ...pick(cover, () => ATTACK_NOTES.cover[0](hitter)),
-                ...pick(setter, () => ATTACK_NOTES.set[0](hitter)),
+                [hitter]: ATTACK_NOTES.hit[0],
+                ...pick(approach, (p) => ATTACK_NOTES[kind[p]]),
+                ...pick(deep, () => ATTACK_NOTES.deep),
+                ...pick(setter, () => ATTACK_NOTES.cupSet(hitter)),
+                ...(cupFront ? { [cupFront]: ATTACK_NOTES.cupFront(hitter) } : {}),
+                ...(cupBack ? { [cupBack]: ATTACK_NOTES.cupBack(hitter) } : {}),
               },
-              ball: { from: setSpot, to: hit, sync: true },
+              ball: { from: touch(setSpot, hit), to: spike, sync: true },
             });
-            const back = attackers.filter((p) => kind[p] === "back");
+            const base = baseSpots(ri, order);
+            const zone = (p) => base[p].zone;
             stages.push({
-              moves: pick([...back, ...cover], (p) => to[p]),
+              moves: pick(order, (p) => ({ x: base[p].x, y: base[p].y })),
               notes: {
-                [hitter]: ATTACK_NOTES.hit[1],
-                ...pick(
-                  front.filter((p) => p !== hitter),
-                  () => ATTACK_NOTES.front[1],
-                ),
-                ...pick(back, (p) => ATTACK_NOTES.back[1](defendZone(to[p].x))),
-                ...pick(cover, (p) => ATTACK_NOTES.cover[1](defendZone(to[p].x))),
-                ...pick(setter, (p) => ATTACK_NOTES.set[1](isFront(ri, p))),
+                ...pick(order, (p) => ATTACK_NOTES.base(zone(p), isFront(ri, p))),
+                [hitter]: ATTACK_NOTES.hit[1](zone(hitter)),
               },
-              ball: { from: hit, to: SPIKE_BALL },
+              ball: { from: spike, to: SPIKE_BALL },
             });
           }
         }
@@ -3363,6 +3408,11 @@
           st.start = t;
           st.src = {};
           st.glide = {};
+          const standing = { ...at, ...st.moves };
+          Object.keys(st.moves).forEach((p) => {
+            st.moves[p] = clearOf(p, st.moves[p], standing);
+            standing[p] = st.moves[p];
+          });
           Object.entries(st.moves).forEach(([p, end]) => {
             st.src[p] = at[p];
             st.glide[p] = Math.min(
