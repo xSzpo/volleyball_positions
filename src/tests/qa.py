@@ -142,9 +142,9 @@ def check_header(pg: Page, tag: str) -> None:
     pg.click('.rulesmode [data-rm="simple"]')
     if not pg.evaluate("document.querySelector('.wrap').inert"):
         fail(f"{tag} the page behind the open sheet is not inert")
-    for _ in range(12):
-        pg.keyboard.press("Tab")
-        if pg.evaluate("document.querySelector('.wrap').contains(document.activeElement)"):
+    for key in ["Tab"] * 12 + ["Shift+Tab"] * 12:
+        pg.keyboard.press(key)
+        if not pg.evaluate("document.getElementById('setup').contains(document.activeElement)"):
             fail(f"{tag} Tab left the open sheet")
             break
     learn_tag = pg.inner_text("#learnTag")

@@ -2520,7 +2520,7 @@
         "match-solo": true,
         "set-call-check": true,
         "match-same-device": true,
-        "match-online": true,
+        "match-online": false,
         "sets-tab": true,
         "sets-quiz": true,
         downloads: true,
@@ -2644,6 +2644,9 @@
         if (!feature("rules-official") && rulesMode === "official") {
           setRules("simple");
           renderRulesMode();
+        } else if (feature("rules-official") && !ON && !G && rulesMode !== storedRules()) {
+          setRules(storedRules());
+          renderRulesMode();
         }
         if (!ALL_ROLES.includes(store.get("role", null))) {
           $("setupNudge").hidden = false;
@@ -2757,7 +2760,20 @@
         if (e.target === $("setup")) setSetupOpen(false);
       };
       document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && !$("setup").hidden) setSetupOpen(false);
+        if ($("setup").hidden) return;
+        if (e.key === "Escape") setSetupOpen(false);
+        if (e.key !== "Tab") return;
+        const stops = [...$("setupPanel").querySelectorAll("button, input, select")].filter(
+          (el) => !el.disabled && el.getClientRects().length,
+        );
+        const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];
+        if (
+          stops.length &&
+          (document.activeElement === edge || !$("setup").contains(document.activeElement))
+        ) {
+          e.preventDefault();
+          (e.shiftKey ? stops[stops.length - 1] : stops[0]).focus();
+        }
       });
       $("subtitle").hidden = !firstVisit;
       $("setupNudge").hidden = !firstVisit;
@@ -3879,7 +3895,9 @@
           return `Look inside the highlighted area. ${describe(st.ri, st.phase, G.role).t}.`;
         }
         if (!me && G.role === "L")
-          return "Who is in zone 1 when we serve? Remember: under the official rules the libero may never serve.";
+          return rulesMode === "official"
+            ? "Who is in zone 1 when we serve? Remember: under the official rules the libero may never serve."
+            : "Who is in zone 1 when we serve? In Simplified KSV a substitute (SUB) serves in R3 and R6, so the libero waits off court.";
         if (!me)
           return st.phase === "serve"
             ? "Who does the libero replace while we serve? And who is serving from zone 1?"
@@ -4277,8 +4295,17 @@
           if (gPlayersMode() === "online") onRejoinCheck();
         };
       });
+      // Simplified shows MB; keep a stored MB1/MB2 so Official gets it back.
       function saveMp() {
-        store.set("mpPlayers", mpPlayers);
+        const prev = store.get("mpPlayers", []);
+        store.set(
+          "mpPlayers",
+          mpPlayers.map((p, k) =>
+            p.role === "MB" && ["MB1", "MB2"].includes(prev?.[k]?.role)
+              ? { ...p, role: prev[k].role }
+              : p,
+          ),
+        );
       }
       function renderMp() {
         $("mpList").innerHTML = mpPlayers
@@ -5448,10 +5475,14 @@
           onRole();
         }
         renderRoles();
-        mpPlayers.forEach((p) => {
-          p.role = roleIn(mode, p.role);
+        const stored = store.get("mpPlayers", []);
+        mpPlayers.forEach((p, k) => {
+          const old = stored?.[k]?.role;
+          p.role =
+            ALL_ROLES.includes(old) && roleIn("simple", old) === roleIn("simple", p.role)
+              ? roleIn(mode, old)
+              : roleIn(mode, p.role);
         });
-        saveMp();
         renderMp();
       }
       function renderRulesMode() {

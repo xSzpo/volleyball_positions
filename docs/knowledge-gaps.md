@@ -115,3 +115,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Keys stay as they are. `MB` is a new role, so its stats start empty; the other roles share their stats between Simplified and Official, which differ only at Our serve in R3 and R6.
 - **Alternatives:** add the rules mode to the stats key, so every role starts empty in Simplified.
 - **Reversible by:** the stats key in the Drill code of `src/template.html`.
+
+### 15. `match-online` off by default until the live database rules change
+
+- **Issue:** #19
+- **Problem:** The live Realtime Database rules reject the role `MB` and `rulesMode` `simple` until the owner runs `terraform apply`. With `match-online` on by default, `file://` and any client without PostHog values would create rooms whose writes are denied.
+- **Decision:** The built-in default of `match-online` is off. Re-enable it in #33, after the owner's `terraform apply`.
+- **Alternatives:** keep it on and write `official` to rooms until the apply; that would teach the wrong rule set online.
+- **Reversible by:** `FEATURES["match-online"]` in `src/template.html` and `DEFAULT_OFF` in `src/tests/flags_test.py`.

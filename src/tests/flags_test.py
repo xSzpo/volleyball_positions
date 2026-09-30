@@ -44,7 +44,7 @@ PRIVACY = {
     "mask_all_element_attributes": True,
     "respect_dnt": True,
 }
-UNBUILT = {"learn-animation", "rules-official", "after-dig"}
+DEFAULT_OFF = {"learn-animation", "rules-official", "after-dig", "match-online"}
 FAKE_POSTHOG = """
 window.posthog = {
   calls: { register: [] },
@@ -80,7 +80,7 @@ def check_defaults(page: Page) -> None:
     open_app(page)
     got = values(page)
     for key, on in got.items():
-        if on != (key not in UNBUILT):
+        if on != (key not in DEFAULT_OFF):
             fail(f"default {key} = {on}")
     for element_id in ("tabLearn", "drill", "game", "sets", "setsQuiz", "downloads", "howTo", "allRots"):
         if not present(page, element_id):
@@ -206,7 +206,7 @@ def check_bad_storage(browser: Browser, file_page: Page) -> None:
     for bad in ('"x"', "[1]", "7"):
         file_page.evaluate("(v) => localStorage.setItem('ksv51:ffOverride', v)", bad)
         open_app(file_page)
-        if values(file_page) != {k: k not in UNBUILT for k in values(file_page)}:
+        if values(file_page) != {k: k not in DEFAULT_OFF for k in values(file_page)}:
             fail(f"file://: stored override {bad} not ignored")
         context, page, errors = open_pages(browser, {"ksv51:flags": bad, "ksv51:ffOverride": bad})
         config: dict[str, Any] = page.evaluate("window.posthog.config")
@@ -235,6 +235,38 @@ def check_players_mode_restored(browser: Browser) -> None:
         fail("players mode: the online setup is not shown")
     if errors:
         fail(f"players mode: page errors: {errors}")
+    context.close()
+
+
+def check_rules_restored(browser: Browser) -> None:
+    """A stored Official choice and same-device middles survive rules-official off, and return when it comes on."""
+    mp = json.dumps([{"name": "Ann", "role": "MB2"}, {"name": "Bo", "role": "OP"}])
+    context, page, errors = open_pages(
+        browser,
+        {"ksv51:flags": "{}", "ksv51:rulesMode": '"official"', "ksv51:role": '"MB2"', "ksv51:mpPlayers": mp},
+    )
+    page.evaluate("window.posthog.fire({'learn-tab': true, 'match-solo': true, 'match-same-device': true})")
+    page.evaluate(
+        "() => { const el = document.querySelector('#mpList input');"
+        " el.value = 'Anna'; el.dispatchEvent(new Event('input')); }"
+    )
+    stored = page.evaluate(
+        "['rulesMode', 'role', 'mpPlayers'].map((k) => JSON.parse(localStorage.getItem('ksv51:' + k)))"
+    )
+    if stored[0] != "official" or stored[1] != "MB2" or stored[2][0]["role"] != "MB2":
+        fail(f"rules: stored choices overwritten while rules-official is off: {stored}")
+    page.evaluate(
+        "window.posthog.fire({'learn-tab': true, 'learn-animation': true, 'rules-official': true,"
+        " 'match-solo': true, 'match-same-device': true})"
+    )
+    checked = page.get_attribute('.rulesmode [aria-checked="true"]', "data-rm")
+    shown = page.evaluate(
+        "[document.getElementById('roleChip').textContent.trim(), document.querySelector('#mpList select').value]"
+    )
+    if checked != "official" or shown != ["MB2", "MB2"]:
+        fail(f"rules: after rules-official came on, rules {checked!r}, role and player 1 {shown}")
+    if errors:
+        fail(f"rules: page errors: {errors}")
     context.close()
 
 
@@ -295,6 +327,7 @@ def main() -> None:
             fail(f"page errors: {errors}")
         check_bad_storage(browser, page)
         check_players_mode_restored(browser)
+        check_rules_restored(browser)
         check_posthog(browser)
         check_first_visit_sheet(browser)
         browser.close()

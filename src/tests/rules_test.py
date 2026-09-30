@@ -125,8 +125,8 @@ def check_learn(page: Page) -> None:
     """Simplified in Learn: MB always front, the pair resets into R3, SUB serves in R3 and R6."""
     open_app(page, "?ff=all", {"role": "MB", "rulesMode": "simple"})
     learn(page, 2, "start")
-    if "zone 4" not in page.inner_text("#cue"):
-        fail(f"MB in R3 Rotation: cue does not say zone 4: {page.inner_text('#cue')!r}")
+    if not page.inner_text("#cue").startswith("Zone 4, front row") or "resets" not in page.inner_text("#cue"):
+        fail(f"MB in R3 Rotation: cue is not the zone 4 reset: {page.inner_text('#cue')!r}")
     for ri in (2, 5):
         learn(page, ri, "serve")
         shown = markers(page)
@@ -151,7 +151,7 @@ def check_learn(page: Page) -> None:
     shown = markers(page)
     if "SUB" in shown or "MB1" not in shown or "L" in shown:
         fail(f"Official R3 Our serve markers: {shown}")
-    if "serve" not in page.inner_text("#cue").lower():
+    if not page.inner_text("#cue").startswith("Defend zone 6") or "so you serve" not in page.inner_text("#cue"):
         fail(f"MB1 in Official R3 Our serve: cue {page.inner_text('#cue')!r}")
 
 

@@ -254,6 +254,26 @@ def check_off_court_pill(browser: Browser) -> None:
     print("off court pill: toggles I'm off court, feedback shows the solid pill", flush=True)
 
 
+def check_libero_hint(browser: Browser) -> None:
+    """The libero's hint at the R3 serve, off court, names the rule set in play."""
+    for rules, want, unwanted in (("simple", "SUB", "official rules"), ("official", "official rules", "SUB")):
+        page = new_page(browser, rules=rules)
+        setup_match(page, "L", ("serve",))
+        page.click("#gStart")
+        for _ in range(2):
+            page.wait_for_selector("#gOff:enabled")
+            tap_at(page, 0.5, 0.5)
+            press_next(page)
+            press_next(page)
+        page.wait_for_selector("#gOff:enabled")
+        page.click("#gHelp")
+        hint = page.inner_text("#gFb")
+        if want not in hint or unwanted in hint:
+            fail(f"{rules} L hint at the R3 serve reads {hint!r}, expected {want!r}")
+        page.close()
+    print("libero hint: Simplified names SUB, Official the libero rule", flush=True)
+
+
 def check_match_order(browser: Browser) -> None:
     """In order, one rotation runs Rotate, Our serve, Receive, After reception, with a story for each."""
     page = new_page(browser)
@@ -603,6 +623,7 @@ def main() -> None:
         check_our_serve(browser)
         check_off_court_pill(browser)
         check_match_order(browser)
+        check_libero_hint(browser)
         check_set_calls(browser)
         check_tap_then_continue(browser)
         check_breakdown(browser)
