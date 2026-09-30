@@ -413,6 +413,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** keep the reception spots as the Reception rest picture (the "end" of getting ready to receive) and stop the play there or snap back; draw the reception spots as ghosts under base defence.
 - **Reversible by:** `renderLearn()` (`played`, `drawn`), `restCaption()`, `LEAD_MS`, `playStart()` and `nudgePlay()` in `src/template.html`.
 - **Updated in #55:** the play is split at the spike. Reception rests on our spike (attackers on their `ar` spots, the cover formed) with a cue for your job at the spike; the reception text and overlap limits stay in the lead-in. Base plays the spike to base defence and rests there, with the controls and the Play nudge (entry 51).
+- **Updated in #64:** the owner saw the pulse move the whole layout. The nudge is now colour only (fill and border to `--accent`, icon `--on-accent`); the layout moved because the setup sheet's `.nudge` rule (margin, padding, border) also matched Play, which is now scoped to `#setupNudge`.
 
 ### 51. Learn's fourth screen is Base; Drill and Match call the step Attack
 

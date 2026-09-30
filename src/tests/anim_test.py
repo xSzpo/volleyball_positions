@@ -336,6 +336,64 @@ def check_nudge(browser: Browser) -> None:
         context.close()
 
 
+NUDGE_BOXES = """async () => {
+  const sels = ['#lPlay', '#lPanel', '#courtL', '#lAnim', '#lCap', '#lCtl', '#lNext'];
+  const box = () => Object.fromEntries(sels.map((s) => {
+    const r = document.querySelector(s).getBoundingClientRect();
+    return [s, [r.x, r.y, r.width, r.height].map((v) => Math.round(v * 100) / 100)];
+  }).concat([['page', [document.documentElement.scrollWidth, document.documentElement.scrollHeight,
+    window.scrollX, window.scrollY, window.visualViewport ? visualViewport.scale : 1]]]));
+  const b = document.querySelector('#lPlay');
+  b.classList.remove('nudge');
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const before = box();
+  b.classList.add('nudge');
+  const meta = ['offset', 'computedOffset', 'easing', 'composite'];
+  const props = new Set();
+  let running = 0;
+  for (const a of document.getAnimations().filter((a) => a.effect && a.effect.target === b)) {
+    running++;
+    for (const k of a.effect.getKeyframes())
+      for (const p of Object.keys(k)) if (!meta.includes(p)) props.add(p);
+  }
+  const samples = [];
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setTimeout(r, 90));
+    samples.push(box());
+  }
+  return { before, samples, props: [...props], running };
+}"""
+COLOUR_PROPS = {
+    "backgroundColor",
+    "borderColor",
+    "borderTopColor",
+    "borderRightColor",
+    "borderBottomColor",
+    "borderLeftColor",
+    "color",
+    "fill",
+}
+
+
+def check_nudge_colour_only(browser: Browser) -> None:
+    """The Play nudge changes colour only: no box on the Learn screen or the page moves while it runs."""
+    context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = context.new_page()
+    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    learn(page, 0, "rec")
+    page.wait_for_timeout(900)
+    got = page.evaluate(NUDGE_BOXES)
+    if not got["running"]:
+        fail("nudge: adding the class starts no animation on #lPlay")
+    if not got["props"] or set(got["props"]) - COLOUR_PROPS:
+        fail(f"nudge: the keyframes change {sorted(got['props'])}, expected colour properties only")
+    for n, sample in enumerate(got["samples"]):
+        for sel, want in got["before"].items():
+            if sample[sel] != want:
+                fail(f"nudge: sample {n}: {sel} is {sample[sel]}, was {want}")
+    context.close()
+
+
 def check_no_autoplay(page: Page) -> None:
     """No route plays: load, reload, Next, the chips, the arrow keys, a role change and a rules change."""
     open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
@@ -1033,6 +1091,7 @@ def main() -> None:
         check_flag_off(page)
         check_reduced(browser)
         check_nudge(browser)
+        check_nudge_colour_only(browser)
         check_phone(browser)
         check_official(page)
         for error in errors:
