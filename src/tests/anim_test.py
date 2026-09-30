@@ -507,6 +507,8 @@ TOP_SPEED = 5.0  # m/s; 1 unit is 9 m
 TRAIL_FADE_MS = 400
 BALL_WAIT_MS = 400
 DEEP_LIMIT = 0.85
+CAPTION_MS = 2500
+HELD = (MARKER_R * 100 + 1 + 0.65 * MARKER_R * 100) / 100
 
 
 def base_zone(p: str, front: bool) -> int:
@@ -777,6 +779,16 @@ def check_ball_moving(page: Page) -> None:
             ready = stages[0]["start"] + stages[0]["arrive"].get("S", 0)
             if ready > stages[1]["start"] + pass_ms + 1:
                 fail(f"{tag}: the setter reaches the set spot at {ready:.0f} ms, after the pass")
+            passer = next(p for p, note in stages[0]["notes"].items() if note.startswith("Their serve comes to you"))
+            _, _, hitter = reception_plan(ri, mode)
+            for k, who in enumerate((passer, "S", hitter)):
+                stage = stages[k]
+                pos = page.evaluate(
+                    "(a) => window.ksvLearn.at(...a)", [ri, "rec", stage["start"] + stage["ball"]["ms"]]
+                )
+                off = math.dist((pos[who]["x"], pos[who]["y"]), (stage["ball"]["to"]["x"], stage["ball"]["to"]["y"]))
+                if off > HELD + 0.01:
+                    fail(f"{tag}: stage {k + 1}'s ball lands {off:.2f} from {who}")
             ends: dict[str, float] = {}
             for n, stage in enumerate(stages):
                 for p in stage["moves"]:
@@ -787,6 +799,62 @@ def check_ball_moving(page: Page) -> None:
             deepest = max((q["y"] for q in stages[1]["paths"].get("L", [])), default=0)
             if deepest > DEEP_LIMIT:
                 fail(f"{tag} stage 2: L runs back to y {deepest:.2f}")
+
+
+def check_caption_timing(page: Page) -> None:
+    """While a play runs, your caption changes only for a new line of yours and stays CAPTION_MS of play.
+
+    Every rotation, role and rule set, from the caption plan; then one Reception played at 1× on the page.
+    """
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            for phase in ("rec", "ar"):
+                total = page.evaluate(f"window.ksvLearn.track({ri}, '{phase}', 1)")[-1]["t"]
+                stages = page.evaluate(f"window.ksvLearn.stages({ri}, '{phase}')")
+                for role in roles:
+                    plan = page.evaluate("(a) => window.ksvLearn.captionPlan(...a)", [ri, phase, role])
+                    tag = f"{mode} R{ri + 1} {phase} {role}"
+                    times = [c["t"] for c in plan]
+                    if any(b - a < CAPTION_MS for a, b in zip(times, times[1:], strict=False)) or times[-1] >= total:
+                        fail(f"{tag}: captions change at {times} (play {total:.0f} ms)")
+                    others = [c["text"] for c in plan[1:] if not c["text"].startswith(f"You ({role})")]
+                    if others and any(role in st["notes"] for st in stages):
+                        fail(f"{tag}: the caption changes to someone else's line: {others}")
+    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    learn(page, 0, "rec")
+    page.evaluate(
+        """() => { window.capLog = [];
+        new MutationObserver(() => { const a = window.ksvLearn.anim();
+          if (a) window.capLog.push([a.t, document.querySelector('#lCap').innerText]); })
+          .observe(document.querySelector('#lCap'), { childList: true, subtree: true, characterData: true }); }"""
+    )
+    page.click("#lPlay")
+    wait_done(page)
+    log = page.evaluate("window.capLog")
+    times = [t for t, _ in log]
+    if len(log) < 2 or any(b - a < CAPTION_MS - 50 for a, b in zip(times, times[1:], strict=False)):
+        fail(f"R1 Reception played at 1×: the caption changes at {times}")
+
+
+def check_rest_list(page: Page) -> None:
+    """After the Reception play the rest caption keeps the reception cue and lists your lines under Then:."""
+    for mode, role in (("simple", "OH1"), ("official", "MB2")):
+        open_app(page, "?ff=all", {"role": role, "rulesMode": mode})
+        learn(page, 3, "rec")
+        if page.locator("#lCap .then").count():
+            fail(f"{mode}: the Then: list shows before the play")
+        page.click("#lPlay")
+        wait_done(page)
+        still = page.evaluate(f"window.ksvLearn.still(3, 'rec', '{role}')")
+        want = page.evaluate(f"window.ksvLearn.captions(3, 'rec', '{role}')")
+        items = page.locator("#lCap .then li").all_inner_texts()
+        if items != want or not page.inner_text("#lCap").startswith(still):
+            fail(f"{mode}: after the play the caption is {page.inner_text('#lCap')!r}, expected {still!r} then {want}")
+        page.click("#lNext")
+        page.click('.ph[data-k="rec"]')
+        if page.locator("#lCap .then").count():
+            fail(f"{mode}: the Then: list stays after leaving the screen")
 
 
 def check_path_shapes(page: Page) -> None:
@@ -1039,6 +1107,16 @@ LAYOUT = """() => {
 }"""
 
 
+REST_FIT = """() => {
+  const row = document.querySelector('#lCtl').getBoundingClientRect();
+  const range = document.createRange(); range.selectNodeContents(document.querySelector('#lCap'));
+  range.setEndBefore(document.querySelector('#lCap .then'));
+  const cap = range.getBoundingClientRect();
+  const court = document.querySelector('#courtL').getBoundingClientRect();
+  return { capCovered: cap.bottom > row.top + 0.5, courtTop: court.top };
+}"""
+
+
 def check_phone(browser: Browser) -> None:
     """While a phase plays, the controls sit in the court panel and the sticky row covers nothing."""
     for height in (750, 664):
@@ -1079,6 +1157,10 @@ def check_phone(browser: Browser) -> None:
                 played += 1
                 page.wait_for_timeout(400)
             wait_done(page)
+            if page.locator("#lCap .then").count():
+                got = page.evaluate(REST_FIT)
+                if got["capCovered"] or got["courtTop"] < -0.5:
+                    fail(f"{tag}: after the play the rest caption or the court is out of view: {got}")
             if step == 1:
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         if played < 2:
@@ -1286,6 +1368,8 @@ def main() -> None:
         check_reception_stages(page)
         check_reception_ends(page)
         check_ball_moving(page)
+        check_caption_timing(page)
+        check_rest_list(page)
         check_path_shapes(page)
         check_switch_behind(page)
         check_no_overlap(page)

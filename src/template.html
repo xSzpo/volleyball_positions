@@ -646,6 +646,12 @@
       margin: 0;
       padding-left: 20px;
     }
+    .lcap .then {
+      margin-top: 4px;
+      font-size: 13px;
+      line-height: 1.35;
+      color: var(--muted);
+    }
     .lctl .btn.primary {
       flex: 1;
       min-width: 0;
@@ -2813,6 +2819,15 @@
         still: (ri, phase, r) =>
           restCaption(ri, phase, phaseStages(ri, phase), r).replace(/<[^>]+>/g, ""),
         lead: (ri, phase, r) => leadCaption(ri, phase, r).replace(/<[^>]+>/g, ""),
+        captionPlan: (ri, phase, r) =>
+          captionPlan(ri, phase, phaseStages(ri, phase), r).map((c) => ({
+            t: c.t,
+            text: c.html.replace(/<[^>]+>/g, ""),
+          })),
+        at: (ri, phase, t) => {
+          const tr = phaseStages(ri, phase);
+          return Object.fromEntries(tr.players.map((p) => [p, posAt(tr, p, t)]));
+        },
         bounds: (ri, phase) => boundLines(ri, players(ri, phase), role, phase).lines.length,
         stages: (ri, phase) =>
           phaseStages(ri, phase).stages.map((st) => ({
@@ -3056,6 +3071,7 @@
       // A new screen opens on its still picture; only Play plays it, and Play nudges once.
       function learnGo(nextRi, nextPhase) {
         const changed = nextRi !== ri || nextPhase !== phase;
+        if (changed) restList = null;
         ri = nextRi;
         phase = nextPhase;
         renderLearn();
@@ -3097,7 +3113,8 @@
         CONTACT_MS = 150,
         FADE_MS = 150,
         TRAIL_FADE_MS = 400,
-        FADE_BACK_MS = 400;
+        FADE_BACK_MS = 400,
+        CAPTION_MS = 2500;
       // 1 unit is 9 m; with a quarter of the glide spent speeding up and a quarter slowing down, the top speed is about 4.8 m/s.
       const MS_PER_UNIT = 2500,
         EASE_PART = 0.25,
@@ -3158,7 +3175,9 @@
       };
       let animSpeed = store.get("animSpeed", 1) === 0.5 ? 0.5 : 1;
       let anim = null,
-        learnTr = null;
+        learnTr = null,
+        // The screen whose play ran to the end: its rest caption lists your lines under "Then:".
+        restList = null;
       function animated() {
         return feature("learn-animation") && !ANIM_OFF && !motionQuery.matches;
       }
@@ -3632,6 +3651,9 @@
             const quick = st.mv[ball.quick];
             if (m) ball.ms = moveEnd(m);
             else if (quick) ball.ms = Math.max(ball.ms, moveEnd(quick));
+            (ball.ready || []).forEach((p) => {
+              if (st.mv[p]) ball.ms = Math.max(ball.ms, moveEnd(st.mv[p]));
+            });
             ball.ms = ball.ms || BALL_MS;
           }
           // The next contact follows the ball's arrival; the last stage runs until every move is done.
@@ -3666,13 +3688,34 @@
         const spike = rec[(n < 0 ? rec.length : n) - 1];
         return spike ? stageCaption(spike, r) : "";
       }
+      // While a play runs, the caption changes only when you get a new line, and each line stays CAPTION_MS of play.
+      function captionPlan(ri, phase, tr, r) {
+        const want = tr.lead ? [{ t: 0, html: leadCaption(ri, phase, r) }] : [];
+        tr.stages.forEach((st, k) => {
+          if (st.notes[r] || (k === 0 && !tr.lead))
+            want.push({ t: st.start, html: stageCaption(st, r) });
+        });
+        const out = [];
+        want.forEach((w) => {
+          const prev = out[out.length - 1];
+          if (prev?.html === w.html) return;
+          const t = prev ? Math.max(w.t, prev.t + CAPTION_MS) : w.t;
+          if (t < tr.total) out.push({ t, html: w.html });
+        });
+        return out;
+      }
+      const numbered = (list) => `<ol>${list.map((c) => `<li>${c}</li>`).join("")}</ol>`;
       function captionHtml(ri, phase, tr) {
         const still = restCaption(ri, phase, tr, role);
-        if (animated() || !tr.stages.length) return still;
         const list = tr.stages.map((st) => stageCaption(st, role));
+        if (animated()) {
+          if (restList !== `${rulesMode}|${ri}|${phase}` || !list.length) return still;
+          return `${still}<div class="then"><b>Then:</b>${numbered(list)}</div>`;
+        }
+        if (!tr.stages.length) return still;
         if (still && !list.includes(still)) list.unshift(still);
         if (list.length < 2) return still;
-        return `<ol>${list.map((c) => `<li>${c}</li>`).join("")}</ol>`;
+        return numbered(list);
       }
       function posAt(tr, p, t) {
         let pos = tr.from[p];
@@ -3739,10 +3782,14 @@
         }
         if (i !== a.stage) {
           a.stage = i;
-          $("lCap").innerHTML = st ? stageCaption(st, role) : leadCaption(ri, phase, role);
           renderDots();
         }
-        $("lCap").style.opacity = Math.min(1, (a.t - (st ? st.start : 0)) / FADE_MS);
+        const cap = a.caps.findLast((c) => c.t <= a.t) || a.caps[0];
+        if (cap && cap !== a.cap) {
+          a.cap = cap;
+          $("lCap").innerHTML = cap.html;
+        }
+        $("lCap").style.opacity = cap ? Math.min(1, (a.t - cap.t) / FADE_MS) : "";
       }
       function animFrame(now) {
         const a = anim;
@@ -3783,6 +3830,7 @@
             return;
           }
           anim = null;
+          restList = `${rulesMode}|${ri}|${phase}`;
           renderLearn();
           $("courtL")
             .querySelectorAll(".mk, .bnd")
@@ -3822,6 +3870,7 @@
       function animPlay(step = false) {
         if (!animated() || !animPhase(phase)) return;
         animCancel();
+        restList = null;
         const tr = phaseStages(ri, phase);
         if (!tr.stages.length) return;
         const off = !tr.from[role];
@@ -3861,6 +3910,8 @@
           ball: $("courtL").querySelector(".ball"),
           stage: null,
           total: tr.total,
+          caps: captionPlan(ri, phase, tr, role),
+          cap: null,
         };
         paintAnim();
         animResume(step ? tr.stages[0].start + tr.stages[0].dur : null);
