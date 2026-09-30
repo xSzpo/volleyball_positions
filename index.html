@@ -3193,17 +3193,22 @@
         `Wait at the sideline while ${sv} serves: the libero may not serve.`;
       const SPIKE_BALL = { x: 0.62, y: -0.09 };
       const HIT_Y = 0.08,
-        APPROACH_Y = 0.17,
-        BACK_HIT_Y = 0.5,
-        DEEP_Y = 0.86;
+        APPROACH_Y = 0.17;
       // Where front-row players who switch sides pass behind the middle: the one going left runs deeper.
       const SWITCH_VIA = { right: { x: 0.45, y: 0.4 }, left: { x: 0.55, y: 0.53 } };
       // Guide rule 01: the two outside hitters and the libero receive. One passer per rotation, so each takes two.
       const RECEIVERS = ["OH1", "OH2", "L"];
       const PASSER = ["L", "OH2", "OH1", "L", "OH1", "OH2"];
-      // The middle's cover spot beside the hitter, and the setter's step after the set.
-      const CUP_FRONT = { dx: 0.24, y: 0.2 };
-      const SETTER_STEP = { dx: -0.1, dy: 0.1 };
+      // The 3-2 cover: three close covers about 3 m from the hitter, in an arc behind and inside, at least GAP clear of
+      // the hitter's lane; two deep covers behind the gaps between them.
+      const COVER = {
+        setter: { dx: 0.33, dy: 0.07 },
+        middle: { dx: 0.26, dy: 0.21 },
+        L: { dx: 0.15, dy: 0.31 },
+      };
+      const DEEP_COVER = { back: { x: 0.44, y: 0.56 }, side: { x: 0.62, y: 0.44 } };
+      // The set flies at most this long; a close cover who is not there yet covers from where it is.
+      const SET_MAX_MS = 1100;
       const ATTACK_NOTES = {
         hit: [
           (left) =>
@@ -3212,13 +3217,15 @@
               : "Approach and jump in zone 4: in this rotation the opposite plays left.",
           (z) => `Spike over the net, then back off to zone ${z} and defend.`,
         ],
-        front: "Run your approach too: the block must watch you.",
-        back: "Approach behind the 3 m line too: the block must watch you.",
+        deepFront: "Come in to the middle and cover deep: a ball off the block can fly far.",
+        deepBack: "Cover deep in the middle: a ball off the block can fly far.",
         quick: "Run in for the quick in front of the setter as the pass comes.",
-        cupFront: (hitter) => `Fake the quick, then drop in low to cover ${hitter}.`,
-        cupSet: (hitter) => `Set ${hitter} in zone 4, then follow a step or two to cover the tip.`,
-        cupBack: (hitter) => `Cover ${hitter} from zone 5: play a ball the block sends back.`,
-        deep: "Stay deep behind the cover: a ball off the block can fly far.",
+        cupFront: (hitter) =>
+          `Fake the quick, then cover ${hitter} close, between the setter and L.`,
+        cupSet: (hitter) =>
+          `Set ${hitter} in zone 4, then follow in to cover ${hitter} close on the right.`,
+        cupBack: (hitter) => `Cover ${hitter} close behind: dig a ball the block sends back.`,
+        deep: "Cover deep behind the close cover: a ball off the block can fly far.",
         base: (z, front) =>
           front
             ? `Back off the net to zone ${z}: block or defend the next ball.`
@@ -3469,12 +3476,14 @@
       // Each mover in turn, shortest move first, takes the cheapest start delay and path (straight, or round one player
       // in the way without turning back) that meets nobody: movers not placed yet count as standing where they start, or
       // running the move they carry on from an earlier stage (carry, in this stage's time). A mover with a carry starts
-      // when it ends, and a mover in st.arrive starts so it arrives at that time if nobody is in the way. A second round
+      // when it ends, and a mover in st.arrive starts so it arrives at that time if nobody is in the way; st.first
+      // places some movers before the others. A second round
       // places again anyone who still meets someone, against everyone else's final move.
       function planStage(st, at, carry = {}) {
         const movers = Object.keys(st.moves);
         if (!st.keepOrder)
           movers.sort((p, q) => dist(at[p], st.moves[p]) - dist(at[q], st.moves[q]));
+        if (st.first) movers.sort((p, q) => st.first.includes(q) - st.first.includes(p));
         const plan = pick(Object.keys(at), (p) => carry[p] || makeMove([at[p]], 0));
         const place = (p) => {
           const others = Object.keys(plan)
@@ -3596,8 +3605,22 @@
           },
         });
         const second = passer ? [passer, ...order.filter((p) => p !== passer)] : order;
+        const cover = ({ dx, dy }) => hit && { x: Math.min(0.9, hit.x + dx), y: hit.y + dy };
+        const deep = order.filter((p) => !kind[p] && p !== "L" && !isFront(ri, p));
+        const side = attackers.filter((p) => p !== hitter && p !== cupFront);
+        const backSide = side.filter((p) => kind[p] === "back");
+        // L, the deep OH and a back-row side cover run straight on during the pass, so they get there with the set.
+        const onCover =
+          setSpot && hit
+            ? {
+                L: cover(COVER.L),
+                ...pick(deep, () => DEEP_COVER.back),
+                ...pick(backSide, () => DEEP_COVER.side),
+              }
+            : {};
         stages.push({
-          moves: pick(second, (p) => (p === cupFront ? takeOff : to[p])),
+          moves: pick(second, (p) => (p === cupFront ? takeOff : { ...(onCover[p] || to[p]) })),
+          first: ["L"],
           notes: {
             ...pick(
               receivers.filter((p) => p !== passer),
@@ -3606,6 +3629,7 @@
             ...(passer ? { [passer]: kind[passer] === "front" ? PASS_ATTACK : PASS_TEXT } : {}),
             ...pick(setter, () => SET_TEXT(passer)),
             ...(cupFront ? { [cupFront]: ATTACK_NOTES.quick } : {}),
+            ...(setSpot && hit ? pick(backSide, () => ATTACK_NOTES.deepBack) : {}),
           },
           team: passer ? `${passer} passes to the setter.` : "",
           ball: passer &&
@@ -3618,20 +3642,16 @@
             },
         });
         if (hitter && setSpot) {
-          const approach = attackers.filter((p) => p !== hitter && p !== cupFront);
-          const deep = order.filter((p) => !kind[p] && p !== "L" && !isFront(ri, p));
           const moves = { [hitter]: hit };
-          if (cupFront) {
-            moves[cupFront] = { x: Math.min(0.9, hit.x + CUP_FRONT.dx), y: CUP_FRONT.y };
-          }
+          if (cupFront) moves[cupFront] = cover(COVER.middle);
           setter.forEach((p) => {
-            moves[p] = { x: setSpot.x + SETTER_STEP.dx, y: setSpot.y + SETTER_STEP.dy };
+            moves[p] = cover(COVER.setter);
           });
-          approach.forEach((p) => {
-            moves[p] = { x: to[p].x, y: kind[p] === "front" ? APPROACH_Y : BACK_HIT_Y };
+          side.forEach((p) => {
+            moves[p] = { ...DEEP_COVER.side };
           });
           deep.forEach((p) => {
-            moves[p] = { x: to[p].x, y: Math.max(to[p].y, DEEP_Y) };
+            moves[p] = { ...DEEP_COVER.back };
           });
           const spike = touch(hit, SPIKE_BALL, HELD);
           stages.push({
@@ -3640,13 +3660,21 @@
             keepOrder: true,
             notes: {
               [hitter]: ATTACK_NOTES.hit[0](hitter.startsWith("OH")),
-              ...pick(approach, (p) => ATTACK_NOTES[kind[p]]),
+              ...pick(
+                side.filter((p) => !backSide.includes(p)),
+                () => ATTACK_NOTES.deepFront,
+              ),
               ...pick(deep, () => ATTACK_NOTES.deep),
               ...pick(setter, () => ATTACK_NOTES.cupSet(hitter)),
               ...(cupFront ? { [cupFront]: ATTACK_NOTES.cupFront(hitter) } : {}),
               ...(from.L ? { L: ATTACK_NOTES.cupBack(hitter) } : {}),
             },
-            ball: { from: touch(setSpot, hit), to: spike, sync: hitter },
+            ball: {
+              from: touch(setSpot, hit),
+              to: spike,
+              sync: hitter,
+              cover: [cupFront, ...setter, from.L ? "L" : null].filter(Boolean),
+            },
           });
           const base = baseSpots(ri, order);
           const zone = (p) => base[p].zone;
@@ -3706,6 +3734,15 @@
             if (ball.quick && st.moves[ball.quick]) st.arrive = { [ball.quick]: ball.ms };
           }
           planStage(st, at, carry);
+          // The set flies until the close cover stands, at most SET_MAX_MS, and the hitter's planned run ends as it lands.
+          if (ball?.cover) {
+            const stands = (p) => (st.mv[p] || carry[p] ? moveEnd(st.mv[p] || carry[p]) : 0);
+            const want = Math.min(SET_MAX_MS, Math.max(0, ...ball.cover.map(stands)));
+            if (want > moveEnd(st.mv[ball.sync])) {
+              st.arrive = { [ball.sync]: want };
+              planStage(st, at, carry);
+            }
+          }
           Object.entries(st.moves).forEach(([p, end]) => {
             st.src[p] = at[p];
             at[p] = { x: end.x, y: end.y };
