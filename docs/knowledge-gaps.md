@@ -227,3 +227,27 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** At the Rotation step in Official R3 and R6 the serving middle gets no limits ("You serve now, so you have no overlap limits. When they serve, the libero is in for you."). Its neighbours get their other limits and none against the zone 1 slot. The libero is off court in that picture, so there is no marker to draw a limit to. This replaces the part of #25 that said the overlap partners follow the serving middle.
 - **Alternatives:** name the libero as the zone 1 partner without a line; draw a ghost libero in zone 1.
 - **Reversible by:** `partners()` and `serverNow` in `renderLearn()` in `src/template.html`.
+
+### 29. When Our serve and Reception play
+
+- **Issue:** #47
+- **Problem:** The owner asked for Our serve and Reception to play once "when the screen opens". The page also re-renders Learn on load, on a tab switch and on a role or rules change, and the page opens on Reception.
+- **Decision:** A phase plays once when you move to a new screen in Learn: Next, a phase chip, a rotation chip or an arrow key. Loading the page, switching back to the Learn tab, and a role or rules change show the still picture only; Replay or Play plays it. After the last stage and a 900 ms hold the still picture comes back with a 150 ms fade.
+- **Alternatives:** also play on load and on the Learn tab (motion before any tap, and behind the first-visit role sheet); play only on Next and chips.
+- **Reversible by:** `learnGo()` in `src/template.html`.
+
+### 30. What the Reception animation shows
+
+- **Issue:** #47
+- **Problem:** The owner wants the ball to come to our side, the pass and the second contact until the ball reaches the setter, with the players' moves. The guide has no per-player timing, and who passes differs per serve.
+- **Decision:** Two stages. First their serve flies to the libero while the setter runs to the setting spot (the setter's `ar` note, "as soon as the serve is hit"), and everyone else sees their `rec` note. Then the pass flies from the libero to the setter while the attackers move to their `ar` approach spots with their `ar` notes; the libero reads "Pass the serve high to the setter at the net." and the setter "Take the pass at the setting spot: you play the second contact." The cover players do not move: covering comes after the set, which is After reception. The libero is always the passer.
+- **Alternatives:** a passer chosen per rotation (not in the guide); the cover moves too (goes past "until the ball reaches the setter").
+- **Reversible by:** `phaseStages()`, `PASS_TEXT` and `SET_TEXT` in `src/template.html`.
+
+### 31. Exchanges and the pair reset move into the still caption
+
+- **Issue:** #47
+- **Problem:** With no animation between screens, the libero and substitute exchanges and the Simplified middle pair reset into R3 and R6 no longer show as moves, and Our serve must start and end on its still picture.
+- **Decision:** The at-rest caption keeps them: when a screen follows an exchange or a reset, the player involved reads the old walk caption ("Go off at the sideline: the libero may not serve.", "Walk across the back from zone 5 to zone 1: the middle pair resets."), and everyone else reads it with that player's name. Otherwise it is your `move` note for the phase; Rotation has no caption. Our serve starts at the base spots: the server walks to the serve spot, then serves and runs back. The rotate step and its caption are gone.
+- **Alternatives:** put the exchange text in the explanation below the court; start Our serve with the server already behind the end line (the marker would jump from the still picture).
+- **Reversible by:** `stillNotes()` and `phaseStages()` in `src/template.html`.

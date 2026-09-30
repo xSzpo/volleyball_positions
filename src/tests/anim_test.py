@@ -1,15 +1,15 @@
 """Playwright test of the Learn animation (learn-animation).
 
-Plays Reception → After reception stage by stage and checks the end positions
-of each stage, the controls (Replay, Pause, Step, speed), that Next and the
-chips never wait for a transition, the rotate and pair-reset captions, the
-caption length and height, reduced motion and ?anim=0, the sticky controls on
-a short phone, and that the flag off leaves no trace.
+Our serve and Reception play once when the screen opens and end on their still
+picture; Rotation and After reception are static with no controls. Checks the
+stage end positions, the controls (Replay, Pause, Step, speed), that Next and
+the chips never animate or wait, the still captions for exchanges and the
+middle pair reset, the caption length and height, reduced motion and ?anim=0,
+the sticky controls on a short phone, and that the flag off leaves no trace.
 
 Usage: python src/tests/anim_test.py
 """
 
-import math
 import re
 import sys
 from pathlib import Path
@@ -28,7 +28,6 @@ MODES = {
     "official": ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"],
 }
 PHASES = ["start", "serve", "rec", "ar"]
-ROTATE = "The rally goes on. We win the point and rotate."
 CONTROLS = ["#lReplay", "#lPlay", "#lStep", "#lSpeed", "#lNext"]
 
 MARKERS = """(sel) => Object.fromEntries([...document.querySelectorAll(sel)].map(g => {
@@ -79,59 +78,128 @@ def check_positions(tag: str, got: dict[str, list[float]], want: dict[str, tuple
             fail(f"{tag}: {p} at {got.get(p)}, expected {spot}")
 
 
-def check_stages(page: Page) -> None:
-    """Step runs one stage and pauses: setter, then attackers, then passers, and the end state matches the data."""
+def spots(ri: int, phase: str, mode: str = "simple") -> dict[str, tuple[float, float]]:
+    row = lineup(ri, mode)  # type: ignore[arg-type]
+    if phase == "rec":
+        return {p: (x, y) for p, x, y in row["rec"]}
+    return {p: (x, y) for p, x, y, _ in row["ar"]}
+
+
+def wait_done(page: Page) -> None:
+    page.wait_for_function("!window.ksvLearn.anim()", timeout=15000)
+
+
+def check_opens_and_returns(page: Page) -> None:
+    """Next into Our serve and Reception plays once and ends on the still picture; Replay plays again."""
     open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
-    learn(page, 0, "rec")
-    if anim(page):
-        fail("a jump to another step plays a transition")
-    row = lineup(0, "simple")
-    rec = {p: (x, y) for p, x, y in row["rec"]}
-    ar = {p: (x, y) for p, x, y, _ in row["ar"]}
-    kind = {p: k for p, _, _, k in row["ar"]}
-    page.click("#lNext")
-    state = anim(page)
-    if not state or not state["playing"]:
-        fail(f"Next does not play the transition: {state}")
-        return
-    if page.inner_text("#learnTag") != "R1 (S1) · After reception":
-        fail(f"the tag does not move with Next: {page.inner_text('#learnTag')!r}")
-    if not 3000 <= state["total"] <= 5000:
-        fail(f"Reception → After reception takes {state['total']} ms at 1×, expected 3-5 s")
-    if not page.is_disabled("#lStep"):
-        fail("Step is enabled while playing")
-    page.click("#lPlay")
-    if anim(page)["playing"] or page.get_attribute("#lPlay", "aria-label") != "Play":  # type: ignore[index]
-        fail("Pause does not pause")
-    stage_kinds: list[tuple[str | None, ...]] = [("set",), ("front", "back"), (None,)]
-    for stage in range(3):
-        before = anim(page)
-        page.click("#lStep")
-        wait_paused(page)
+    learn(page, 0, "start")
+    wait_done(page)
+    for phase, label in (("serve", "Our serve"), ("rec", "Reception")):
+        page.click("#lNext")
+        if page.inner_text("#learnTag") != f"R1 (S1) · {label}":
+            fail(f"the tag does not move with Next: {page.inner_text('#learnTag')!r}")
         state = anim(page)
-        if stage < 2:
-            if not state or abs(state["t"] - state["ends"][stage]) > 1:
-                fail(f"Step {stage + 1} stopped at {state}, expected the end of stage {stage + 1}")
-                continue
-            if state["stage"] != stage or page.locator("#lDots i.on").count() != stage + 1:
-                fail(f"stage {stage + 1}: dots {page.locator('#lDots i.on').count()} on, stage {state['stage']}")
-            got = page.evaluate(MARKERS, "#courtL .am")
-            moved = {p: ar[p] if any(kind[p] in kinds for kinds in stage_kinds[: stage + 1]) else rec[p] for p in ar}
-            check_positions(f"after Step {stage + 1}", got, moved)
-        elif state:
-            fail(f"the last Step does not reach the end state: {state}, before {before}")
-    if page.locator("#courtL .am").count() or page.locator("#courtL .rt").count() == 0:
-        fail("the end state is not the static court with routes")
-    check_positions("end state", page.evaluate(MARKERS, "#courtL .mk"), ar)
+        if not state or not state["playing"] or state["t"] > 400:
+            fail(f"{label} does not play when it opens: {state}")
+            continue
+        if not page.is_visible("#lAnim") or not page.is_visible("#lDots"):
+            fail(f"{label}: the controls do not show")
+        if not page.is_disabled("#lStep"):
+            fail(f"{label}: Step is enabled while playing")
+        still = page.evaluate(MARKERS, "#courtL .am")
+        wait_done(page)
+        if page.locator("#courtL .am").count():
+            fail(f"{label}: the animation markers stay after the play")
+        end = page.evaluate(MARKERS, "#courtL .mk")
+        for p, xy in still.items():
+            if p not in end or abs(end[p][0] - xy[0]) > 0.2 or abs(end[p][1] - xy[1]) > 0.2:
+                fail(f"{label}: {p} ends at {end.get(p)}, the still picture has {xy}")
+        if phase == "rec":
+            check_positions(f"{label} end", end, spots(0, "rec"))
+        if page.locator("#lDots i.on").count():
+            fail(f"{label}: dots stay on at rest")
+        page.click("#lReplay")
+        if not (anim(page) or {}).get("playing"):
+            fail(f"{label}: Replay does not play again")
+        wait_done(page)
+        page.click("#lPlay")
+        if not (anim(page) or {}).get("playing"):
+            fail(f"{label}: Play at rest does not play")
+        wait_done(page)
     if "You (OH1):" not in page.inner_text("#lCap"):
         fail(f"the caption does not start with your move: {page.inner_text('#lCap')!r}")
 
 
-def check_never_blocks(page: Page) -> None:
-    """Next, the chips and the court answer at once while a transition plays; markers ignore taps."""
+def check_static(page: Page) -> None:
+    """Rotation and After reception never play and show no controls; Next reads in full there."""
     open_app(page, "?ff=all", {"role": "S", "rulesMode": "simple"})
-    learn(page, 1, "rec")
+    for ri, phase in ((0, "start"), (0, "ar"), (3, "start"), (3, "ar")):
+        learn(page, ri, phase)
+        if anim(page):
+            fail(f"R{ri + 1} {phase}: a chip tap plays an animation")
+        if page.is_visible("#lAnim") or page.is_visible("#lDots"):
+            fail(f"R{ri + 1} {phase}: controls show")
+        if not page.inner_text("#lNext").lower().startswith("next:"):
+            fail(f"R{ri + 1} {phase}: Next reads {page.inner_text('#lNext')!r}")
+        if page.locator("#courtL .am").count():
+            fail(f"R{ri + 1} {phase}: animation markers on a static screen")
+    learn(page, 0, "rec")
+    wait_done(page)
     page.click("#lNext")
+    if anim(page) or page.inner_text("#learnTag") != "R1 (S1) · After reception":
+        fail("Next into After reception animates or does not move the tag")
+    check_positions("After reception", page.evaluate(MARKERS, "#courtL .mk"), spots(0, "ar"))
+    page.click("#lNext")
+    if anim(page) or page.inner_text("#learnTag") != "R2 (S6) · Rotation":
+        fail("Next into the next Rotation animates")
+    for key in ("start", "ar"):
+        stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages(0, '{key}')")
+        if stages:
+            fail(f"{key} has animation stages: {stages}")
+
+
+def check_reception_stages(page: Page) -> None:
+    """Step runs one stage and pauses: the serve comes and the setter releases, then the pass and the attackers."""
+    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    learn(page, 0, "start")
+    page.click('.ph[data-k="rec"]')
+    wait_done(page)
+    row = lineup(0, "simple")
+    rec = spots(0, "rec")
+    ar = spots(0, "ar")
+    kind = {p: k for p, _, _, k in row["ar"]}
+    stages: list[dict[str, Any]] = page.evaluate("window.ksvLearn.stages(0, 'rec')")
+    if [st["moves"] for st in stages] != [["S"], [p for p in rec if kind[p] in ("front", "back")]]:
+        fail(f"Reception stages move {[st['moves'] for st in stages]}")
+    if not all(st["ball"] for st in stages):
+        fail("a Reception stage has no ball")
+    stage_kinds: list[tuple[str | None, ...]] = [("set",), ("front", "back")]
+    for stage in range(2):
+        page.click("#lStep")
+        wait_paused(page)
+        state = anim(page)
+        if not state or abs(state["t"] - state["ends"][stage]) > 1:
+            fail(f"Step {stage + 1} stopped at {state}, expected the end of stage {stage + 1}")
+            continue
+        if state["stage"] != stage or page.locator("#lDots i.on").count() != stage + 1:
+            fail(f"stage {stage + 1}: dots {page.locator('#lDots i.on').count()} on, stage {state['stage']}")
+        got = page.evaluate(MARKERS, "#courtL .am")
+        moved = {p: ar[p] if any(kind[p] in kinds for kinds in stage_kinds[: stage + 1]) else rec[p] for p in rec}
+        check_positions(f"after Step {stage + 1}", got, moved)
+    page.click("#lStep")
+    wait_paused(page)
+    if anim(page):
+        fail("the last Step does not return to the still picture")
+    check_positions("after the last Step", page.evaluate(MARKERS, "#courtL .mk"), rec)
+    captions: list[str] = page.evaluate("window.ksvLearn.captions(0, 'rec', 'L')")
+    if captions[-1] != "You (L): Pass the serve high to the setter at the net.":
+        fail(f"Reception captions for L: {captions}")
+
+
+def check_never_blocks(page: Page) -> None:
+    """Next, the chips and the court answer at once while a phase plays; markers ignore taps."""
+    open_app(page, "?ff=all", {"role": "S", "rulesMode": "simple"})
+    learn(page, 1, "serve")
     page.wait_for_timeout(300)
     hit = page.evaluate(
         "(() => { const g = document.querySelector('#courtL .am[data-p=\"S\"]').getBoundingClientRect();"
@@ -139,25 +207,23 @@ def check_never_blocks(page: Page) -> None:
         " return !!(el && el.closest('.am')); })()"
     )
     if hit:
-        fail("a marker takes taps while a transition plays")
+        fail("a marker takes taps while a phase plays")
     page.click("#lNext")
-    if page.inner_text("#learnTag") != "R3 (S5) · Rotation":
-        fail(f"Next waits for the transition: tag {page.inner_text('#learnTag')!r}")
+    if page.inner_text("#learnTag") != "R2 (S6) · Reception":
+        fail(f"Next waits for the animation: tag {page.inner_text('#learnTag')!r}")
     state = anim(page)
     if not state or not state["playing"] or state["t"] > 400:
-        fail(f"Next mid-transition does not start the next one: {state}")
+        fail(f"Next mid-play does not start Reception at once: {state}")
     page.click('.rot[data-i="4"]')
-    if anim(page) or page.inner_text("#learnTag") != "R5 (S3) · Rotation":
-        fail("a rotation chip does not snap to the end state")
-    page.click('.ph[data-k="serve"]')
-    if not anim(page):
-        fail("tapping the next phase chip does not play that transition")
+    state = anim(page)
+    if page.inner_text("#learnTag") != "R5 (S3) · Reception" or not state or state["t"] > 400:
+        fail(f"a rotation chip does not open that Reception: {state}")
     page.click('.ph[data-k="ar"]')
     if anim(page):
-        fail("jumping two phases plays a transition")
-    page.click("#lReplay")
+        fail("a chip to After reception plays")
+    page.click('.ph[data-k="serve"]')
     if not anim(page):
-        fail("Replay does not restart the transition")
+        fail("a chip back to Our serve does not play it")
     page.click("#tabSets")
     page.click("#tabLearn")
     if anim(page):
@@ -173,53 +239,52 @@ def check_speed(page: Page) -> None:
     page.wait_for_function("document.readyState === 'complete'")
     if page.inner_text("#lSpeed") != "0.5×":
         fail("the speed is not kept across a reload")
-    page.click("#lNext")
+    page.click("#lReplay")
     page.wait_for_timeout(1000)
     state = anim(page)
     if not state or not 300 <= state["t"] <= 700:
-        fail(f"at 0.5× one second plays {state and state['t']} ms of the transition")
+        fail(f"at 0.5× one second plays {state and state['t']} ms of the phase")
 
 
-def check_rotate_and_reset(page: Page) -> None:
-    """After reception → next rotation says the rally goes on; into R3 the middle pair resets."""
+def check_still_captions(page: Page) -> None:
+    """The exchanges and the middle pair reset that no longer animate stay in the still captions."""
     open_app(page, "?ff=all", {"role": "MB", "rulesMode": "simple"})
-    learn(page, 0, "ar")
-    page.click("#lNext")
-    if page.inner_text("#lCap") != ROTATE:
-        fail(f"After reception → R2 caption: {page.inner_text('#lCap')!r}")
-    if re.search(r"go to base", page.inner_text("#learn"), re.I):
-        fail("a 'go to base' banner shows")
+    for ri in (2, 5):
+        tag = f"Simplified R{ri + 1}"
+        still = page.evaluate(f"window.ksvLearn.still({ri}, 'start', 'MB')")
+        if still != "You (MB): Walk along the net from zone 2 to zone 4: the middle pair resets.":
+            fail(f"{tag} Rotation still caption for MB: {still!r}")
+        if page.evaluate(f"window.ksvLearn.still({ri}, 'serve', 'L')") != (
+            "You (L): Go off at the sideline: the libero may not serve."
+        ):
+            fail(f"{tag} Our serve still caption for L")
+        if page.evaluate(f"window.ksvLearn.still({ri}, 'rec', 'L')") != (
+            "You (L): Come back on for SUB and take your reception spot."
+        ):
+            fail(f"{tag} Reception still caption for L")
     learn(page, 1, "ar")
     page.click("#lNext")
-    captions: list[str] = page.evaluate("window.ksvLearn.captions(2, 'start', 'MB')")
-    if captions != [ROTATE, "You (MB): Walk along the net from zone 2 to zone 4: the middle pair resets."]:
-        fail(f"R2 → R3 captions for MB: {captions}")
-    page.wait_for_function("!window.ksvLearn.anim()", timeout=15000)
     got = page.evaluate(MARKERS, "#courtL .mk")
     if not close(got["MB"], (0.17, 0.21)) or not close(got["L"], (0.83, 0.71)):
-        fail(f"after the reset MB is at {got.get('MB')}, L at {got.get('L')}")
-    serve: list[str] = page.evaluate("window.ksvLearn.captions(2, 'serve', 'OH1')")
-    if (
-        len(serve) != 3
-        or "Libero: Go off at the sideline" not in serve[0]
-        or not serve[2].startswith("Substitute: Serve")
-    ):
-        fail(f"R3 Our serve does not swap L for SUB first: {serve}")
-    rec: list[str] = page.evaluate("window.ksvLearn.captions(2, 'rec', 'L')")
-    if rec[0] != "You (L): Come back on for SUB and take your reception spot.":
-        fail(f"R3 Reception does not bring L back on for SUB: {rec}")
+        fail(f"R3 Rotation: MB at {got.get('MB')}, L at {got.get('L')}")
+    if "middle pair resets" not in page.inner_text("#lCap"):
+        fail(f"R3 Rotation caption: {page.inner_text('#lCap')!r}")
+    if re.search(r"go to base|rally goes on", page.inner_text("#learn"), re.I):
+        fail("a rotate or 'go to base' text shows")
 
 
 def check_captions(page: Page) -> None:
-    """Every stage caption is one line or two at 390 px, at most 90 characters, with no template leaks."""
+    """Every stage and still caption is one line or two at 390 px, at most 90 characters, with no template leaks."""
     for mode, roles in MODES.items():
         open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
         result: list[dict[str, Any]] = page.evaluate(
             """(roles) => { const cap = document.querySelector('#lCap'), out = [];
             const line = parseFloat(getComputedStyle(cap).lineHeight);
             for (const r of roles) for (let ri = 0; ri < 6; ri++) for (const ph of ['start','serve','rec','ar'])
-              for (const c of window.ksvLearn.captions(ri, ph, r)) {
-                cap.textContent = c; out.push({ r, ri, ph, c, lines: cap.getBoundingClientRect().height / line });
+              for (const [still, c] of [[true, window.ksvLearn.still(ri, ph, r)],
+                  ...window.ksvLearn.captions(ri, ph, r).map((c) => [false, c])]) {
+                cap.textContent = c;
+                out.push({ r, ri, ph, still, c, lines: cap.getBoundingClientRect().height / line });
               }
             return out; }""",
             roles,
@@ -227,32 +292,39 @@ def check_captions(page: Page) -> None:
         seen: dict[tuple[str, int, str], list[str]] = {}
         for item in result:
             tag = f"{mode} {item['r']} R{item['ri'] + 1} {item['ph']}"
-            same = seen.setdefault((item["r"], item["ri"], item["ph"]), [])
-            if item["c"] in same:
-                fail(f"{tag}: the caption shows twice: {item['c']!r}")
-            same.append(item["c"])
-            if not item["c"] or len(item["c"]) > 90 or re.search(r"undefined|NaN|null|\$\{", item["c"]):
+            if item["ph"] in ("serve", "rec", "ar") and item["still"] and not item["c"]:
+                fail(f"{tag}: no still caption")
+            if not item["still"]:
+                same = seen.setdefault((item["r"], item["ri"], item["ph"]), [])
+                if item["c"] in same:
+                    fail(f"{tag}: the caption shows twice: {item['c']!r}")
+                same.append(item["c"])
+                if not item["c"]:
+                    fail(f"{tag}: empty stage caption")
+            if len(item["c"]) > 90 or re.search(r"undefined|NaN|null|\$\{", item["c"]):
                 fail(f"{tag}: caption {item['c']!r} ({len(item['c'])} characters)")
             if item["lines"] > 2.05:
                 fail(f"{tag}: caption takes {item['lines']:.1f} lines: {item['c']!r}")
 
 
 def check_reduced(browser: Browser) -> None:
-    """Reduced motion and ?anim=0: no glide, the stages as a list, only Next in the row."""
+    """Reduced motion and ?anim=0: no glide, Our serve and Reception list their stages, only Next in the row."""
     for label, query, motion in (("reduced motion", "?ff=all", "reduce"), ("?anim=0", "?ff=all&anim=0", None)):
         context = browser.new_context(viewport={"width": 390, "height": 844}, reduced_motion=motion)  # type: ignore[arg-type]
         page = context.new_page()
         open_app(page, query, {"role": "OH1", "rulesMode": "simple"})
-        learn(page, 0, "rec")
-        if page.is_visible("#lAnim") or page.is_visible("#lDots") or not page.is_visible("#lNext"):
-            fail(f"{label}: controls shown: Replay/Pause/Step/speed and dots must be hidden, Next shown")
+        learn(page, 0, "start")
+        for phase in ("serve", "rec"):
+            page.click("#lNext")
+            if anim(page) or page.locator("#courtL .am").count():
+                fail(f"{label} {phase}: Next plays a glide")
+            if page.is_visible("#lAnim") or page.is_visible("#lDots") or not page.is_visible("#lNext"):
+                fail(f"{label} {phase}: Replay/Pause/Step/speed and dots must be hidden, Next shown")
+            if page.locator("#lCap ol li").count() != 2:
+                fail(f"{label} {phase}: the caption is not the list of two stages: {page.inner_text('#lCap')!r}")
         page.click("#lNext")
-        if anim(page) or page.locator("#courtL .am").count():
-            fail(f"{label}: Next plays a glide")
-        if page.locator("#courtL .rt").count() == 0:
-            fail(f"{label}: routes do not show at once")
-        if page.locator("#lCap ol li").count() != 3:
-            fail(f"{label}: the caption is not the list of three stages: {page.inner_text('#lCap')!r}")
+        if page.locator("#courtL .rt").count() == 0 or page.locator("#lCap ol").count():
+            fail(f"{label}: After reception has no routes or lists stages")
         context.close()
 
 
@@ -272,27 +344,27 @@ LAYOUT = """() => {
 
 
 def check_phone(browser: Browser) -> None:
-    """While a transition plays, the sticky row covers neither the caption nor a marker, and it stays one line."""
+    """While a phase plays, the sticky row covers neither the caption nor a marker, and it stays one line."""
     for height in (750, 664):
         context = browser.new_context(viewport={"width": 390, "height": height}, is_mobile=True, has_touch=True)
         page = context.new_page()
         open_app(page, "?ff=all", {"role": "S", "rulesMode": "simple"})
         learn(page, 0, "ar")
         page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        played = 0
         for step in range(4):
             label = page.inner_text("#lNext")
             page.click("#lNext")
             tag = f"390 × {height}, Next {label!r}"
-            for sel in CONTROLS:
+            sels = CONTROLS if anim(page) else ["#lNext"]
+            for sel in sels:
                 box = page.locator(sel).bounding_box()
                 if not box or box["y"] < 0 or box["y"] + box["height"] > height + 1:
                     fail(f"{tag}: {sel} is outside the viewport: {box}")
                 elif box["width"] < 44 or box["height"] < 44:
                     fail(f"{tag}: {sel} is {box['width']:.0f} × {box['height']:.0f}")
-            for sample in range(6):
+            for _ in range(6):
                 if not anim(page):
-                    if not sample:
-                        fail(f"{tag}: the transition did not play")
                     break
                 got = page.evaluate(LAYOUT)
                 if got["rowHeight"] > 58 or got["nextHeight"] > 50:
@@ -301,60 +373,38 @@ def check_phone(browser: Browser) -> None:
                     fail(f"{tag}: the row covers the caption {got['capCovered']} or markers {got['marksCovered']}")
                 if height == 750 and got["courtCovered"]:
                     fail(f"{tag}: the court is not all in view above the row")
+                played += 1
                 page.wait_for_timeout(400)
+            wait_done(page)
             if step == 1:
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        if played < 2:
+            fail(f"390 × {height}: Our serve and Reception did not play")
         context.close()
 
 
 def check_official(page: Page) -> None:
-    """Official R3 and R6: L leaves and the front-row middle comes on; the zone 1 middle rotates on and serves."""
+    """Official R3 and R6: the Rotation step shows the real lineup and the exchanges stay in the still captions."""
     for ri, (on, serves) in ((2, ("MB2", "MB1")), (5, ("MB1", "MB2"))):
         open_app(page, "?ff=all", {"role": serves, "rulesMode": "official"})
         tag = f"Official R{ri + 1}"
-        start: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'start')")
-        swaps = [(st["leave"], st["enter"]) for st in start if st["leave"] or st["enter"]]
-        if swaps != [(["L"], [on])]:
-            fail(f"{tag} rotate: exchanges {swaps}, expected L off and {on} on")
-        if not any(serves in st["moves"] for st in start if st["fixed"]):
-            fail(f"{tag} rotate: {serves} does not rotate into zone 1")
         serve: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'serve')")
-        if any(st["leave"] or st["enter"] for st in serve):
-            fail(f"{tag} Our serve: an exchange plays: {serve}")
-        if serve[-1]["moves"] != [serves]:
-            fail(f"{tag} Our serve: the last stage moves {serve[-1]['moves']}, expected {serves} to serve")
-        rec: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")
-        if (rec[0]["leave"], rec[0]["enter"]) != ([serves], ["L"]):
-            fail(f"{tag} Reception: first stage {rec[0]}, expected {serves} off and L on")
+        if [st["moves"] for st in serve] != [[serves], [serves]]:
+            fail(f"{tag} Our serve: stages move {[st['moves'] for st in serve]}, expected {serves} to serve")
         learn(page, ri, "start")
         got = page.evaluate(MARKERS, "#courtL .mk")
         if "L" in got or serves not in got or on not in got:
             fail(f"{tag} Rotation step shows {sorted(got)}: expected {serves} and {on} on, L off")
-        captions: list[str] = page.evaluate(f"window.ksvLearn.captions({ri}, 'start', 'L')")
-        if "You (L): Go off at the sideline: the libero may not play in the front row." not in captions:
-            fail(f"{tag} rotate captions for L: {captions}")
-
-
-def check_round_behind(page: Page) -> None:
-    """A move that goes round behind a player never runs through that player's marker."""
-    for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
-        for ri in range(6):
-            stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'ar')")
-            track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, 'ar', 400)")
-            for k, st in enumerate(stages):
-                for p, note in st["notes"].items():
-                    m = re.search(r"round behind (\w+)", note or "")
-                    if not m:
-                        continue
-                    other = m.group(1)
-                    gap = [
-                        math.dist((f["pos"][p]["x"], f["pos"][p]["y"]), (f["pos"][other]["x"], f["pos"][other]["y"]))
-                        for f in track
-                        if f["stage"] == k
-                    ]
-                    if min(gap) < min(0.12, gap[0], gap[-1]) - 1e-6:
-                        fail(f"{mode} R{ri + 1}: {p} runs through {other} ({min(gap):.3f} apart)")
+        checks = {
+            ("start", "L"): "You (L): Go off at the sideline: the libero may not play in the front row.",
+            ("start", on): f"You ({on}): Come on for the libero and take zone 4.",
+            ("rec", serves): f"You ({serves}): Go off at the sideline: we lost the serve, so the libero comes back.",
+            ("rec", "L"): f"You (L): Come back on for {serves} and take your reception spot.",
+        }
+        for (phase, r), want in checks.items():
+            still = page.evaluate(f"window.ksvLearn.still({ri}, '{phase}', '{r}')")
+            if still != want:
+                fail(f"{tag} {phase} still caption for {r}: {still!r}")
 
 
 def check_flag_off(page: Page) -> None:
@@ -374,16 +424,17 @@ def main() -> None:
         page = context.new_page()
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        check_stages(page)
+        check_opens_and_returns(page)
+        check_static(page)
+        check_reception_stages(page)
         check_never_blocks(page)
         check_speed(page)
-        check_rotate_and_reset(page)
+        check_still_captions(page)
         check_captions(page)
         check_flag_off(page)
         check_reduced(browser)
         check_phone(browser)
         check_official(page)
-        check_round_behind(page)
         for error in errors:
             fail(f"page error: {error}")
         browser.close()

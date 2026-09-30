@@ -23,8 +23,8 @@ BASE_DEF: dict[int, tuple[float, float, str | None]] = {
 class Row(TypedDict):
     """One rotation: lineup, reception, after-reception and serve positions.
 
-    `move` holds one Learn caption per player for each transition into a
-    phase (serve, rec, ar), written to that player, 78 characters at most.
+    `move` holds one Learn caption per player for each phase (serve, rec,
+    ar), written to that player, 78 characters at most.
     """
 
     name: str
