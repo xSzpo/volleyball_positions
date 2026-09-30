@@ -2525,14 +2525,23 @@
         };
         return { set, hitter: hitter.p, hit, quick };
       }
-      // The spots Drill and Match grade. At Attack that is the moment the pass reaches the setter, so the front middle is at its quick take-off, not its 3 m line spot.
+      // The spots Drill and Match grade. At Attack that is where the Learn Reception play has everyone as the pass lands; the quick middle's route turns at its 3 m line spot.
       function answerSpots(ri, phase) {
         const pl = players(ri, phase);
-        const quick = phase === "ar" && passPlan(ri)?.quick;
-        if (!quick) return pl;
-        return pl.map((o) =>
-          o.p === quick.p ? { ...o, x: quick.x, y: quick.y, turn: { x: o.x, y: o.y } } : o,
-        );
+        const tr = phase === "ar" && phaseStages(ri, "rec"),
+          pass = tr && tr.stages[1];
+        if (!pass?.ball) return pl;
+        const t = pass.start + pass.ball.ms,
+          quick = passPlan(ri)?.quick;
+        return pl.map((o) => {
+          const at = posAt(tr, o.p, t);
+          return {
+            ...o,
+            x: at.x,
+            y: at.y,
+            ...(o.p === quick?.p ? { turn: { x: o.x, y: o.y } } : {}),
+          };
+        });
       }
       // The ball where it is at the moment asked: over the net after our serve, in the setter's hands when the pass lands.
       function momentBall(ri, phase, clip) {
@@ -2543,11 +2552,11 @@
       }
       // The ball held by the setter on the first side clear of every other marker and its ring: from the passer, right, or below right.
       function setterBall(ri) {
-        const plan = passPlan(ri);
-        if (!plan) return null;
-        const set = plan.set,
-          passer = players(ri, "rec").find((o) => o.p === PASSER[ri]),
-          others = answerSpots(ri, "ar").filter((o) => o.p !== set.p),
+        const spots = answerSpots(ri, "ar"),
+          set = spots.find((o) => o.kind === "set");
+        if (!set) return null;
+        const passer = players(ri, "rec").find((o) => o.p === PASSER[ri]),
+          others = spots.filter((o) => o.p !== set.p),
           clear = 8.3 + 1.2 + BALL_R;
         const sides = [passer, { x: 1, y: set.y }, { x: set.x + 1, y: set.y + 1 }]
           .filter(Boolean)

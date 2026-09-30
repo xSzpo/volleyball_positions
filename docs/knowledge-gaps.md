@@ -568,13 +568,13 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** L goes to the guide's zone 5 spot first and turns to the cover (an L-shaped run, and the set waits up to 1.6 s for it); the right-side attacker keeps its approach, a 3-1 cover; the deep outside hitter in the close cover instead of L where L passes from the right.
 - **Reversible by:** `COVER`, `DEEP_COVER`, `SET_MAX_MS`, the pass stage's `onCover` and the set ball's `cover` list in `buildReception()` in `src/template.html`.
 
-### 69. The front middle at Attack is graded at its quick take-off
+### 69. Attack is graded where Learn has everyone as the pass lands
 
 - **Issue:** #92
-- **Problem:** The Attack step asks where you are as the pass reaches the setter. The data `ar` spot of the front middle is on the 3 m line, where the guide's attack approach starts. Learn's Reception play has the middle at its take-off by the net when the pass lands, and the owner says the middle goes to the middle of the front row.
-- **Decision:** Drill and Match grade the front middle at the take-off the Learn play uses (`passPlan()`: `APPROACH_Y`, at most 0.15 left of the set spot). The feedback draws the run to the 3 m line, then the dashed approach to the take-off. Every other role is graded on its `ar` spot, which is where Learn has it when the pass lands. `ROWS[].ar` is unchanged.
-- **Alternatives:** move the middle's `ar` spot in the data (it would no longer match the guide's drawing); ask about the moment the setter sets.
-- **Reversible by:** `answerSpots()` and `passPlan()` in `src/template.html`.
+- **Problem:** The Attack step asks where you are as the pass reaches the setter. The data `ar` spots are where each player ends up after the pass (the front middle's is on the 3 m line, where the guide's approach starts). Learn's Reception play has some players elsewhere when the pass lands: the front middle at its take-off by the net (the owner says the middle goes to the middle of the front row), and L still on its run to the cover spot (about 0.07 short in R1 and 0.34 in R3, R4 and R6; in R4 L is the passer).
+- **Decision:** Drill and Match grade every player at their position in the Learn Reception play at the moment the pass lands (stage 2 start plus the pass flight), one source for all roles. The feedback draws the run from the reception spot to that position; for the front middle, the run to the 3 m line, then the dashed approach to the take-off. `ROWS[].ar` is unchanged. L's graded spot in R3, R4 and R6 is mid-run, so it follows any change to L's run timing.
+- **Alternatives:** grade the `ar` spots and move only the middle (disagrees with Learn for L); move the spots in the data (it would no longer match the guide's drawing); ask about the moment the setter sets.
+- **Reversible by:** `answerSpots()` in `src/template.html`.
 
 ### 70. The ball after an Attack answer is at the setter
 

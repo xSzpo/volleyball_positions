@@ -95,9 +95,15 @@ def tap_spot(page: Page, role: str, ri: int, phase: str, check: bool = True) -> 
 
 
 def pass_lands(page: Page, ri: int) -> dict[str, tuple[float, float]]:
-    """Where Learn's Reception play has each mover when the pass reaches the setter (the end of its stage 2)."""
-    stages = page.evaluate("(ri) => window.ksvLearn.stages(ri, 'rec').slice(0, 2).map((s) => s.to)", ri)
-    return {p: (at["x"], at["y"]) for stage in stages for p, at in stage.items()}
+    """Where Learn's Reception play has everyone at the moment the pass reaches the setter."""
+    spots = page.evaluate(
+        """(ri) => {
+            const pass = window.ksvLearn.stages(ri, 'rec')[1];
+            return window.ksvLearn.at(ri, 'rec', pass.start + pass.ball.ms);
+        }""",
+        ri,
+    )
+    return {p: (at["x"], at["y"]) for p, at in spots.items()}
 
 
 def breakdown_total(line: str) -> tuple[int, int]:
@@ -815,8 +821,9 @@ def attack_question(ri: int, role: str) -> str:
     return f"{PASSER[ri]} passes to the setter. Where are you as it arrives?"
 
 
-def check_ball_at_setter(pic: dict[str, Any], row: Row, tag: str) -> None:
-    set_spot = next((x * 100, y * 100) for _, x, y, kind in row["ar"] if kind == "set")
+def check_ball_at_setter(pic: dict[str, Any], row: Row, lands: dict[str, tuple[float, float]], tag: str) -> None:
+    setter = next(p for p, _, _, kind in row["ar"] if kind == "set")
+    set_spot = (lands[setter][0] * 100, lands[setter][1] * 100)
     if not pic["ball"] or abs(dist(pic["ball"], set_spot) - HELD) > 0.02:
         fail(f"{tag}: ball at {pic['ball']}, not with the setter at {set_spot}")
 
@@ -899,12 +906,13 @@ def check_attack_match(browser: Browser) -> None:
                 story = page.inner_text("#gStory")
                 if not story.endswith(attack_question(ri, "OH1")):
                     fail(f"{tag}: question reads {story!r}")
-                spot = next((x, y) for p, x, y, _ in rows[ri]["ar"] if p == "OH1")
+                lands = pass_lands(page, ri)
+                spot = lands["OH1"]
                 tap_at(page, *spot)
                 check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, tag)
                 press_next(page)
                 check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, f"{tag} feedback")
-                check_ball_at_setter(court_picture(page, "courtG"), rows[ri], f"{tag} feedback")
+                check_ball_at_setter(court_picture(page, "courtG"), rows[ri], lands, f"{tag} feedback")
                 line = page.inner_text("#gBd")
                 parts, total = breakdown_total(line)
                 if "%" in line or not parts == total == points(page) or total < 100:
@@ -917,38 +925,40 @@ def check_attack_match(browser: Browser) -> None:
     print("match Attack: reception picture, ball, tap line, full points", flush=True)
 
 
-def check_quick_middle(browser: Browser) -> None:
-    """Attack grades the front middle where Learn has it as the pass lands: at its quick take-off by the net."""
+def check_attack_grading(browser: Browser) -> None:
+    """Attack grades everyone where Learn's Reception play has them as the pass lands, and rings them there."""
     checked = 0
     for rules in RULES_MODES:
-        for role in [r for r in MODE_ROLES[rules] if r.startswith("MB")]:
+        for role in MODE_ROLES[rules]:
             page = new_page(browser, rules)
             setup_match(page, role, ("ar",), sets=False)
             page.click("#gStart")
             for ri in range(6):
-                tag = f"quick {rules} {role} R{ri + 1}"
+                tag = f"attack grading {rules} {role} R{ri + 1}"
                 row = lineup(ri, rules)
                 page.wait_for_selector("#gOff:enabled")
-                if role not in row["front"]:
+                lands = pass_lands(page, ri)
+                if not any(p == role for p, _, _, _ in row["ar"]):
                     page.click("#gOff")
                     press_next(page)
                     press_next(page)
                     continue
-                spot = pass_lands(page, ri)[role]
-                if spot[1] > 0.25:
+                spot = lands[role]
+                if role in row["front"] and role.startswith("MB") and spot[1] > 0.25:
                     fail(f"{tag}: Learn has the middle at {spot} as the pass lands, not at the net")
                 tap_at(page, *spot)
                 press_next(page)
                 if "Spot on" not in page.inner_text("#gFb"):
-                    fail(f"{tag}: a tap on the take-off {spot} reads {page.inner_text('#gFb')!r}")
-                me = next(m for m in court_picture(page, "courtG")["markers"] if m["me"])
+                    fail(f"{tag}: a tap where Learn has you {spot} reads {page.inner_text('#gFb')!r}")
+                pic = court_picture(page, "courtG")
+                me = next(m for m in pic["markers"] if m["me"])
                 if dist((me["x"], me["y"]), (spot[0] * 100, spot[1] * 100)) > 0.5:
-                    fail(f"{tag}: feedback rings the middle at ({me['x']}, {me['y']}), not at the take-off {spot}")
-                check_ball_at_setter(court_picture(page, "courtG"), row, tag)
+                    fail(f"{tag}: feedback rings you at ({me['x']}, {me['y']}), not at {spot}")
+                check_ball_at_setter(pic, row, lands, tag)
                 checked += 1
                 press_next(page)
             page.close()
-    print(f"Attack: front middle graded at its quick take-off on {checked} courts", flush=True)
+    print(f"Attack: graded where Learn has everyone as the pass lands on {checked} courts", flush=True)
 
 
 MODE_ROLES = {"simple": ("MB", "OH1", "OH2", "OP", "S", "L"), "official": ("MB1", "MB2", "OH1", "OH2", "OP", "S", "L")}
@@ -1066,6 +1076,29 @@ def check_receive_limits(browser: Browser) -> None:
         if len(seen) < 6:
             fail(f"limits drill {rules}: Receive came up only in {sorted(seen)}")
         page.close()
+    page = new_page(browser)
+    pick_role(page, "OH1")
+    page.click("#tabDrill")
+    if page.get_attribute("#dOpts", "open") is None:
+        page.click("#dOpts > summary")
+    page.set_checked("#nbDrill", True)
+    for _ in range(400):
+        if page.inner_text("#dq").endswith("· Reception"):
+            break
+        page.click("#resetBtn")
+    else:
+        fail("limits drill neighbour: Receive never came up")
+    ri = int(page.inner_text("#dq")[1]) - 1
+    spot = next((x, y) for p, x, y in lineup(ri, "simple")["rec"] if p == "OH1")
+    tap_at(page, *spot, court="courtD")
+    page.wait_for_selector("#dnb button")
+    if limit_lines(page, "courtD") or "Overlap: stay" in page.inner_text("#fb"):
+        fail("limits drill: shown while the neighbour check is open")
+    page.locator("#dnb button").first.click()
+    want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
+    if limit_lines(page, "courtD") != want or "Overlap: stay" not in page.inner_text("#fb"):
+        fail(f"limits drill: {limit_lines(page, 'courtD')} limit lines after the neighbour check, Learn draws {want}")
+    page.close()
     print(
         f"Receive limits: after the answer as in Learn on {checked} Match courts, Drill and after the neighbour check"
     )
@@ -1100,10 +1133,11 @@ def check_attack_drill(browser: Browser) -> None:
                 check_from_picture(court_picture(page, "courtD"), rows[ri], ri, "OH1", tag)
                 if page.inner_text("#dsub") != attack_question(ri, "OH1"):
                     fail(f"{tag}: question reads {page.inner_text('#dsub')!r}")
-                spot = next((x, y) for p, x, y, _ in rows[ri]["ar"] if p == "OH1")
+                lands = pass_lands(page, ri)
+                spot = lands["OH1"]
                 tap_at(page, *spot, court="courtD")
                 check_tap_line(court_picture(page, "courtD"), rows[ri], "OH1", spot, tag)
-                check_ball_at_setter(court_picture(page, "courtD"), rows[ri], f"{tag} feedback")
+                check_ball_at_setter(court_picture(page, "courtD"), rows[ri], lands, f"{tag} feedback")
                 page.click("#resetBtn")
             if len(seen) < 6:
                 fail(f"drill {rules} {vis}: Attack came up only in {sorted(seen)}")
@@ -1148,7 +1182,7 @@ def main() -> None:
         check_court_not_covered(browser)
         check_double_check(browser)
         check_attack_match(browser)
-        check_quick_middle(browser)
+        check_attack_grading(browser)
         check_from_label(browser)
         check_attack_drill(browser)
         check_receive_limits(browser)
