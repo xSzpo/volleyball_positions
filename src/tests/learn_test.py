@@ -28,7 +28,8 @@ PHASES = ["start", "serve", "rec", "ar"]
 PHASE_NAMES = {"start": "Rotation", "serve": "Our serve", "rec": "Reception", "ar": "Base"}
 ROUTE_KEY = {"S": "s", "OP": "op", "MB": "mb", "MB1": "mb", "MB2": "mb", "OH1": "oh", "OH2": "oh", "L": "l"}
 ROUTE_KEY["SUB"] = "sub"
-ROTATION_NAMES = ["R1 (S1)", "R2 (S6)", "R3 (S5)", "R4 (S4)", "R5 (S3)", "R6 (S2)"]
+ROTATION_NAMES = ["R1 (H1)", "R2 (H6)", "R3 (H5)", "R4 (H4)", "R5 (H3)", "R6 (H2)"]
+OLD_NAME = re.compile(r"\(S\d\)")
 # (mode, role, rotation, phase) -> (overlap sentence, partners whose limit is inside your marker)
 EXPECTED = {
     ("official", "L", 0, "start"): ("Overlap: stay behind MB1, right of OH2 and left of S.", []),
@@ -108,6 +109,8 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
         fail(f"{tag}: cue is empty: {state['cue']!r}")
     if re.search(r"undefined|NaN|null|\$\{", state["cue"]):
         fail(f"{tag}: cue has a template leak: {state['cue']!r}")
+    if OLD_NAME.search(page.inner_text("body")):
+        fail(f"{tag}: a rotation label still uses S")
     if OLD_TIMING.search(state["cue"]):
         fail(f"{tag}: cue uses the old overlap timing: {state['cue']!r}")
     here = on_court(page, role)
@@ -277,6 +280,29 @@ def check_rules_of_thumb(page: Page) -> None:
             fail(f"{mode} L: the middles rule is not marked as your rule: {mine}")
 
 
+def check_rotation_names(page: Page) -> None:
+    """Rotations are named with the Danish H in the table and the rotation chips, and Rules of thumb explain it."""
+    for mode, roles in MODES.items():
+        open_app(page, {"role": roles[0], "rulesMode": mode})
+        page.evaluate("document.querySelectorAll('details.fold').forEach(d => d.open = true)")
+        text = page.inner_text("body")
+        if OLD_NAME.search(text):
+            fail(f"{mode}: a rotation label still uses S")
+        for name in ROTATION_NAMES:
+            if name not in page.inner_text("#rotTable"):
+                fail(f"{mode}: the all-rotations table lacks {name}")
+        labels: list[str] = page.eval_on_selector_all(
+            "[aria-label]", "els => els.map(e => e.getAttribute('aria-label'))"
+        )
+        if not all(any(name in label for label in labels) for name in ROTATION_NAMES):
+            fail(f"{mode}: the rotation chip aria-labels lack the H names: {labels}")
+        if any(OLD_NAME.search(label) for label in labels):
+            fail(f"{mode}: an aria-label still uses S")
+        thumbs = " ".join(page.inner_text("#thumbs").split())
+        if "hæver" not in thumbs or "setter's zone" not in thumbs:
+            fail(f"{mode}: Rules of thumb do not explain H: {thumbs!r}")
+
+
 def walkthrough_rows() -> list[list[str]]:
     """The Official walk-through table of docs/v2.md section 5, one list of cells per rotation."""
     doc = (ROOT / "docs" / "v2.md").read_text()
@@ -423,6 +449,7 @@ def main() -> None:
         check_next_in_view(page)
         check_texts(page)
         check_rules_of_thumb(page)
+        check_rotation_names(page)
         check_official_walkthrough(page)
         check_official_libero(page)
         for error in errors:
