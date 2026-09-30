@@ -167,6 +167,11 @@
       margin: 6px 0 4px;
       letter-spacing: -0.01em;
     }
+    .titleball {
+      width: 0.7em;
+      height: 0.7em;
+      margin-left: 0.18em;
+    }
     h1 span[hidden] {
       display: none;
     }
@@ -1636,9 +1641,13 @@
     <div class="wrap">
       <div class="top">
         <h1>
-          Where do I stand?<span id="subtitle"
-            >KSV 5-1 system · receiving positions, movements and sets</span
-          >
+          Where do I stand?<svg
+            class="titleball"
+            id="titleBall"
+            viewBox="-1.1 -1.1 2.2 2.2"
+            aria-hidden="true"
+            focusable="false"
+          ></svg><span id="subtitle">KSV 5-1 system · receiving positions, movements and sets</span>
         </h1>
         <div class="topbtns">
           <button
@@ -1739,12 +1748,11 @@
             </div>
           </div>
           <div class="lcap" id="lCap" aria-live="polite"></div>
-          <div class="cue" id="cue"></div>
           <div class="lctl" id="lCtl">
             <button type="button" class="btn primary" id="lNext"></button>
           </div>
+          <div class="cue" id="cue"></div>
         </div>
-        <div class="card" id="sheet"></div>
         <details class="card fold" id="thumbsBox">
           <summary>Rules of thumb from the guide</summary>
           <div class="foldbody"><ol class="thumbs" id="thumbs"></ol></div>
@@ -3123,7 +3131,7 @@
         $("lNext").setAttribute("aria-label", `Next: ${upNext}`);
         $("lCap").innerHTML = captionHtml(ri, phase, learnTr);
         renderAnimControls();
-        renderSheet();
+        renderFolds();
       }
       // A new screen opens on its still picture; only Play plays it, and Play nudges once.
       function learnGo(nextRi, nextPhase) {
@@ -4084,57 +4092,6 @@
         if (e.key === "ArrowRight") learnGo((ri + 1) % 6, phase);
         if (e.key === "ArrowLeft") learnGo((ri + 5) % 6, phase);
       });
-      const RULES = {
-        S: [
-          "R1, R2, R3: you are back row. Stay out of the passing lanes, then run to the net.",
-          "R4, R5, R6: you are front row and start at the net. In R4 you run along the net from zone 4.",
-          "When we serve: back row → defend zone 1 (run to the net only after we dig); front row → middle of zone 2.",
-          "Attack: your setting spot is at the net, right of the middle. Base: middle of zone 2 in the front row, zone 1 in the back row.",
-        ],
-        OP: [
-          "Front row in R1, R2, R3 (setter back row). R1: at the left sideline, attack left. R2: at the net in the middle. R3: at the right sideline.",
-          "When we serve: front row → middle of zone 2, back row → defend zone 1.",
-          "Back row in R4, R5, R6: stand deep behind the receivers, then go straight to zone 1 for the back-row attack.",
-          "Except R1, you attack from the right.",
-        ],
-        MB: [
-          "You are always in the front row, in the middle slot. Start where the guide's front-row middle starts, get to the 3 m line and attack in the middle.",
-          "Into R3 and R6 the middle pair resets: you walk along the net from zone 2 to zone 4, and the libero walks across the back from zone 5 to zone 1.",
-          "When we serve: middle of zone 3.",
-          "Simplified KSV is a training convention for one middle. In a match both middles play.",
-        ],
-        MB1: [
-          "Front row in R1, R2, R6: start at the net (R6 far left, R2 right of the setter), get to the 3 m line and attack in the middle.",
-          "R3, R4, R5: you are off, the libero is in for you.",
-          "@MB1SERVE",
-          "When we serve, front row: middle of zone 3.",
-        ],
-        MB2: [
-          "Front row in R3, R4, R5: start at the net (R3 and R4 on the left, R5 on the right), get to the 3 m line and attack in the middle.",
-          "R6, R1, R2: you are off, the libero is in for you.",
-          "@MB2SERVE",
-          "When we serve, front row: middle of zone 3.",
-        ],
-        OH1: [
-          "Front row in R1, R5, R6: attack left (zone 4). R1 is the exception: the setter is in 1, you receive on the right and attack right.",
-          "@OHSERVE",
-          "You receive in every rotation, with the libero and the other outside.",
-          "Back row in R2, R3, R4: at the attack cover deep in middle back (zone 6) and defend there at base; the libero covers left back.",
-        ],
-        L: [
-          "@LSLOT",
-          "@LSERVE",
-          "You receive in every rotation: in the middle of the line in R1, R2 and R5, on the right in R3, R4 and R6.",
-          "Attack: cover the hitter from left back. Base: defend zone 5.",
-          "@LRULES",
-        ],
-        OH2: [
-          "Front row in R2, R3, R4: attack left (zone 4).",
-          "@OHSERVE",
-          "You receive in every rotation, with the libero and the other outside.",
-          "Back row in R1, R5, R6: at the attack cover deep in middle back (zone 6) and defend there at base; the libero covers left back.",
-        ],
-      };
       const THUMB = [
         {
           k: "overlap",
@@ -4183,9 +4140,6 @@
       function lab(t) {
         return t.replace(/\bR([1-6])\b(?! \(H)/g, (m, n) => RLAB[n - 1]);
       }
-      Object.keys(RULES).forEach((k) => {
-        RULES[k] = RULES[k].map(lab);
-      });
       THUMB.forEach((t) => {
         t.d = lab(t.d);
       });
@@ -4200,30 +4154,16 @@
       function ruleText(x) {
         const off = rulesMode === "official";
         const T = {
-          "@MB1SERVE":
-            "Exception: in R3 you are in zone 1, so you serve, then run to zone 6. The libero may not serve, so you stay on until your team loses the serve.",
-          "@MB2SERVE":
-            "Exception: in R6 you are in zone 1, so you serve, then run to zone 6. The libero may not serve, so you stay on until your team loses the serve.",
-          "@LSLOT": off
-            ? "You replace the back-row middle: MB2 in R1, R2 and R6, MB1 in R3, R4 and R5. You are never in the front row."
-            : "You always play the back-row middle spot, opposite MB. You are never in the front row. Into R3 and R6 the middle pair resets: you walk across the back from zone 5 to zone 1.",
-          "@LSERVE": off
-            ? "When we serve: defend zone 5. Exception: in R3 and R6 the back-row middle is in zone 1 and must serve, because the libero may never serve (FIVB rules). You are off until your team loses the serve."
-            : "When we serve: defend zone 5. Exception: in R3 and R6 you are in zone 1, but the libero may never serve. A substitute (SUB) serves and defends zone 6. You come back on for SUB when your team loses the serve.",
-          "@LRULES": off
-            ? `${LIBERO_RULE} ${FINGER_SET.replace("you set", "the libero sets")}`
-            : "",
           "@THUMB_MIDDLES_T": off
             ? "The libero replaces the back-row middle"
             : "MB plays the front middle, L the back middle",
           "@THUMB_MIDDLES_D": off
             ? "The libero goes on for whichever middle is in the back row: MB2 in R1, R2 and R6, MB1 in R3, R4 and R5, only while the ball is out of play. The libero may never serve. So in R3 and R6 that middle is in zone 1, serves and stays on until your team loses the serve; the libero comes back on for the reception (FIVB 19.3)."
             : "A training convention for one middle, not in the guide. MB always plays the front-row middle and the libero the back-row middle. Into R3 and R6 the pair resets: MB walks along the net from zone 2 to zone 4, L across the back from zone 5 to zone 1. The libero may never serve, so in R3 and R6 a substitute (SUB) serves and defends zone 6 until your team loses the serve.",
-          "@OHSERVE": `When we serve: front → middle of zone 4; back → defend zone 6 (zone 5 in R3 and R6, when ${off ? "a middle" : "SUB"} serves).`,
         };
         return lab(x in T ? T[x] : x);
       }
-      function renderSheet() {
+      function renderFolds() {
         const rows = ROWS.map((r, i) => {
           const z = zoneOf(i, role);
           return `<tr><td class="r">${r.name}</td><td>${z ? `Zone ${z}` : `Off (libero in zone ${zoneOf(i, "L")})`}</td>${["serve", "rec", "ar"].map((ph) => `<td>${describe(i, ph, role).t}</td>`).join("")}</tr>`;
@@ -4232,11 +4172,6 @@
           (t, i) =>
             `<li${t.roles.includes(role) ? ' class="mine"' : ""}><b>${ruleText(t.t)}</b>${t.roles.includes(role) ? ' <span class="tag">your rule</span>' : ""}<br>${ruleText(t.d)}</li>`,
         ).join("");
-        $("sheet").innerHTML = `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role]
-          .map(ruleText)
-          .filter(Boolean)
-          .map((x) => `<li>${x}</li>`)
-          .join("")}</ul>`;
         $("rotTable").innerHTML =
           `<table><thead><tr><th></th><th>Rotation</th><th>Our serve</th><th>Reception</th><th>Attack</th></tr></thead><tbody>${rows}</tbody></table>`;
         $("thumbs").innerHTML = thumbs;
@@ -6842,6 +6777,10 @@
       drawVis("game", visGame);
       renderRefLabels();
       $("fb").innerHTML = HINT;
+      $("titleBall").innerHTML = BALL_SVG.replace('opacity="0"', "").replaceAll(
+        "ballClip",
+        "ballClip-title",
+      );
       renderRoles();
       renderLearn();
       renderSets();

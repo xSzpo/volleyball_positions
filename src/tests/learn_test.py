@@ -405,12 +405,9 @@ def check_official_libero(page: Page) -> None:
         " ...window.ksvLearn.captions(ri, ph, r)])))",
         MODES["official"],
     )
-    texts.append(page.inner_text("#sheet"))
     for text in texts:
         if us_libero_rule(text):
             fail(f"Official text teaches a US libero rule: {text!r}")
-    if "FIVB 19.3" not in page.inner_text("#sheet"):
-        fail("Official libero rules to remember lack the 19.3 rule")
     for ri in range(6):
         if "nobody may attack that ball above the net" not in page.evaluate(
             f"window.ksvLearn.describe({ri}, 'ar', 'L').d"
@@ -428,11 +425,66 @@ def check_official_libero(page: Page) -> None:
                 fail(f"Official {ROTATION_NAMES[ri]} {ph}: libero rule in the cue is {shown}, expected {want}")
     open_app(page, {"role": "L", "rulesMode": "simple"})
     learn(page, 2, "serve")
-    if "FIVB 19.3" in page.inner_text("#cue") or "19.3" in page.inner_text("#sheet"):
+    if "FIVB 19.3" in page.inner_text("#cue"):
         fail("Simplified shows the Official libero rule text")
     learn(page, 2, "ar")
     if "nobody may attack that ball above the net" in page.inner_text("#cue"):
         fail("Simplified Base shows the Official finger-set rule")
+
+
+def check_hint_below_next(page: Page) -> None:
+    """Learn has no rules box, and the hint comes after Next in the DOM and on a 390 x 664 screen."""
+    page.set_viewport_size({"width": 390, "height": 664})
+    open_app(page, {"role": "L", "rulesMode": "official"})
+    for ri, phase in ((0, "rec"), (2, "rec"), (2, "start"), (3, "ar")):
+        learn(page, ri, phase)
+        tag = f"{ROTATION_NAMES[ri]} {phase}"
+        if page.locator("#sheet").count() or "rules to remember" in page.inner_text("#learn").lower():
+            fail(f"{tag}: Learn still shows the rules to remember box")
+        order = page.evaluate(
+            "['#lNext', '#cue', '#thumbsBox', '#allRots'].map(s => document.querySelector(s))"
+            ".every((e, i, all) => !i || all[i - 1].compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING)"
+        )
+        if not order:
+            fail(f"{tag}: the order is not Next, hint, Rules of thumb, all rotations")
+        page.evaluate("document.querySelector('#cue').scrollIntoView({block: 'end'})")
+        box: dict[str, float] = page.evaluate(
+            "(() => { const n = document.querySelector('#lNext').getBoundingClientRect(),"
+            " c = document.querySelector('#cue').getBoundingClientRect();"
+            " return { next: n.bottom, top: c.top, bottom: c.bottom, height: innerHeight }; })()"
+        )
+        if box["next"] > box["top"] or box["bottom"] > box["height"] + 1:
+            fail(f"{tag}: Next covers the hint or the hint is off screen: {box}")
+        want = ri == 2 and phase in ("start", "rec")
+        if ("FIVB 19.3" in page.inner_text("#cue")) != want:
+            fail(f"{tag}: the libero rule under Next is {not want}, expected {want}")
+        if phase == "ar" and "nobody may attack that ball above the net" not in page.inner_text("#cue"):
+            fail(f"{tag}: the finger-set rule is not in the hint")
+    page.set_viewport_size({"width": 390, "height": 844})
+
+
+def check_title_ball(page: Page) -> None:
+    """A decorative volleyball sits beside the title, cap height, in one header row at 390 px."""
+    open_app(page, {"role": "OH1", "rulesMode": "simple"})
+    if page.get_attribute("#titleBall", "aria-hidden") != "true" or not page.locator("h1 #titleBall .ball").count():
+        fail("the title has no decorative volleyball")
+    geo: dict[str, Any] = page.evaluate(
+        "(() => { const r = s => document.querySelector(s).getBoundingClientRect();"
+        " const h1 = document.querySelector('h1'), size = parseFloat(getComputedStyle(h1).fontSize);"
+        " const with_ball = h1.offsetHeight; document.querySelector('#titleBall').style.display = 'none';"
+        " const without = h1.offsetHeight; document.querySelector('#titleBall').style.display = '';"
+        " return { ball: r('#titleBall').toJSON(), chip: r('#roleChip').toJSON(), theme: r('#themeBtn').toJSON(),"
+        " size, with_ball, without, scroll: document.documentElement.scrollWidth > innerWidth }; })()"
+    )
+    ball, chip, theme = geo["ball"], geo["chip"], geo["theme"]
+    if not 0.6 * geo["size"] <= ball["height"] <= 0.8 * geo["size"]:
+        fail(f"the title ball is not cap height: {ball['height']:.1f} px for a {geo['size']:.0f} px title")
+    if ball["right"] > chip["left"] or chip["right"] > theme["left"] or abs(chip["top"] - theme["top"]) > 1:
+        fail(f"the title, role button and theme button are not in one row: {geo}")
+    if geo["with_ball"] != geo["without"]:
+        fail(f"the title ball adds a line to the title: {geo}")
+    if geo["scroll"]:
+        fail("the header scrolls sideways at 390 px")
 
 
 def main() -> None:
@@ -452,6 +504,8 @@ def main() -> None:
         check_rotation_names(page)
         check_official_walkthrough(page)
         check_official_libero(page)
+        check_hint_below_next(page)
+        check_title_ball(page)
         for error in errors:
             fail(f"page error: {error}")
         browser.close()
