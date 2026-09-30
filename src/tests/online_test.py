@@ -29,6 +29,8 @@ from typing import Any
 from playwright.sync_api import Browser, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
+# A stored role skips the first-visit role sheet, which covers the page.
+SEED_ROLE = "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"
 sys.path.insert(0, str(ROOT / "src"))
 from data import ROWS, SETS  # noqa: E402
 
@@ -128,6 +130,7 @@ def phone(browser: Browser, url: str, errors: list[str]) -> Page:
     """Opens the app in a fresh browser context, like a separate phone."""
     context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
     page = context.new_page()
+    page.add_init_script(SEED_ROLE)
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(url)
     page.wait_for_timeout(300)
@@ -137,7 +140,7 @@ def phone(browser: Browser, url: str, errors: list[str]) -> Page:
 def pick_role(page: Page, role: str) -> None:
     """Selects the player's role in the setup bar."""
     if page.is_hidden("#setupPanel"):
-        page.click("#setupBar")
+        page.click("#roleChip")
     page.click(f'.role[data-r="{role}"]')
 
 
@@ -184,7 +187,7 @@ def tap_at(page: Page, x: float, y: float) -> None:
     cx, cy = page.evaluate(
         """([x, y]) => {
             const m = document.getElementById('courtG').getScreenCTM();
-            return [m.a * x * 300 + m.e, m.d * y * 200 + m.f];
+            return [m.a * x * 100 + m.e, m.d * y * 100 + m.f];
         }""",
         [x, y],
     )
@@ -388,11 +391,12 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
 
     assert guest.is_disabled('.rulesmode [data-rm="drill"]'), "a guest can change the rules in the lobby"
     if host.is_hidden("#setupPanel"):
-        host.click("#setupBar")
+        host.click("#roleChip")
     host.click('.rulesmode [data-rm="drill"]')
     guest.wait_for_function("document.getElementById('lSet').textContent.includes('Drill')")
     host.click('.rulesmode [data-rm="official"]')
     guest.wait_for_function("document.getElementById('lSet').textContent.includes('Official')")
+    host.click("#setupDone")
     print("lobby rules follow the host")
 
     check_permissions(browser, url, host, code, errors)

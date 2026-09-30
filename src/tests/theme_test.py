@@ -1,4 +1,4 @@
-"""Playwright test of the light/dark theme button in index.html.
+"""Playwright test of the light/dark theme button and the court and role colour contrast in index.html.
 
 Usage: python src/tests/theme_test.py [screenshot directory]
 """
@@ -13,6 +13,10 @@ ROOT = Path(__file__).resolve().parents[2]
 URL = (ROOT / "index.html").as_uri() + "?ff=all"
 FAIL: list[str] = []
 OPPOSITE = {"light": "dark", "dark": "light"}
+COURT = ("--court-g0", "--court-g1", "--court-g2")
+ROLE_FILLS = ("--role-s", "--role-op", "--role-mb", "--role-oh", "--role-sub")
+ROUTES = ("--route-s", "--route-op", "--route-mb", "--route-oh", "--route-l", "--route-sub")
+RGB = tuple[float, float, float]
 
 
 def fail(message: str) -> None:
@@ -24,6 +28,67 @@ def shown_theme(page: Page) -> str:
     background = page.evaluate("getComputedStyle(document.body).backgroundColor")
     red = int(background.split("(")[1].split(",")[0])
     return "light" if red > 128 else "dark"
+
+
+def parse_colour(value: str) -> tuple[RGB, float]:
+    """Parses ``#rrggbb`` or ``rgba(r, g, b, a)`` into an RGB triple and an alpha."""
+    value = value.strip()
+    if value.startswith("#") and len(value) == 7:
+        return (int(value[1:3], 16), int(value[3:5], 16), int(value[5:7], 16)), 1.0
+    parts = [float(x) for x in value[value.index("(") + 1 : value.index(")")].split(",")]
+    return (parts[0], parts[1], parts[2]), parts[3] if len(parts) > 3 else 1.0
+
+
+def over(top: str, bottom: RGB) -> RGB:
+    """Composites a possibly translucent colour over an opaque one."""
+    rgb, alpha = parse_colour(top)
+    red, green, blue = (alpha * rgb[i] + (1 - alpha) * bottom[i] for i in range(3))
+    return red, green, blue
+
+
+def luminance(rgb: RGB) -> float:
+    channels = [c / 255 for c in rgb]
+    linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def ratio(first: RGB, second: RGB) -> float:
+    """WCAG 2.x contrast ratio."""
+    light, dark = sorted((luminance(first), luminance(second)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+def check_contrast(page: Page, tag: str) -> None:
+    """Court and role tokens meet the ratios in docs/v2.md section 2.2: text 4.5, shapes and lines 3."""
+    names = ["--court-line", "--net-label", "--marker-edge", "--ring", "--halo", "--tag", "--tag-ink"]
+    names += ["--role-ink", "--role-l", "--role-l-ink", *COURT, *ROLE_FILLS, *ROUTES]
+    raw: dict[str, str] = page.evaluate(
+        "names => { const style = getComputedStyle(document.documentElement);"
+        " return Object.fromEntries(names.map(n => [n, style.getPropertyValue(n)])); }",
+        names,
+    )
+    missing = [name for name, value in raw.items() if not value.strip()]
+    if missing:
+        fail(f"{tag}: tokens not defined: {missing}")
+        return
+    colour = {name: parse_colour(value)[0] for name, value in raw.items()}
+
+    def need(label: str, first: RGB, second: RGB, minimum: float) -> None:
+        found = ratio(first, second)
+        if found < minimum:
+            fail(f"{tag}: {label} contrast {found:.2f} < {minimum}")
+
+    for band in COURT:
+        need(f"--court-line on {band}", colour["--court-line"], colour[band], 3)
+        need(f"--net-label on {band}", colour["--net-label"], colour[band], 4.5)
+        need(f"--marker-edge on {band}", colour["--marker-edge"], colour[band], 3)
+        need(f"--ring on {band}", colour["--ring"], colour[band], 3)
+        for route in ROUTES:
+            need(f"{route} over --halo on {band}", colour[route], over(raw["--halo"], colour[band]), 3)
+    for fill in ROLE_FILLS:
+        need(f"--role-ink on {fill}", colour["--role-ink"], colour[fill], 4.5)
+    need("--role-l-ink on --role-l", colour["--role-l-ink"], colour["--role-l"], 4.5)
+    need("--tag-ink on --tag", colour["--tag-ink"], colour["--tag"], 4.5)
 
 
 def check_button(page: Page, tag: str, expected: str) -> None:
@@ -46,6 +111,7 @@ def run(scheme: Literal["light", "dark"], shots: Path | None) -> None:
         )
         errors: list[str] = []
         page.on("pageerror", lambda error: errors.append(str(error)))
+        page.add_init_script("localStorage.setItem('ksv51:role', JSON.stringify('OH1'))")
         page.goto(URL)
         page.wait_for_timeout(300)
         if page.locator("#themeBtn").count() == 0:
@@ -55,6 +121,7 @@ def run(scheme: Literal["light", "dark"], shots: Path | None) -> None:
         if page.get_attribute("html", "data-theme") is not None:
             fail(f"{tag}: data-theme set without a stored choice")
         check_button(page, f"{tag} default", scheme)
+        check_contrast(page, f"{tag} tokens")
         box = page.locator("#themeBtn").bounding_box()
         if box is None or box["width"] < 44 or box["height"] < 44:
             fail(f"{tag}: tap target smaller than 44px: {box}")
@@ -67,6 +134,7 @@ def run(scheme: Literal["light", "dark"], shots: Path | None) -> None:
         if page.get_attribute("html", "data-theme") != flipped:
             fail(f"{tag}: tap did not set data-theme={flipped}")
         check_button(page, f"{tag} after tap", flipped)
+        check_contrast(page, f"{tag} tokens after tap")
         page.reload()
         page.wait_for_timeout(300)
         if page.get_attribute("html", "data-theme") != flipped:
