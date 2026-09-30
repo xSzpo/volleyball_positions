@@ -25,7 +25,7 @@ MODES = {
     "official": ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"],
 }
 PHASES = ["start", "serve", "rec", "ar"]
-PHASE_NAMES = {"start": "Rotation", "serve": "Our serve", "rec": "Reception", "ar": "After reception"}
+PHASE_NAMES = {"start": "Rotation", "serve": "Our serve", "rec": "Reception", "ar": "Base"}
 ROUTE_KEY = {"S": "s", "OP": "op", "MB": "mb", "MB1": "mb", "MB2": "mb", "OH1": "oh", "OH2": "oh", "L": "l"}
 ROUTE_KEY["SUB"] = "sub"
 ROTATION_NAMES = ["R1 (S1)", "R2 (S6)", "R3 (S5)", "R4 (S4)", "R5 (S3)", "R6 (S2)"]
@@ -168,12 +168,12 @@ def check_walk(page: Page, mode: str, role: str) -> None:
         for at, phase in enumerate(PHASES):
             check_step(page, mode, role, rotation, phase)
             expected = PHASE_NAMES[PHASES[at + 1]] if at < 3 else ROTATION_NAMES[(rotation + 1) % 6]
-            label = "After" if phase == "rec" else f"Next: {expected}"
+            label = "Base" if phase == "rec" else f"Next: {expected}"
             if page.text_content("#lNext") != f"{label} ▸":
                 fail(f"{mode} {role} R{rotation + 1} {phase}: Next reads {page.text_content('#lNext')!r}")
             page.click("#lNext")
     if page.inner_text("#learnTag") != f"{ROTATION_NAMES[0]} · {PHASE_NAMES['start']}":
-        fail(f"{mode} {role}: Next after R6 After reception shows {page.inner_text('#learnTag')!r}")
+        fail(f"{mode} {role}: Next after R6 Base shows {page.inner_text('#learnTag')!r}")
 
 
 def check_next_in_view(page: Page) -> None:
@@ -277,7 +277,7 @@ def check_official_walkthrough(page: Page) -> None:
     for ri, cells in enumerate(rows):
         tag = f"Official walk-through {ROTATION_NAMES[ri]}"
         if len(cells) != 5:
-            fail(f"{tag}: {len(cells)} columns, expected Rot, Rotation step, Our serve, Reception, After reception")
+            fail(f"{tag}: {len(cells)} columns, expected Rot, Rotation step, Our serve, Reception, Attack")
             continue
         _, rotation, serve, reception, after = cells
         at: dict[str, list[dict[str, Any]]] = {
@@ -309,7 +309,7 @@ def check_official_walkthrough(page: Page) -> None:
         kinds = {o["p"]: o["kind"] for o in at["ar"]}
         attackers = re.match(r"((?:\w+, )+\w+) attack", after)
         if attackers and any(kinds.get(p) not in ("front", "back") for p in attackers[1].split(", ")):
-            fail(f"{tag}: After reception kinds {kinds}; the table says {after!r}")
+            fail(f"{tag}: Attack kinds {kinds}; the table says {after!r}")
         if "back-row attack" in after and kinds.get("OP") != "back":
             fail(f"{tag}: OP is {kinds.get('OP')!r} after reception; the table says {after!r}")
 
@@ -366,7 +366,10 @@ def check_official_libero(page: Page) -> None:
         if "nobody may attack that ball above the net" not in page.evaluate(
             f"window.ksvLearn.describe({ri}, 'ar', 'L').d"
         ):
-            fail(f"Official {ROTATION_NAMES[ri]} After reception: L text lacks the finger-set rule")
+            fail(f"Official {ROTATION_NAMES[ri]} Attack: L text in Drill and Match lacks the finger-set rule")
+        learn(page, ri, "ar")
+        if "nobody may attack that ball above the net" not in page.inner_text("#cue"):
+            fail(f"Official {ROTATION_NAMES[ri]} Base: L's cue lacks the finger-set rule")
     for ri in range(6):
         for ph in PHASES:
             learn(page, ri, ph)
@@ -378,6 +381,9 @@ def check_official_libero(page: Page) -> None:
     learn(page, 2, "serve")
     if "FIVB 19.3" in page.inner_text("#cue") or "19.3" in page.inner_text("#sheet"):
         fail("Simplified shows the Official libero rule text")
+    learn(page, 2, "ar")
+    if "nobody may attack that ball above the net" in page.inner_text("#cue"):
+        fail("Simplified Base shows the Official finger-set rule")
 
 
 def main() -> None:

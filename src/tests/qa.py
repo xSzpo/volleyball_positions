@@ -196,12 +196,15 @@ def check_court_look(pg: Page, tag: str, phone: bool) -> None:
         fail(f"{tag} marker labels read {labels}")
     if pg.locator("#courtL .rt").count():
         fail(f"{tag} routes drawn in Reception")
-    pg.click('.ph[data-k="ar"]')
+    pg.click('.ph[data-k="serve"]')
     if (
         not pg.locator("#courtL .rt").count()
         or pg.locator("#courtL .rt").count() != pg.locator("#courtL .rt .halo").count()
     ):
-        fail(f"{tag} after reception routes missing or without a halo")
+        fail(f"{tag} Our serve route missing or without a halo")
+    pg.click('.ph[data-k="ar"]')
+    if pg.locator("#courtL .rt").count() or pg.get_attribute("#courtL .ball", "opacity") != "1":
+        fail(f"{tag} Base draws routes or no ball")
     if phone:
         pg.evaluate("window.scrollTo(0, 0)")
         view = pg.evaluate("[innerWidth, innerHeight]")
