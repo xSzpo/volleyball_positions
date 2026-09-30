@@ -203,3 +203,19 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** In Official, `players(ri, "start")` puts the serving middle in zone 1 with L off in R3 and R6, and `zoneOf()` and the overlap partners follow it. Learn, Drill and Match all use it, so the serving middle answers zone 1 at the Rotation step and the libero answers off court. Simplified is unchanged.
 - **Alternatives:** change only the animation (its end state would not match the static court); change `ROWS.back` in `data.py` (also changes the cheat sheet and the Simplified SUB rename).
 - **Reversible by:** `middleServes()` in `src/template.html`.
+
+### 26. Whistle timing wording and where it shows
+
+- **Issue:** #44
+- **Problem:** The Volleyball Danmark rule from 1 October 2026 moves the overlap check to the referee's whistle, and lets players move from the server's first movement. The plan does not give the on-screen words, and the Rotation step shows our lineup before our own serve, when no overlap rule applies.
+- **Decision:** One sentence, "From the server's first movement you may move.", after every overlap text. Rotation: "These limits count at the referee's whistle when they serve." Reception: "These limits count at the whistle, not during the pass." The neighbour check asks "… at the whistle?". The first rule of thumb covers both teams in one entry, so the numbers the Match hints cite ("rule 2", "rule 4") do not shift.
+- **Alternatives:** a new rule of thumb for the receiving team; say "service motion" instead of "first movement".
+- **Reversible by:** `WHISTLE_MOVE`, `OVERLAP_WHEN`, `THUMB`, `neighbourQ()` and the `#checks` fold in `src/template.html`.
+
+### 27. Setter release after the serve kept
+
+- **Issue:** #44
+- **Problem:** Under the new rule the setter could leave the reception spot from the server's first movement, not only once the serve is hit. The R1 setter caption says "as soon as the serve is hit".
+- **Decision:** Keep the caption and all reception and after-reception spots. It is a tactic, not a rule text, and whether KSV wants the earlier release is the coach question on #16.
+- **Alternatives:** change the caption to "as soon as the server starts to move".
+- **Reversible by:** the R1 `move["ar"]["S"]` note in `src/data.py`.

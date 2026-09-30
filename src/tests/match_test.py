@@ -508,14 +508,23 @@ def check_breakdown(browser: Browser) -> None:
             page.wait_for_selector("#gOff:enabled")
             if ri == 1:
                 page.click("#gHelp")
+                hint = page.inner_text("#gFb")
+                if phase == "rec" and ("at the whistle" not in hint or "first movement" not in hint):
+                    fail(f"reception hint lacks the whistle timing: {hint!r}")
             tap_spot(page, "OH1", ri, phase)
             page.wait_for_selector("#gBd")
             right = ri % 2 == 0
             if page.locator("#gnb").count():
-                want = neighbour_answer(ri, "OH1", page.inner_text("#gnb"))
+                question = page.inner_text("#gnb")
+                if "at the whistle?" not in question or "at the serve" in question:
+                    fail(f"neighbour question does not ask about the whistle: {question!r}")
+                want = neighbour_answer(ri, "OH1", question)
                 page.locator(
                     f'#gnb button[data-p="{want}"]' if right else f'#gnb button:not([data-p="{want}"])'
                 ).first.click()
+                marked = page.inner_text("#gnb")
+                if "From the server's first movement you may move." not in marked or "serve is made" in marked:
+                    fail(f"neighbour feedback does not give the whistle timing: {marked!r}")
             if page.locator("#gsc").count():
                 want = asked_set(page)
                 page.locator(
