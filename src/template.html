@@ -555,7 +555,7 @@
       bottom: 0;
       z-index: 2;
       margin-top: 12px;
-      padding: 8px 0;
+      padding: 4px 0;
       border-top: 1px solid var(--line);
       background: var(--panel);
     }
@@ -595,10 +595,14 @@
       cursor: default;
     }
     .ldots {
+      position: absolute;
+      top: -5px;
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
-      justify-content: center;
       gap: 8px;
-      padding-top: 6px;
+      padding: 0 6px;
+      background: var(--panel);
     }
     .ldots i {
       width: 8px;
@@ -621,7 +625,10 @@
     }
     .lctl .btn.primary {
       flex: 1;
+      min-width: 0;
       min-height: 48px;
+      padding: 10px 6px;
+      white-space: nowrap;
       border-color: var(--accent);
       background: var(--accent);
       color: var(--on-accent);
@@ -1703,7 +1710,7 @@
           <svg class="court" id="courtL" viewBox="-4 -14 108 127" aria-label="Court diagram"></svg>
           <div class="lcap" id="lCap" aria-live="polite"></div>
           <div class="cue" id="cue"></div>
-          <div class="lctl">
+          <div class="lctl" id="lCtl">
             <div class="lrow">
               <span class="lanim" id="lAnim">
                 <button type="button" class="ictl" id="lReplay" aria-label="Replay">⟲</button>
@@ -2271,7 +2278,11 @@
           ...f.map((p, i) => ({ p, x: XS[i], y: FY })),
           ...b.map((p, i) => ({ p, x: XS[i], y: BY })),
         ];
-        if (phase === "start") return grid(r.front, r.back);
+        if (phase === "start")
+          return grid(
+            r.front,
+            middleServes(ri) ? r.back.map((p) => (p === "L" ? server(ri) : p)) : r.back,
+          );
         if (phase === "rec") return r.rec.map(([p, x, y]) => ({ p, x, y }));
         if (phase === "serve") {
           const sv = r.serve;
@@ -2285,9 +2296,15 @@
       function server(ri) {
         return ROWS[ri].server;
       }
+      // Official R3/R6: the zone 1 middle serves, so the Rotation step has them on and the libero off.
+      function middleServes(ri) {
+        const r = ROWS[ri];
+        return rulesMode === "official" && r.back.includes("L") && !r.serve.flat().includes("L");
+      }
       function zoneOf(ri, role) {
         const r = ROWS[ri];
         const i = [...r.front, ...r.back].indexOf(role);
+        if (i < 0 && middleServes(ri) && role === server(ri)) return ORDER[3 + r.back.indexOf("L")];
         return i < 0 ? null : ORDER[i];
       }
       function isFront(ri, role) {
@@ -2524,12 +2541,13 @@
         [5, 6, 1],
       ];
       // Your overlap partners at the serve: the player in your column and your row neighbours.
-      function partners(ri, role) {
+      function partners(ri, role, phase) {
         const z = zoneOf(ri, role);
         if (!z) return [];
         const zp = {};
+        const swap = phase === "start" && middleServes(ri);
         [...ROWS[ri].front, ...ROWS[ri].back].forEach((p, i) => {
-          zp[ORDER[i]] = p;
+          zp[ORDER[i]] = swap && p === "L" ? server(ri) : p;
         });
         const front = [4, 3, 2].includes(z);
         const out = [{ p: zp[COLUMN[z]], side: front ? "behind" : "front" }];
@@ -2539,25 +2557,25 @@
         if (i < 2) out.push({ p: zp[row[i + 1]], side: "right" });
         return out;
       }
-      function overlapText(ri, role) {
+      function overlapText(ri, role, phase) {
         const words = {
           behind: "in front of",
           front: "behind",
           left: "right of",
           right: "left of",
         };
-        const parts = partners(ri, role).map((o) => `${words[o.side]} ${o.p}`);
+        const parts = partners(ri, role, phase).map((o) => `${words[o.side]} ${o.p}`);
         if (!parts.length) return "";
         const last = parts.pop();
         return `Overlap: stay ${parts.length ? `${parts.join(", ")} and ${last}` : last}.`;
       }
       // Each line runs from your marker to the line a partner sets, in that partner's colour.
-      function boundLines(ri, pl, role) {
+      function boundLines(ri, pl, role, phase) {
         const out = { lines: [], tight: [] };
         const me = pl.find((o) => o.p === role);
         if (!me) return out;
         const gap = MARKER_R + 0.5;
-        partners(ri, role).forEach(({ p, side }) => {
+        partners(ri, role, phase).forEach(({ p, side }) => {
           const q = pl.find((o) => o.p === p);
           if (!q) return;
           const vertical = side === "behind" || side === "front";
@@ -2856,6 +2874,25 @@
         describe: (ri, phase, r) => describe(ri, phase, r),
         captions: (ri, phase, r) =>
           transition(ri, phase).stages.map((st) => stageCaption(st, r).replace(/<[^>]+>/g, "")),
+        stages: (ri, phase) =>
+          transition(ri, phase).stages.map((st) => ({
+            moves: Object.keys(st.moves),
+            enter: st.enter || [],
+            leave: st.leave || [],
+            notes: st.notes,
+            fixed: st.fixed || null,
+          })),
+        track: (ri, phase, n) => {
+          const tr = transition(ri, phase);
+          return Array.from({ length: n + 1 }, (_, i) => {
+            const t = (tr.total * i) / n;
+            return {
+              t,
+              stage: stageAt(tr, t),
+              pos: Object.fromEntries(tr.players.map((p) => [p, posAt(tr, p, t)])),
+            };
+          });
+        },
         anim: () =>
           anim && {
             t: anim.t,
@@ -3026,7 +3063,7 @@
         });
         const bounds =
           phase === "start" || phase === "rec"
-            ? boundLines(ri, pl, role)
+            ? boundLines(ri, pl, role, phase)
             : { lines: [], tight: [] };
         s += bounds.lines.join("");
         if (me) s += chip(me, { me: true });
@@ -3042,7 +3079,7 @@
         const { tight } = bounds;
         const overlap =
           me && (phase === "start" || phase === "rec")
-            ? ` ${overlapText(ri, role)}${bounds.lines.length ? " Each line ends at a limit you may not cross." : ""}${
+            ? ` ${overlapText(ri, role, phase)}${bounds.lines.length ? " Each line ends at a limit you may not cross." : ""}${
                 tight.length
                   ? ` You stand right at the ${tight.join(" and ")} limit${tight.length > 1 ? "s" : ""}.`
                   : ""
@@ -3051,9 +3088,9 @@
         $("cue").innerHTML =
           `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${guide}`;
         const at = PHASES.findIndex(([k]) => k === phase);
-        $("lNext").textContent = `Next: ${
-          at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1]
-        } ▸`;
+        const upNext = at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1];
+        $("lNext").textContent = `${animated() ? "" : "Next: "}${upNext} ▸`;
+        $("lNext").setAttribute("aria-label", `Next: ${upNext}`);
         learnTr = transition(ri, phase);
         $("lCap").innerHTML = captionHtml(learnTr);
         renderAnimControls();
@@ -3077,16 +3114,20 @@
         BALL_MS = 450,
         FADE_MS = 150;
       const ROTATE_TEXT = "The rally goes on. We win the point and rotate.";
+      const SERVE_GO = "Go to the serve spot behind the end line in zone 1.";
       const SWAP_NOTES = {
         serve: [
           () => "Go off at the sideline: the libero may not serve.",
-          () => "Come on for the libero and serve from behind the end line.",
+          () => "Come on at the sideline and go to the serve spot.",
         ],
         rec: [
           () => "Go off at the sideline: we lost the serve, so the libero comes back.",
           (off) => `Come back on for ${off} and take your reception spot.`,
         ],
-        start: [() => "Go off at the sideline.", () => "Come on at the sideline."],
+        start: [
+          () => "Go off at the sideline: the libero may not play in the front row.",
+          (off, z) => `Come on for the libero and take zone ${z}.`,
+        ],
       };
       let animSpeed = store.get("animSpeed", 1) === 0.5 ? 0.5 : 1;
       let anim = null,
@@ -3123,12 +3164,18 @@
           const [off, on] = SWAP_NOTES[phase] || SWAP_NOTES.start;
           swap = stage(
             { ...pick(leave, () => EXIT), ...pick(enter, first) },
-            { ...pick(leave, () => off()), ...pick(enter, () => on(leave.join(" and "))) },
+            {
+              ...pick(leave, () => off()),
+              ...pick(enter, (p) => on(leave.join(" and "), zoneOf(ri, p))),
+            },
             { enter, leave, src: pick(enter, () => EXIT) },
           );
         }
         if (phase === "serve") {
-          stages.push(own(stay, first));
+          stages.push({
+            ...own(stay, first),
+            notes: pick(stay, (p) => (p === sv ? SERVE_GO : notes[p])),
+          });
           if (to[sv])
             stages.push({
               ...own([sv]),
@@ -3149,7 +3196,13 @@
             ...own(stay.filter((p) => kind[p] === "front" || kind[p] === "back")),
             ball: setSpot && hitter && { from: setSpot, to: { x: to[hitter].x, y: 0.08 } },
           });
-          stages.push(own(cover));
+          const cov = own(cover);
+          cover.forEach((p) => {
+            const round = /round behind (\w+)/.exec(notes[p] || "");
+            const o = round && to[round[1]];
+            if (o) cov.moves[p] = { ...to[p], via: { x: o.x, y: o.y + 0.15 } };
+          });
+          stages.push(cov);
         } else {
           const home = spots(players(fromRi, "start"));
           const nextZone = (z) => (z === 1 ? 6 : z - 1);
@@ -3159,7 +3212,10 @@
           });
           stages.push({
             ...stage(
-              pick(stay, (p) => (reset.includes(p) ? home[p] : to[p])),
+              {
+                ...pick(stay, (p) => (reset.includes(p) ? home[p] : to[p])),
+                ...pick(swap ? leave : [], () => EXIT),
+              },
               {},
             ),
             fixed: ROTATE_TEXT,
@@ -3194,11 +3250,8 @@
           Object.entries(st.moves).forEach(([p, end]) => {
             const src = st.src[p] || at[p];
             st.src[p] = src;
-            st.glide[p] = Math.min(
-              900,
-              Math.max(600, Math.hypot(end.x - src.x, end.y - src.y) * 1000),
-            );
-            at[p] = end;
+            st.glide[p] = Math.min(900, Math.max(600, pathLength(src, end) * 1000));
+            at[p] = { x: end.x, y: end.y };
           });
           st.dur = Math.max(600, ...Object.values(st.glide));
           t += st.dur + (i < tr.stages.length - 1 ? HOLD_MS : 0);
@@ -3219,6 +3272,18 @@
         const mine = tr.stages.filter((st) => st.notes[role]).pop();
         return stageCaption(mine || tr.stages[tr.stages.length - 1], role);
       }
+      const pathLength = (a, b) =>
+        b.via
+          ? Math.hypot(b.via.x - a.x, b.via.y - a.y) + Math.hypot(b.x - b.via.x, b.y - b.via.y)
+          : Math.hypot(b.x - a.x, b.y - a.y);
+      function along(a, b, e) {
+        let [u, from, to] = [e, a, b];
+        if (b.via) {
+          const first = Math.hypot(b.via.x - a.x, b.via.y - a.y) / pathLength(a, b);
+          [u, from, to] = e < first ? [e / first, a, b.via] : [(e - first) / (1 - first), b.via, b];
+        }
+        return { x: from.x + (to.x - from.x) * u, y: from.y + (to.y - from.y) * u };
+      }
       function posAt(tr, p, t) {
         let pos = tr.from[p] || null,
           op = pos ? 1 : 0;
@@ -3233,7 +3298,7 @@
           const ms = t - st.start,
             u = Math.min(1, ms / st.glide[p]),
             e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
-          pos = { x: src.x + (end.x - src.x) * e, y: src.y + (end.y - src.y) * e };
+          pos = along(src, end, e);
           op = st.enter?.includes(p)
             ? Math.min(1, ms / FADE_MS)
             : st.leave?.includes(p)
@@ -3361,6 +3426,14 @@
         };
         paintAnim();
         animResume(step ? tr.stages[0].dur : null);
+        learnFit();
+      }
+      // While a transition plays, the court and caption sit above the sticky controls.
+      function learnFit() {
+        const court = $("courtL").getBoundingClientRect();
+        const cap = $("lCap").getBoundingClientRect();
+        const down = Math.min(cap.bottom - (innerHeight - $("lCtl").offsetHeight - 6), court.top);
+        if (court.top < 0 || down > 0) scrollBy(0, court.top < 0 ? court.top : down);
       }
       function animStep() {
         if (!anim) return animPlay(true);

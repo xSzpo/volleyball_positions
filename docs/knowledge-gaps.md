@@ -187,3 +187,19 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The built-in default of `learn-animation` is on; the PostHog flag stays off. With `rules-official` on, the Official exchanges play with generic captions ("Go off at the sideline: the libero may not serve.") until #22 polishes them. The options fold of §4.4 (Show everyone / Zones) and the Drill and Match motion of §4.7 are not in this issue.
 - **Alternatives:** keep the default off until #22.
 - **Reversible by:** `FEATURES["learn-animation"]` in `src/template.html`.
+
+### 24. Learn controls on one line, page scrolls to the court
+
+- **Issue:** #21
+- **Problem:** §2.7 plans a 48 px sticky row, but with the animation controls, the dots and a two-line `Next: After reception ▸` the row was 79-93 px and covered the caption and court markers at 390 × 750 and 390 × 664. The header, chips, tag, court and caption alone are about 745 px at 390 × 750, so they cannot all fit above any row without scrolling.
+- **Decision:** One-line row of 57 px: the stage dots sit on its top border, and while the controls show, Next reads `After reception ▸` (aria-label "Next: After reception"). When a transition starts, the page scrolls just enough that the whole court and the caption sit above the row; the chips and tag scroll up out of view.
+- **Alternatives:** the caption above the court or inside the row (the row grows and covers more court); a smaller court cap (below the 381 px floor at 390 × 664).
+- **Reversible by:** `.lctl`, `.ldots` and `learnFit()` in `src/template.html`.
+
+### 25. Official Rotation step in R3 and R6 shows the real lineup
+
+- **Issue:** #21
+- **Problem:** `ROWS.back` has L in zone 1 in R3 and R6 (the reception picture), so the rotate animation took the serving middle off and walked L into zone 1, then swapped them back at Our serve. §4.9 and the Official walk-through say L leaves, the front-row middle comes on in zone 4, and the zone 1 middle rotates on and serves. Which picture the Rotation step shows is coach question 1.
+- **Decision:** In Official, `players(ri, "start")` puts the serving middle in zone 1 with L off in R3 and R6, and `zoneOf()` and the overlap partners follow it. Learn, Drill and Match all use it, so the serving middle answers zone 1 at the Rotation step and the libero answers off court. Simplified is unchanged.
+- **Alternatives:** change only the animation (its end state would not match the static court); change `ROWS.back` in `data.py` (also changes the cheat sheet and the Simplified SUB rename).
+- **Reversible by:** `middleServes()` in `src/template.html`.

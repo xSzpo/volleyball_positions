@@ -9,6 +9,7 @@ a short phone, and that the flag off leaves no trace.
 Usage: python src/tests/anim_test.py
 """
 
+import math
 import re
 import sys
 from pathlib import Path
@@ -198,7 +199,11 @@ def check_rotate_and_reset(page: Page) -> None:
     if not close(got["MB"], (0.17, 0.21)) or not close(got["L"], (0.83, 0.71)):
         fail(f"after the reset MB is at {got.get('MB')}, L at {got.get('L')}")
     serve: list[str] = page.evaluate("window.ksvLearn.captions(2, 'serve', 'OH1')")
-    if len(serve) != 3 or "Libero: Go off at the sideline" not in serve[0] or not serve[2].startswith("Substitute: Serve"):
+    if (
+        len(serve) != 3
+        or "Libero: Go off at the sideline" not in serve[0]
+        or not serve[2].startswith("Substitute: Serve")
+    ):
         fail(f"R3 Our serve does not swap L for SUB first: {serve}")
     rec: list[str] = page.evaluate("window.ksvLearn.captions(2, 'rec', 'L')")
     if rec[0] != "You (L): Come back on for SUB and take your reception spot.":
@@ -219,8 +224,13 @@ def check_captions(page: Page) -> None:
             return out; }""",
             roles,
         )
+        seen: dict[tuple[str, int, str], list[str]] = {}
         for item in result:
             tag = f"{mode} {item['r']} R{item['ri'] + 1} {item['ph']}"
+            same = seen.setdefault((item["r"], item["ri"], item["ph"]), [])
+            if item["c"] in same:
+                fail(f"{tag}: the caption shows twice: {item['c']!r}")
+            same.append(item["c"])
             if not item["c"] or len(item["c"]) > 90 or re.search(r"undefined|NaN|null|\$\{", item["c"]):
                 fail(f"{tag}: caption {item['c']!r} ({len(item['c'])} characters)")
             if item["lines"] > 2.05:
@@ -246,23 +256,105 @@ def check_reduced(browser: Browser) -> None:
         context.close()
 
 
+LAYOUT = """() => {
+  const box = (e) => e.getBoundingClientRect();
+  const row = box(document.querySelector('#lCtl')), dots = box(document.querySelector('#lDots'));
+  const top = Math.min(row.top, dots.height ? dots.top : row.top);
+  const hit = (b) => b.bottom > top + 0.5 && b.top < innerHeight;
+  const marks = [...document.querySelectorAll('#courtL .am, #courtL .mk')]
+    .filter((g) => +(g.getAttribute('opacity') ?? 1) > 0)
+    .map((g) => [g.dataset.p, box(g)]);
+  const court = box(document.querySelector('#courtL')), cap = box(document.querySelector('#lCap'));
+  return { rowHeight: row.height, nextHeight: box(document.querySelector('#lNext')).height,
+    capCovered: hit(cap), courtCovered: hit(court) || court.top < 0,
+    marksCovered: marks.filter(([, b]) => hit(b) || b.top < 0).map(([p]) => p) };
+}"""
+
+
 def check_phone(browser: Browser) -> None:
-    """At 390 × 664 the whole control row stays in view while a transition plays."""
-    context = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
-    page = context.new_page()
-    open_app(page, "?ff=all", {"role": "S", "rulesMode": "simple"})
-    learn(page, 0, "rec")
-    page.click("#lNext")
-    page.evaluate("window.scrollTo(0, 0)")
-    for sel in CONTROLS:
-        box = page.locator(sel).bounding_box()
-        if not box or box["y"] < 0 or box["y"] + box["height"] > 665:
-            fail(f"390 × 664: {sel} is outside the viewport: {box}")
-        elif box["width"] < 44 or box["height"] < 44:
-            fail(f"390 × 664: {sel} is {box['width']:.0f} × {box['height']:.0f}")
-    if not anim(page):
-        fail("390 × 664: the transition did not play")
-    context.close()
+    """While a transition plays, the sticky row covers neither the caption nor a marker, and it stays one line."""
+    for height in (750, 664):
+        context = browser.new_context(viewport={"width": 390, "height": height}, is_mobile=True, has_touch=True)
+        page = context.new_page()
+        open_app(page, "?ff=all", {"role": "S", "rulesMode": "simple"})
+        learn(page, 0, "ar")
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        for step in range(4):
+            label = page.inner_text("#lNext")
+            page.click("#lNext")
+            tag = f"390 × {height}, Next {label!r}"
+            for sel in CONTROLS:
+                box = page.locator(sel).bounding_box()
+                if not box or box["y"] < 0 or box["y"] + box["height"] > height + 1:
+                    fail(f"{tag}: {sel} is outside the viewport: {box}")
+                elif box["width"] < 44 or box["height"] < 44:
+                    fail(f"{tag}: {sel} is {box['width']:.0f} × {box['height']:.0f}")
+            for sample in range(6):
+                if not anim(page):
+                    if not sample:
+                        fail(f"{tag}: the transition did not play")
+                    break
+                got = page.evaluate(LAYOUT)
+                if got["rowHeight"] > 58 or got["nextHeight"] > 50:
+                    fail(f"{tag}: row {got['rowHeight']:.0f} px, Next {got['nextHeight']:.0f} px high")
+                if got["capCovered"] or got["marksCovered"]:
+                    fail(f"{tag}: the row covers the caption {got['capCovered']} or markers {got['marksCovered']}")
+                if height == 750 and got["courtCovered"]:
+                    fail(f"{tag}: the court is not all in view above the row")
+                page.wait_for_timeout(400)
+            if step == 1:
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        context.close()
+
+
+def check_official(page: Page) -> None:
+    """Official R3 and R6: L leaves and the front-row middle comes on; the zone 1 middle rotates on and serves."""
+    for ri, (on, serves) in ((2, ("MB2", "MB1")), (5, ("MB1", "MB2"))):
+        open_app(page, "?ff=all", {"role": serves, "rulesMode": "official"})
+        tag = f"Official R{ri + 1}"
+        start: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'start')")
+        swaps = [(st["leave"], st["enter"]) for st in start if st["leave"] or st["enter"]]
+        if swaps != [(["L"], [on])]:
+            fail(f"{tag} rotate: exchanges {swaps}, expected L off and {on} on")
+        if not any(serves in st["moves"] for st in start if st["fixed"]):
+            fail(f"{tag} rotate: {serves} does not rotate into zone 1")
+        serve: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'serve')")
+        if any(st["leave"] or st["enter"] for st in serve):
+            fail(f"{tag} Our serve: an exchange plays: {serve}")
+        if serve[-1]["moves"] != [serves]:
+            fail(f"{tag} Our serve: the last stage moves {serve[-1]['moves']}, expected {serves} to serve")
+        rec: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")
+        if (rec[0]["leave"], rec[0]["enter"]) != ([serves], ["L"]):
+            fail(f"{tag} Reception: first stage {rec[0]}, expected {serves} off and L on")
+        learn(page, ri, "start")
+        got = page.evaluate(MARKERS, "#courtL .mk")
+        if "L" in got or serves not in got or on not in got:
+            fail(f"{tag} Rotation step shows {sorted(got)}: expected {serves} and {on} on, L off")
+        captions: list[str] = page.evaluate(f"window.ksvLearn.captions({ri}, 'start', 'L')")
+        if "You (L): Go off at the sideline: the libero may not play in the front row." not in captions:
+            fail(f"{tag} rotate captions for L: {captions}")
+
+
+def check_round_behind(page: Page) -> None:
+    """A move that goes round behind a player never runs through that player's marker."""
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'ar')")
+            track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, 'ar', 400)")
+            for k, st in enumerate(stages):
+                for p, note in st["notes"].items():
+                    m = re.search(r"round behind (\w+)", note or "")
+                    if not m:
+                        continue
+                    other = m.group(1)
+                    gap = [
+                        math.dist((f["pos"][p]["x"], f["pos"][p]["y"]), (f["pos"][other]["x"], f["pos"][other]["y"]))
+                        for f in track
+                        if f["stage"] == k
+                    ]
+                    if min(gap) < min(0.12, gap[0], gap[-1]) - 1e-6:
+                        fail(f"{mode} R{ri + 1}: {p} runs through {other} ({min(gap):.3f} apart)")
 
 
 def check_flag_off(page: Page) -> None:
@@ -290,6 +382,8 @@ def main() -> None:
         check_flag_off(page)
         check_reduced(browser)
         check_phone(browser)
+        check_official(page)
+        check_round_behind(page)
         for error in errors:
             fail(f"page error: {error}")
         browser.close()
