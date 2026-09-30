@@ -77,4 +77,5 @@ live on phones before any room uses `tr`.
 - In R3 and R6, whether the serving middle defends 6 or 1 (with the OH at 6).
 - Set calls in transition: the same calls as after reception, or a shorter
   list.
-- Still open from before: "Po" and "4", and the serve column in general.
+- Still open from before: what the guide's "Po" and "Til" mean (left out of
+  the app until then), and the serve column in general.

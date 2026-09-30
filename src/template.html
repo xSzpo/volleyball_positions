@@ -66,6 +66,7 @@
       --set-left: #27598c;
       --set-mid: #c2410c;
       --set-right: #222222;
+      --set-back: #0f766e;
       --netmesh: #5b2a86;
       box-sizing: border-box;
       padding-top: env(safe-area-inset-top, 0px);
@@ -103,6 +104,7 @@
         --set-left: #6fa8e0;
         --set-mid: #f28b4b;
         --set-right: #e8eef5;
+        --set-back: #4fd1c5;
         --netmesh: #a77bd1;
       }
     }
@@ -137,6 +139,7 @@
       --set-left: #6fa8e0;
       --set-mid: #f28b4b;
       --set-right: #e8eef5;
+      --set-back: #4fd1c5;
       --netmesh: #a77bd1;
     }
     html {
@@ -878,6 +881,10 @@
     }
     .setchip.right {
       color: var(--set-right);
+    }
+    .setchip.back {
+      color: var(--set-back);
+      border-style: dashed;
     }
     .setchip.unconf span::after {
       content: "?";
@@ -2090,13 +2097,13 @@
 
       <section id="sets" hidden>
         <div class="card">
-          <h2>Front row sets</h2>
+          <h2>Set calls</h2>
           <p class="hint">Seen from our side of the net. Tap a set to see its path.</p>
           <svg
             class="netsvg"
             id="netS"
             viewBox="30 10 940 480"
-            aria-label="Front row sets diagram"
+            aria-label="Set calls diagram"
           ></svg>
           <div class="setchips" id="setchips"></div>
           <div class="cue" id="setcue"></div>
@@ -4578,11 +4585,17 @@
         SY = 330,
         NT = 362,
         PH = 290;
-      const FAMCOL = { left: "var(--set-left)", mid: "var(--set-mid)", right: "var(--set-right)" };
+      const FAMCOL = {
+        left: "var(--set-left)",
+        mid: "var(--set-mid)",
+        right: "var(--set-right)",
+        back: "var(--set-back)",
+      };
       const FAMNAME = {
         left: "Left side",
         mid: "Middle, in front of the setter",
         right: "Behind the setter / right side",
+        back: "Back row, behind the 3 m line",
       };
       const PX = (x) => NL + x * (NR - NL);
       function setPath(s) {
@@ -4614,9 +4627,10 @@
           if (!visible.includes(st[0])) return;
           const p = setPath(st),
             on = !hi || hi === st[0],
-            col = FAMCOL[st[3]];
-          s += `<path d="${p.d}" fill="none" stroke="${col}" stroke-width="${on && hi ? 10 : 5.5}" opacity="${on ? 1 : 0.18}"/>`;
-          s += `<circle cx="${p.ex}" cy="${SY + 10}" r="${on && hi ? 12 : 8}" fill="${col}" opacity="${on ? 1 : 0.18}"/>`;
+            col = FAMCOL[st[3]],
+            back = st[3] === "back";
+          s += `<path d="${p.d}" fill="none" stroke="${col}" stroke-width="${on && hi ? 10 : 5.5}"${back ? ' stroke-dasharray="18 10"' : ""} opacity="${on ? 1 : 0.18}"/>`;
+          s += `<circle cx="${p.ex}" cy="${SY + 10}" r="${on && hi ? 12 : 8}" fill="${back ? "var(--panel)" : col}" stroke="${col}" stroke-width="${back ? 5 : 0}" opacity="${on ? 1 : 0.18}"/>`;
         });
         if (labels)
           SETS.forEach((st) => {
@@ -4624,7 +4638,7 @@
             const p = setPath(st),
               on = !hi || hi === st[0];
             if (!on && hi) return;
-            const t = ["1", "6", "4", "7", "0", "Po"].includes(st[0]) ? 0.5 : 0.72;
+            const t = { 1: 0.5, 6: 0.5, 0: 0.5, 7: 0.7, A: 0.6, C: 0.4 }[st[0]] ?? 0.72;
             const x = (1 - t) ** 2 * p.sx + 2 * (1 - t) * t * p.cx + t * t * p.ex,
               y = (1 - t) ** 2 * SY + 2 * (1 - t) * t * p.cy + t * t * (SY + 10);
             const w = 40 + 19 * st[0].length;
@@ -4655,7 +4669,7 @@
         const st = SETS.find((s) => s[0] === selSet);
         $("setcue").innerHTML = st
           ? `<b>${st[0]} · ${FAMNAME[st[3]]}${UNCONFIRMED.includes(st[0]) ? " (not confirmed)" : ""}</b><p>${st[4]}</p>`
-          : `<b>Lower arc = faster tempo</b><p>Left-side calls are 1, 0 and 2. Middle calls are Shoot, 4 and Po (4 and Po not confirmed). Behind the setter: Til, 7 and 6.</p>`;
+          : `<b>Lower arc = faster tempo</b><p>Left-side calls are 1, 0 and 2. Middle calls are Shoot and 4. Behind the setter: 7 and 6. Back row (dashed, behind the 3 m line): A to zone 1, B to zone 6 (the pipe), C to zone 5.</p>`;
       }
       let sq = null,
         sAns = false,
@@ -4710,16 +4724,28 @@
 
       // Antenna sets belong to the pin hitters; everything else inside the antennas is the middle's.
       function setLane(s) {
-        return s[3] === "left" ? "left" : s[1] > 0.9 ? "right" : "mid";
+        return s[3] === "back" ? "back" : s[3] === "left" ? "left" : s[1] > 0.9 ? "right" : "mid";
+      }
+      function third(x) {
+        return x < 1 / 3 ? "left" : x > 2 / 3 ? "right" : "mid";
       }
       function rnd(a) {
         return a[Math.floor(Math.random() * a.length)];
       }
       function setQ(ri, r) {
         const me = players(ri, "ar").find((o) => o.p === r);
-        const who = me?.kind === "front" ? "hitter" : me?.kind === "set" ? "setter" : "other";
-        const lane = me && (me.x < 1 / 3 ? "left" : me.x > 2 / 3 ? "right" : "mid");
-        const pool = who === "hitter" ? MATCH_SETS.filter((s) => setLane(s) === lane) : MATCH_SETS;
+        const who =
+          me?.kind === "front" || me?.kind === "back"
+            ? "hitter"
+            : me?.kind === "set"
+              ? "setter"
+              : "other";
+        const pool =
+          me?.kind === "back"
+            ? MATCH_SETS.filter((s) => s[3] === "back" && third(s[1]) === third(me.x))
+            : who === "hitter"
+              ? MATCH_SETS.filter((s) => setLane(s) === third(me.x))
+              : MATCH_SETS;
         if (!pool.length) return null;
         const ask = rnd(pool);
         const others = MATCH_SETS.filter((s) => s !== ask);

@@ -347,15 +347,22 @@ def check_match_order(browser: Browser) -> None:
 
 
 MATCH_SETS = [s for s in SETS if s[0] not in UNCONFIRMED_SETS]
-LANES = {"left": {"1", "0", "2"}, "mid": {"Shoot", "Til"}, "right": {"7", "6"}}
+LANES = {"left": {"1", "0", "2"}, "mid": {"Shoot", "4"}, "right": {"7", "6"}}
+BACK_LANES = {"left": {"C"}, "mid": {"B"}, "right": {"A"}}
+
+
+def third(x: float) -> str:
+    return "left" if x < 1 / 3 else "right" if x > 2 / 3 else "mid"
 
 
 def expected_sets(ri: int, role: str) -> set[str]:
     """The calls a set question may ask ``role`` after reception in rotation ``ri``."""
     spot = next((s for s in ROWS[ri]["ar"] if s[0] == role), None)
-    if spot is None or spot[3] != "front":
-        return {s[0] for s in MATCH_SETS}
-    return LANES["left" if spot[1] < 1 / 3 else "right" if spot[1] > 2 / 3 else "mid"]
+    if spot is not None and spot[3] == "front":
+        return LANES[third(spot[1])]
+    if spot is not None and spot[3] == "back":
+        return BACK_LANES[third(spot[1])]
+    return {s[0] for s in MATCH_SETS}
 
 
 def set_prompt(ri: int, role: str) -> str:
@@ -363,7 +370,7 @@ def set_prompt(ri: int, role: str) -> str:
     kind = next((s[3] for s in ROWS[ri]["ar"] if s[0] == role), None)
     if kind == "set":
         return "You set this ball. What is the call?"
-    if kind == "front":
+    if kind in ("front", "back"):
         return "The setter sets this ball for you. What is the call?"
     return "The setter sets this ball. What is the call?"
 
@@ -443,7 +450,7 @@ def play_set_calls(browser: Browser, role: str, steps: tuple[str, ...], sets: bo
 
 
 def check_set_calls(browser: Browser) -> None:
-    for role in ("OH1", "MB", "S"):
+    for role in ("OH1", "MB", "OP", "S"):
         page = play_set_calls(browser, role, ("rec", "ar"))
         stats = page.inner_text("#gStats")
         if "1/2 set calls right" not in stats.replace("\n", " "):
@@ -455,7 +462,7 @@ def check_set_calls(browser: Browser) -> None:
         if page.get_attribute("#tabSets", "aria-selected") != "true":
             fail(f"{role}: Practise in Sets does not open the Sets tab")
         page.close()
-    print("set call check: front row and setter asked their own sets, +30 for a right call", flush=True)
+    print("set call check: front row, back-row OP and setter asked their own sets, +30 for a right call", flush=True)
     page = play_set_calls(browser, "L", ("ar",))
     if "1/2 set calls right" not in page.inner_text("#gStats").replace("\n", " "):
         fail(f"libero: end screen stats read {page.inner_text('#gStats')!r}")
@@ -476,13 +483,76 @@ def check_set_calls(browser: Browser) -> None:
     if "set calls" in page.inner_text("#gOptSum"):
         fail("options summary lists set calls without the Attack step")
     page.click("#tabSets")
-    for name in UNCONFIRMED_SETS:
-        page.click(f'#setchips .setchip[data-s="{name}"]')
-        if "(not confirmed)" not in page.inner_text("#setcue"):
-            fail(f"Sets tab does not mark {name} as not confirmed")
-        page.click(f'#setchips .setchip[data-s="{name}"]')
+    if "not confirmed" in page.inner_text("#setcue"):
+        fail(f"Sets tab text reads {page.inner_text('#setcue')!r}")
+    for name in (s[0] for s in SETS):
+        chip = f'#setchips .setchip[data-s="{name}"]'
+        page.click(chip)
+        want = name in UNCONFIRMED_SETS
+        marked = "unconf" in (page.get_attribute(chip, "class") or "").split()
+        cue = "(not confirmed)" in page.inner_text("#setcue")
+        if marked != want or cue != want:
+            fail(f"Sets tab marks {name}: chip {marked}, cue {cue}, expected {want}")
+        page.click(chip)
     page.close()
-    print("set call option and unconfirmed marks ok", flush=True)
+    print("set call option and Sets tab marks ok", flush=True)
+
+
+SET_NAMES = [s[0] for s in SETS]
+REMOVED_SETS = ("Po", "Til")
+
+
+def named_calls(text: str) -> list[str]:
+    """The set calls a Sets tab text names, without zone numbers and the 3 m line."""
+    text = re.sub(r"zone [0-9]|3 m", "", text)
+    return re.findall(r"\b(?:Shoot|Po|Til|[0-9]|[A-C])\b", text)
+
+
+def check_sets_tab(browser: Browser) -> None:
+    """The Sets tab shows exactly the sets in SETS, back sets dashed; stored data naming a removed set is harmless."""
+    for name in REMOVED_SETS:
+        if name in SET_NAMES:
+            fail(f"removed set {name} is back in SETS")
+    page = new_page(browser)
+    page.add_init_script(
+        "localStorage.setItem('ksv51:stats2', JSON.stringify({'OH1|0|ar': {ok: 0, miss: 2}}));"
+        "localStorage.setItem('ksv51:gameBest', JSON.stringify({'v5|MB|ar|0|0|none|1|1': 90, 'Po|Til': 50}));"
+    )
+    page.reload()
+    page.click("#tabSets")
+    chips = page.locator("#setchips .setchip").all_inner_texts()
+    if chips != SET_NAMES:
+        fail(f"Sets tab chips {chips}, expected {SET_NAMES}")
+    cue = page.inner_text("#setcue")
+    if sorted(named_calls(cue)) != sorted(SET_NAMES):
+        fail(f"Sets tab text names {named_calls(cue)}, expected {SET_NAMES}: {cue!r}")
+    labels = page.locator("#netS text").all_text_contents()
+    if any(name in labels for name in REMOVED_SETS) or not all(name in labels for name in SET_NAMES):
+        fail(f"Sets diagram labels {labels}")
+    for s in SETS:
+        chip = page.locator(f'#setchips .setchip[data-s="{s[0]}"]')
+        if s[3] not in (chip.get_attribute("class") or "").split():
+            fail(f"chip {s[0]} has no {s[3]} class")
+        chip.click()
+        text = page.inner_text("#setcue")
+        if any(name in named_calls(text) for name in REMOVED_SETS):
+            fail(f"{s[0]} text names a removed set: {text!r}")
+        if s[3] == "back" and "behind the 3 m line" not in text:
+            fail(f"{s[0]} text does not say behind the 3 m line: {text!r}")
+        chip.click()
+    dashed = page.locator("#netS path[stroke-dasharray]").count()
+    if dashed != sum(s[3] == "back" for s in SETS):
+        fail(f"{dashed} dashed paths on the Sets diagram")
+    answers = page.locator("#setanswers .setchip").all_inner_texts()
+    if answers != SET_NAMES:
+        fail(f"quiz options {answers}, expected {SET_NAMES}")
+    for _ in range(12):
+        page.locator("#setanswers .setchip").first.click()
+        page.click("#snext")
+    page.click("#tabDrill")
+    page.click("#reviewBtn")
+    page.close()
+    print("Sets tab lists exactly the sets in SETS; stored data naming Po or Til is harmless", flush=True)
 
 
 def in_view(page: Page, selector: str) -> bool:
@@ -682,6 +752,7 @@ def main() -> None:
         check_hint_rule_numbers(browser)
         check_hints_without_guides(browser)
         check_set_calls(browser)
+        check_sets_tab(browser)
         check_tap_then_continue(browser)
         check_breakdown(browser)
         check_end_screen(browser)

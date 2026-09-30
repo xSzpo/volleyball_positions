@@ -16,6 +16,7 @@ OPPOSITE = {"light": "dark", "dark": "light"}
 COURT = ("--court-g0", "--court-g1", "--court-g2")
 ROLE_FILLS = ("--role-s", "--role-op", "--role-mb", "--role-oh", "--role-sub")
 ROUTES = ("--route-s", "--route-op", "--route-mb", "--route-oh", "--route-l", "--route-sub")
+SET_FAMILIES = ("--set-left", "--set-mid", "--set-right", "--set-back")
 RGB = tuple[float, float, float]
 
 
@@ -59,9 +60,10 @@ def ratio(first: RGB, second: RGB) -> float:
 
 
 def check_contrast(page: Page, tag: str) -> None:
-    """Court and role tokens meet the ratios in docs/v2.md section 2.2: text 4.5, shapes and lines 3."""
+    """Court, role and set tokens meet the ratios in docs/v2.md section 2.2: text 4.5, shapes and lines 3."""
     names = ["--court-line", "--net-label", "--marker-edge", "--ring", "--halo", "--tag", "--tag-ink"]
     names += ["--role-ink", "--role-l", "--role-l-ink", *COURT, *ROLE_FILLS, *ROUTES]
+    names += ["--panel", *SET_FAMILIES]
     raw: dict[str, str] = page.evaluate(
         "names => { const style = getComputedStyle(document.documentElement);"
         " return Object.fromEntries(names.map(n => [n, style.getPropertyValue(n)])); }",
@@ -89,6 +91,8 @@ def check_contrast(page: Page, tag: str) -> None:
         need(f"--role-ink on {fill}", colour["--role-ink"], colour[fill], 4.5)
     need("--role-l-ink on --role-l", colour["--role-l-ink"], colour["--role-l"], 4.5)
     need("--tag-ink on --tag", colour["--tag-ink"], colour["--tag"], 4.5)
+    for family in SET_FAMILIES:
+        need(f"{family} on --panel", colour[family], colour["--panel"], 4.5)
 
 
 def check_button(page: Page, tag: str, expected: str) -> None:

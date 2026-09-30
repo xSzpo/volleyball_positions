@@ -252,9 +252,24 @@ for z, (_x, y, kind) in BASE_DEF.items():
         issues.append(f"base defence zone {z} at y {y} on the wrong side of the 3 m line")
     if kind != ("zone" if front else None):
         issues.append(f"base defence zone {z} has kind {kind}")
+SET_NAMES = [s[0] for s in SETS]
 for name in UNCONFIRMED_SETS:
-    if name not in [s[0] for s in SETS]:
+    if name not in SET_NAMES:
         issues.append(f"unconfirmed set {name} is not in SETS")
+if len(set(SET_NAMES)) != len(SET_NAMES) or len({s[1:3] for s in SETS}) != len(SETS):
+    issues.append("two sets share a name or a path")
+for name in ("Po", "Til"):
+    if name in SET_NAMES:
+        issues.append(f"removed set {name} is in SETS")
+
+
+def third(x: float) -> str:
+    return "left" if x < 1 / 3 else "right" if x > 2 / 3 else "mid"
+
+
+BACK_THIRDS = sorted(third(s[1]) for s in SETS if s[3] == "back")
+if BACK_THIRDS != ["left", "mid", "right"]:
+    issues.append(f"back-row sets land in {BACK_THIRDS}, expected one per back zone")
 if len(ROWS) != 6:
     issues.append(f"{len(ROWS)} rotations, expected 6")
 print("\n".join(issues) if issues else "DATA AUDIT: no issues")
