@@ -2868,9 +2868,7 @@
         players: (ri, phase) => players(ri, phase),
         captions: (ri, phase, r) =>
           phaseStages(ri, phase).stages.map((st) => stageCaption(st, r).replace(/<[^>]+>/g, "")),
-        still: (ri, phase, r) =>
-          restCaption(ri, phase, phaseStages(ri, phase), r).replace(/<[^>]+>/g, ""),
-        lead: (ri, phase, r) => leadCaption(ri, phase, r).replace(/<[^>]+>/g, ""),
+        still: (ri, phase, r) => restCaption(ri, phase, r).replace(/<[^>]+>/g, ""),
         captionPlan: (ri, phase, r) =>
           captionPlan(ri, phase, phaseStages(ri, phase), r).map((c) => ({
             t: c.t,
@@ -3075,19 +3073,14 @@
           });
         const pl = learnPlayers(ri, phase);
         learnTr = animPhase(phase) ? phaseStages(ri, phase) : { stages: [] };
-        // Reception rests on the whistle picture; Base rests where its play ends.
-        const played = animated() && phase === "ar";
-        const shown = played ? pl.map((o) => ({ ...o, ...learnTr.end[o.p] })) : pl;
-        const me = shown.find((o) => o.p === role);
+        const me = pl.find((o) => o.p === role);
         let s = DEFS + courtBase(!me);
         if (phase === "start") s += rotArrows();
         if (phase === "serve") s += serveLayer(ri, pl, role);
-        shown
-          .filter((o) => o.p !== role)
-          .forEach((o) => {
-            s += chip(o);
-          });
-        const ball = phase === "serve" ? SERVE_BALL : phase === "rec" ? null : restBall(learnTr);
+        pl.filter((o) => o.p !== role).forEach((o) => {
+          s += chip(o);
+        });
+        const ball = phase === "serve" ? SERVE_BALL : phase === "ar" ? SPIKE_BALL : null;
         const bounds =
           phase === "start" || phase === "rec"
             ? boundLines(ri, pl, role, phase)
@@ -3155,7 +3148,7 @@
       const SERVE_BALL = { x: 0.3, y: -0.08 };
       const THEIR_SERVE = { x: 0.3, y: -0.09 };
       const BALL_R = MARKER_R * 0.65;
-      // A ball that rests on a still or a lead-in sits clear of the marker and its edge.
+      // A ball that rests on a still sits clear of the marker and its edge.
       const HELD = MARKER_R + 1 + BALL_R;
       // A unit volleyball, scaled to BALL_R: three curved panels with dark seams.
       const BALL_SVG =
@@ -3168,8 +3161,6 @@
         '<path class="seam" d="M1.2,-0.05Q0.05,0.35 -0.45,1.2"/>' +
         '<path class="seam" d="M-0.85,0.45Q0.15,0.1 0.9,-0.6"/></g></g>' +
         '<circle r="1" fill="none" stroke="var(--marker-edge)" stroke-width="0.14"/></g>';
-      // The play holds its start picture this long before the first move.
-      const LEAD_MS = 700;
       // The hold is only at the end of a play: between stages the ball is always in the air.
       const HOLD_MS = 900,
         BALL_MS = 450,
@@ -3253,7 +3244,7 @@
       function animated() {
         return feature("learn-animation") && !ANIM_OFF && !motionQuery.matches;
       }
-      const animPhase = (ph) => ph === "rec" || ph === "ar";
+      const animPhase = (ph) => ph === "rec";
       // Learn's Base screen: base defence by job for the players on court at Reception.
       function learnPlayers(ri, phase) {
         if (phase !== "ar") return players(ri, phase);
@@ -3263,11 +3254,6 @@
           pl.map((o) => o.p),
         );
         return pl.map((o) => ({ p: o.p, ...base[o.p] }));
-      }
-      // The still picture's ball: where the play ends.
-      function restBall(tr) {
-        const balls = tr.stages.map((st) => st.ball).filter(Boolean);
-        return balls.length ? balls[balls.length - 1].to : null;
       }
       function ballSvg(at) {
         return BALL_SVG.replace(
@@ -3527,7 +3513,7 @@
         });
       }
       // What plays in (ri, phase), in stages. Reception plays from their serve to base defence and then fades back
-      // to its still picture; Base replays the last stage, from our spike to base defence.
+      // to its still picture; the other phases are still.
       const stageCache = {};
       function phaseStages(ri, phase) {
         const key = `${rulesMode}|${ri}|${phase}`;
@@ -3536,24 +3522,11 @@
           const list = players(ri, phase);
           const at = spots(list);
           const order = list.map((o) => o.p);
-          stageCache[key] = { from: at, players: order, stages: [], lead: 0, total: 0, end: at };
+          stageCache[key] = { from: at, players: order, stages: [], total: 0, end: at };
           return stageCache[key];
         }
-        const play = buildReception(ri);
-        const n = play.stages.findIndex((st) => st.base);
-        stageCache[`${rulesMode}|${ri}|rec`] = { ...play, fadeBack: true };
-        stageCache[`${rulesMode}|${ri}|ar`] = cutPlay(play, n < 0 ? play.stages.length : n);
+        stageCache[key] = { ...buildReception(ri), fadeBack: true };
         return stageCache[key];
-      }
-      // The stages of a play from stage a on, as a play of their own with a lead-in on the picture where stage a starts.
-      function cutPlay(play, a) {
-        const from = { ...play.from };
-        for (const st of play.stages.slice(0, a)) Object.assign(from, st.moves);
-        const shift = a < play.stages.length ? LEAD_MS - play.stages[a].start : 0;
-        const stages = play.stages.slice(a).map((st) => ({ ...st, start: st.start + shift }));
-        const last = stages[stages.length - 1];
-        const total = last ? last.start + last.dur + HOLD_MS : LEAD_MS;
-        return { from, players: play.players, stages, lead: LEAD_MS, total, end: play.end };
       }
       function buildReception(ri) {
         const list = players(ri, "rec");
@@ -3701,7 +3674,7 @@
             ball: { from: spike, to: SPIKE_BALL },
           });
         }
-        const tr = { from, players: order, stages: [], lead: 0 };
+        const tr = { from, players: order, stages: [] };
         let t = 0;
         const at = { ...from };
         // Each player's latest move and the start of its stage, to carry a long run on into the next stages.
@@ -3776,26 +3749,16 @@
         const who = st.notes[r] ? r : Object.keys(st.moves || st.notes).find((p) => st.notes[p]);
         return who ? `<b>${who === r ? `You (${r})` : NAMES[who]}:</b> ${st.notes[who]}` : "";
       }
-      // At Base the caption says why you stand in base defence; elsewhere it is the still picture's note.
-      function restCaption(ri, phase, tr, r) {
-        const last = tr.stages[tr.stages.length - 1];
-        if (last && phase === "ar") return stageCaption(last, r);
-        return stageCaption(stillStage(ri, phase), r);
-      }
-      // The caption of the picture a play starts on: Base starts at our spike, the stage before base defence.
-      function leadCaption(ri, phase, r) {
-        if (phase !== "ar") return stageCaption(stillStage(ri, phase), r);
-        const rec = phaseStages(ri, "rec").stages;
-        const n = rec.findIndex((st) => st.base);
-        const spike = rec[(n < 0 ? rec.length : n) - 1];
-        return spike ? stageCaption(spike, r) : "";
+      // At Base the caption is your line of Reception's base defence stage; elsewhere the still picture's note.
+      function restCaption(ri, phase, r) {
+        const base = phase === "ar" && phaseStages(ri, "rec").stages.find((st) => st.base);
+        return stageCaption(base || stillStage(ri, phase), r);
       }
       // While a play runs, the caption changes only when you get a new line, and each line stays CAPTION_MS of play.
       function captionPlan(ri, phase, tr, r) {
-        const want = tr.lead ? [{ t: 0, html: leadCaption(ri, phase, r) }] : [];
+        const want = [];
         tr.stages.forEach((st, k) => {
-          if (st.notes[r] || (k === 0 && !tr.lead))
-            want.push({ t: st.start, html: stageCaption(st, r) });
+          if (st.notes[r] || k === 0) want.push({ t: st.start, html: stageCaption(st, r) });
         });
         const out = [];
         want.forEach((w) => {
@@ -3808,7 +3771,7 @@
       }
       const numbered = (list) => `<ol>${list.map((c) => `<li>${c}</li>`).join("")}</ol>`;
       function captionHtml(ri, phase, tr) {
-        const still = restCaption(ri, phase, tr, role);
+        const still = restCaption(ri, phase, role);
         const list = tr.stages.map((st) => stageCaption(st, role));
         if (animated()) {
           if (restList !== `${rulesMode}|${ri}|${phase}` || !list.length) return still;
@@ -3845,7 +3808,7 @@
           if (!g) return;
           g.setAttribute("transform", `translate(${s.x * W} ${s.y * H})`);
         });
-        const i = a.t < tr.lead ? -1 : stageAt(tr, a.t),
+        const i = stageAt(tr, a.t),
           st = tr.stages[i];
         let ball = null;
         tr.stages.forEach((b, k) => {
@@ -3870,8 +3833,6 @@
           el.setAttribute("opacity", 0.6 * fade);
           el.setAttribute("visibility", "visible");
         });
-        const first = tr.stages[0];
-        if (!ball && first?.ball && a.t < first.start) ball = { ...first.ball, u: 0 };
         a.ball.setAttribute("opacity", ball ? 1 : 0);
         if (ball) {
           const x = (ball.from.x + (ball.to.x - ball.from.x) * ball.u) * W,
@@ -4044,7 +4005,6 @@
           st = tr.stages[i];
         const next = anim.t < st.start + st.dur ? st : tr.stages[i + 1];
         if (next) animResume(next.start + next.dur);
-        else if (!tr.fadeBack) animResume(tr.total);
       }
       // Where Step back goes: a stage end, 0 for the start picture, null when it is already there.
       function backTarget() {
@@ -4053,16 +4013,15 @@
         const ends = tr.stages.map((st) => st.start + st.dur);
         const last = ends[ends.length - 1];
         if (anim?.fading) return last;
-        // Reception rests on its start picture, Base on the end of its last stage; the end hold counts as that end.
-        let t = tr.fadeBack ? 0 : last;
-        if (anim) t = Math.min(anim.t, last);
+        // At rest the play is on its start picture; the end hold counts as the last stage end.
+        const t = anim ? Math.min(anim.t, last) : 0;
         if (t <= 0) return null;
         return ends.filter((e) => e < t - 1).pop() ?? 0;
       }
       function animBack() {
         const t = backTarget();
         if (t == null) return;
-        if (t === 0 && learnTr.fadeBack) {
+        if (t === 0) {
           animCancel();
           renderLearn();
           return;

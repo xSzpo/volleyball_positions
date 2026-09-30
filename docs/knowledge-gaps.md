@@ -591,3 +591,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The hint (`#cue`) stays in the Learn card, right after the sticky Next row, with the libero and finger-set rules in it. Next sticks to the bottom only while its own place is below the screen, so it never covers the hint.
 - **Alternatives:** the hint as its own card under the Learn card; the libero rules kept above Next.
 - **Reversible by:** the order of `#lCtl` and `#cue` in `src/template.html`.
+
+### 78. Base is a still screen
+
+- **Issue:** #94
+- **Problem:** The owner found the Base animation confusing: it replayed Reception's spike stage after a lead-in, so the same move played on two screens.
+- **Decision:** The owner's call: only Reception animates. Base shows its still picture (base defence, the ball over the net, "Our attack is over the net: defend.") with the controls hidden, no Play nudge, and nothing plays. Reception's play still runs on to base defence and fades back. The Base-only code (`cutPlay()`, the lead-in `LEAD_MS`, `leadCaption()`, `ksvLearn.lead()`) is deleted.
+- **Alternatives:** keep the Base play without its lead-in; play the whole rally at Base.
+- **Reversible by:** `animPhase()` and `phaseStages()` in `src/template.html` before #94.
