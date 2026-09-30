@@ -2608,13 +2608,15 @@
         return out;
       }
       const SERVE_SPOT = [0.88, 1.1];
-      function serveLayer(ri, pl, role) {
+      // With atSpot the server's marker stands on the serve spot, so the label and route clear it.
+      function serveLayer(ri, pl, role, atSpot = false) {
         const o = pl.find((x) => x.p === server(ri));
         if (!o) return "";
         const [fx, fy] = SERVE_SPOT;
-        const [a, b, c, d] = shorten(fx * W, fy * H, o.x * W, o.y * H, 1.8);
+        const gap = atSpot ? MARKER_R + 0.5 : 1.8;
+        const [a, b, c, d] = shorten(fx * W, fy * H, o.x * W, o.y * H, gap);
         return (
-          `<text x="${fx * W - 3}" y="${fy * H + 1.3}" text-anchor="end" font-size="3.8" fill="var(--net-label)" font-family="Barlow,sans-serif">serve</text>` +
+          `<text x="${fx * W - (atSpot ? gap + 1 : 3)}" y="${fy * H + 1.3}" text-anchor="end" font-size="3.8" fill="var(--net-label)" font-family="Barlow,sans-serif">serve</text>` +
           route(a, b, c, d, o.p, { mine: role == null || o.p === role, dot: true })
         );
       }
@@ -3053,14 +3055,17 @@
             b.onclick = () => learnGo(ri, b.dataset.k);
           });
         const pl = players(ri, phase);
-        const me = pl.find((o) => o.p === role);
+        const shown = learnSpots(ri, phase);
+        const me = shown.find((o) => o.p === role);
         let s = DEFS + courtBase(!me);
         if (phase === "start") s += rotArrows();
         if (phase === "ar") s += arLayer(ri, pl, role);
-        if (phase === "serve") s += serveLayer(ri, pl, role);
-        pl.filter((o) => o.p !== role).forEach((o) => {
-          s += chip(o);
-        });
+        if (phase === "serve") s += serveLayer(ri, pl, role, true);
+        shown
+          .filter((o) => o.p !== role)
+          .forEach((o) => {
+            s += chip(o);
+          });
         const bounds =
           phase === "start" || phase === "rec"
             ? boundLines(ri, pl, role, phase)
@@ -3122,13 +3127,13 @@
       const HOLD_MS = 900,
         BALL_MS = 450,
         FADE_MS = 150;
-      const SERVE_GO = "Go to the serve spot behind the end line in zone 1.";
+      const SERVE_HIT = "Serve from the spot behind the end line: the ball must clear the net.";
       const PASS_TEXT = "Pass the serve high to the setter at the net.";
       const SET_TEXT = "Take the pass at the setting spot: you play the second contact.";
       const SWAP_NOTES = {
         serve: [
           () => "Go off at the sideline: the libero may not serve.",
-          () => "Come on at the sideline and go to the serve spot.",
+          () => "Come on for the libero: you serve from the spot behind the end line.",
         ],
         rec: [
           () => "Go off at the sideline: we lost the serve, so the libero comes back.",
@@ -3146,6 +3151,13 @@
         return feature("learn-animation") && !ANIM_OFF && !motionQuery.matches;
       }
       const animPhase = (ph) => ph === "serve" || ph === "rec";
+      // Learn's still picture of Our serve has the server behind the end line, before the serve.
+      function learnSpots(ri, phase) {
+        const list = players(ri, phase);
+        if (phase !== "serve") return list;
+        const sv = server(ri);
+        return list.map((o) => (o.p === sv ? { ...o, x: SERVE_SPOT[0], y: SERVE_SPOT[1] } : o));
+      }
       const spots = (list) => Object.fromEntries(list.map((o) => [o.p, { x: o.x, y: o.y }]));
       const pick = (ps, f) => Object.fromEntries(ps.map((p) => [p, f(p)]));
       const prevStep = (ri, phase) => {
@@ -3186,21 +3198,21 @@
       }
       // What happens in (ri, phase) after its still picture, in stages that end back on that picture.
       function phaseStages(ri, phase) {
-        const list = players(ri, phase);
+        const list = learnSpots(ri, phase);
         const from = spots(list);
         const order = list.map((o) => o.p);
         const notes = ROWS[ri].move?.[phase] || {};
         const stages = [];
         if (phase === "serve") {
           const sv = server(ri);
-          const serveSpot = { x: SERVE_SPOT[0], y: SERVE_SPOT[1] };
-          if (from[sv]) {
-            stages.push({ moves: { [sv]: serveSpot }, notes: { ...notes, [sv]: SERVE_GO } });
+          const base = players(ri, phase).find((o) => o.p === sv);
+          if (base) {
             stages.push({
               moves: { [sv]: from[sv] },
-              notes: { [sv]: notes[sv] },
-              ball: { from: serveSpot, to: SERVE_BALL },
+              notes: { ...notes, [sv]: SERVE_HIT },
+              ball: { from: from[sv], to: SERVE_BALL },
             });
+            stages.push({ moves: { [sv]: { x: base.x, y: base.y } }, notes: { [sv]: notes[sv] } });
           }
         } else if (phase === "rec") {
           const ar = players(ri, "ar");

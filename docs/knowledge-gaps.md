@@ -162,7 +162,8 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** The guide shows arrows but not the order of moves, which passer takes the first ball, or who gets the set. The plan gives the order only for Reception → After reception.
 - **Decision:** Reception → After reception: setter, then attackers, then cover, with the ball from L to the setting spot and on to the zone 4 attacker at the net. Rotation → Our serve: everyone to base with the server behind the end line, then the serve (the ball crosses the net while the server runs to base). Our serve → Reception: one walk. An exchange (L off, SUB or a middle on) is its own first stage. After reception → next rotation: the rotate stage, then in Simplified R3 and R6 the middle pair reset ("Walk along the net from zone 2 to zone 4: the middle pair resets."). The three stage dots fill up to the stage that is playing. Asked the coach on #16.
 - **Alternatives:** a random passer and hitter per rotation; the setter's choice from the set calls.
-- **Reversible by:** `transition()` in `src/template.html`.
+- **Superseded** by #30 and #31 (#47): nothing animates between screens.
+- **Reversible by:** `transition()` in `src/template.html` (removed in #47).
 
 ### 21. Where players leave and come on
 
@@ -170,7 +171,8 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** §4.9 says replacements happen "at the sideline by the attack line" but not which sideline.
 - **Decision:** The right sideline at the 3 m line, next to zone 1 where the libero and SUB swap. Asked the coach on #16.
 - **Alternatives:** the left sideline by the bench.
-- **Reversible by:** `EXIT` in `src/template.html`.
+- **Superseded** by #31 (#47): exchanges no longer animate; the still caption still says "at the sideline".
+- **Reversible by:** `EXIT` in `src/template.html` (removed in #47).
 
 ### 22. Reduced motion caption height
 
@@ -240,7 +242,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #47
 - **Problem:** The owner wants the ball to come to our side, the pass and the second contact until the ball reaches the setter, with the players' moves. The guide has no per-player timing, and who passes differs per serve.
-- **Decision:** Two stages. First their serve flies to the libero while the setter runs to the setting spot (the setter's `ar` note, "as soon as the serve is hit"), and everyone else sees their `rec` note. Then the pass flies from the libero to the setter while the attackers move to their `ar` approach spots with their `ar` notes; the libero reads "Pass the serve high to the setter at the net." and the setter "Take the pass at the setting spot: you play the second contact." The cover players do not move: covering comes after the set, which is After reception. The libero is always the passer.
+- **Decision:** Two stages. First their serve flies to the libero while the setter runs to the setting spot (the setter's `ar` note, "as soon as the serve is hit"), and everyone else sees their `rec` note. Then the pass flies from the libero to the setter while the attackers move to their `ar` approach spots with their `ar` notes; the libero reads "Pass the serve high to the setter at the net." and the setter "Take the pass at the setting spot: you play the second contact." The cover players do not move: covering comes after the set, which is After reception. The libero is always the passer. This replaces the Reception → After reception stages and the passer of #20.
 - **Alternatives:** a passer chosen per rotation (not in the guide); the cover moves too (goes past "until the ball reaches the setter").
 - **Reversible by:** `phaseStages()`, `PASS_TEXT` and `SET_TEXT` in `src/template.html`.
 
@@ -248,6 +250,22 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #47
 - **Problem:** With no animation between screens, the libero and substitute exchanges and the Simplified middle pair reset into R3 and R6 no longer show as moves, and Our serve must start and end on its still picture.
-- **Decision:** The at-rest caption keeps them: when a screen follows an exchange or a reset, the player involved reads the old walk caption ("Go off at the sideline: the libero may not serve.", "Walk across the back from zone 5 to zone 1: the middle pair resets."), and everyone else reads it with that player's name. Otherwise it is your `move` note for the phase; Rotation has no caption. Our serve starts at the base spots: the server walks to the serve spot, then serves and runs back. The rotate step and its caption are gone.
-- **Alternatives:** put the exchange text in the explanation below the court; start Our serve with the server already behind the end line (the marker would jump from the still picture).
+- **Decision:** The at-rest caption keeps them: when a screen follows an exchange or a reset, the player involved reads the old walk caption ("Go off at the sideline: the libero may not serve.", "Walk across the back from zone 5 to zone 1: the middle pair resets."), and everyone else reads it with that player's name. Otherwise it is your `move` note for the phase; Rotation has no caption. The rotate step and its caption are gone. This replaces the other stages of #20 and the `EXIT` walk of #21.
+- **Alternatives:** put the exchange text in the explanation below the court.
 - **Reversible by:** `stillNotes()` and `phaseStages()` in `src/template.html`.
+
+### 32. The server stands behind the end line in the Our serve picture
+
+- **Issue:** #47
+- **Problem:** Our serve must start and end on its still picture, and that picture had every server, SUB included, on the base spot while the caption and route said they serve from behind the end line first.
+- **Decision:** In Learn the Our serve still picture puts the server on the serve spot behind the end line, with the route to the base spot. The animation is the serve (ball over the net), then the run to base. SUB in Simplified R3 and R6 reads "Come on for the libero: you serve from the spot behind the end line." Drill and Match still grade the base spot, and `players()` is unchanged.
+- **Alternatives:** keep the server on the base spot and let the animation walk them out to the serve spot first (the picture then shows where they end, not where they start).
+- **Reversible by:** `learnSpots()`, `SERVE_HIT` and `SWAP_NOTES.serve` in `src/template.html`.
+
+### 33. Reception captions read as standing
+
+- **Issue:** #47
+- **Problem:** At rest and while their serve is in the air, players stand on their reception spot, but the R1 opposite's `rec` note said "Go to the left sideline …".
+- **Decision:** The R1 OP note now reads "Stand at the left sideline on the 3 m line: in R1 the opposite plays left." Every other `rec` note already says Stand, Receive, Hide or Start. The Our serve notes ("Cross to zone 4 …") are kept: the owner likes that content, and the audit ties them to the zone.
+- **Alternatives:** show a `rec` note only to a player who moves in that stage (most players would then see the setter's caption).
+- **Reversible by:** the R1 `move["rec"]["OP"]` note in `src/data.py`.

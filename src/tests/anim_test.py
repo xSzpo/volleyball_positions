@@ -19,7 +19,7 @@ from playwright.sync_api import Browser, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from data import lineup  # noqa: E402
+from data import BASE_DEF, lineup, server  # noqa: E402
 
 BASE = (ROOT / "index.html").as_uri()
 FAIL: list[str] = []
@@ -78,8 +78,16 @@ def check_positions(tag: str, got: dict[str, list[float]], want: dict[str, tuple
             fail(f"{tag}: {p} at {got.get(p)}, expected {spot}")
 
 
+SERVE_SPOT = (0.88, 1.1)
+
+
 def spots(ri: int, phase: str, mode: str = "simple") -> dict[str, tuple[float, float]]:
+    """The Learn still picture from the data; at Our serve the server stands on the serve spot."""
     row = lineup(ri, mode)  # type: ignore[arg-type]
+    if phase == "serve":
+        front, back = row["serve"]
+        base = {p: BASE_DEF[z][:2] for z, p in zip((4, 3, 2, 5, 6, 1), front + back, strict=True)}
+        return {**base, server(ri, mode): SERVE_SPOT}  # type: ignore[arg-type]
     if phase == "rec":
         return {p: (x, y) for p, x, y in row["rec"]}
     return {p: (x, y) for p, x, y, _ in row["ar"]}
@@ -106,16 +114,16 @@ def check_opens_and_returns(page: Page) -> None:
             fail(f"{label}: the controls do not show")
         if not page.is_disabled("#lStep"):
             fail(f"{label}: Step is enabled while playing")
-        still = page.evaluate(MARKERS, "#courtL .am")
+        still = spots(0, phase)
+        if sorted(page.evaluate(MARKERS, "#courtL .am")) != sorted(still):
+            fail(f"{label}: the animation has other players than the still picture")
         wait_done(page)
         if page.locator("#courtL .am").count():
             fail(f"{label}: the animation markers stay after the play")
         end = page.evaluate(MARKERS, "#courtL .mk")
-        for p, xy in still.items():
-            if p not in end or abs(end[p][0] - xy[0]) > 0.2 or abs(end[p][1] - xy[1]) > 0.2:
-                fail(f"{label}: {p} ends at {end.get(p)}, the still picture has {xy}")
-        if phase == "rec":
-            check_positions(f"{label} end", end, spots(0, "rec"))
+        if sorted(end) != sorted(still):
+            fail(f"{label}: the end picture shows {sorted(end)}, expected {sorted(still)}")
+        check_positions(f"{label} end", end, still)
         if page.locator("#lDots i.on").count():
             fail(f"{label}: dots stay on at rest")
         page.click("#lReplay")
@@ -128,6 +136,34 @@ def check_opens_and_returns(page: Page) -> None:
         wait_done(page)
     if "You (OH1):" not in page.inner_text("#lCap"):
         fail(f"the caption does not start with your move: {page.inner_text('#lCap')!r}")
+
+
+def check_no_autoplay(page: Page) -> None:
+    """Loading onto Reception, a reload, a role change and a rules change show the still picture only."""
+    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    if page.inner_text("#learnTag") != "R1 (S1) · Reception" or anim(page):
+        fail(f"a fresh load onto {page.inner_text('#learnTag')!r} plays: {anim(page)}")
+    page.reload()
+    page.wait_for_function("document.readyState === 'complete' && !!document.querySelector('#lNext')")
+    if anim(page):
+        fail("a reload plays Reception")
+    page.click('.ph[data-k="serve"]')
+    wait_done(page)
+    page.click("#roleChip")
+    page.click('#roles .role[data-r="L"]')
+    if page.is_visible("#setupPanel"):
+        page.click("#setupDone")
+    if page.inner_text("#roleChip").strip() != "L" or anim(page):
+        fail(f"a role change plays Our serve or does not apply: {page.inner_text('#roleChip')!r}")
+    page.click("#roleChip")
+    page.click('.rulesmode [data-rm="official"]')
+    if page.is_visible("#setupPanel"):
+        page.click("#setupDone")
+    if page.get_attribute('.rulesmode [aria-checked="true"]', "data-rm") != "official" or anim(page):
+        fail("a rules change plays Our serve or does not apply")
+    check_positions(
+        "Our serve after the rules change", page.evaluate(MARKERS, "#courtL .mk"), spots(0, "serve", "official")
+    )
 
 
 def check_static(page: Page) -> None:
@@ -258,6 +294,13 @@ def check_still_captions(page: Page) -> None:
             "You (L): Go off at the sideline: the libero may not serve."
         ):
             fail(f"{tag} Our serve still caption for L")
+        if page.evaluate(f"window.ksvLearn.still({ri}, 'serve', 'SUB')") != (
+            "You (SUB): Come on for the libero: you serve from the spot behind the end line."
+        ):
+            fail(f"{tag} Our serve still caption for SUB")
+        learn(page, ri, "serve")
+        wait_done(page)
+        check_positions(f"{tag} Our serve still picture", page.evaluate(MARKERS, "#courtL .mk"), spots(ri, "serve"))
         if page.evaluate(f"window.ksvLearn.still({ri}, 'rec', 'L')") != (
             "You (L): Come back on for SUB and take your reception spot."
         ):
@@ -389,7 +432,7 @@ def check_official(page: Page) -> None:
         open_app(page, "?ff=all", {"role": serves, "rulesMode": "official"})
         tag = f"Official R{ri + 1}"
         serve: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'serve')")
-        if [st["moves"] for st in serve] != [[serves], [serves]]:
+        if [st["moves"] for st in serve] != [[serves], [serves]] or not serve[0]["ball"]:
             fail(f"{tag} Our serve: stages move {[st['moves'] for st in serve]}, expected {serves} to serve")
         learn(page, ri, "start")
         got = page.evaluate(MARKERS, "#courtL .mk")
@@ -425,6 +468,7 @@ def main() -> None:
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         check_opens_and_returns(page)
+        check_no_autoplay(page)
         check_static(page)
         check_reception_stages(page)
         check_never_blocks(page)
