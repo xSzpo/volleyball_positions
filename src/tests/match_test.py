@@ -192,21 +192,32 @@ def check_peek(browser: Browser) -> None:
     if shown != "Shown: Nobody (full points) · Peeked: 1 moment":
         fail(f"end screen after one peek reads {shown!r}")
     best = page.evaluate("JSON.parse(localStorage.getItem('ksv51:gameBest'))")
-    if list(best) != ["v5|OH1|rec"]:
+    if list(best) != ["v6|OH1|rec"]:
         fail(f"best score saved under {list(best)}, expected the starting settings only")
     page.close()
 
 
 def check_best_key(browser: Browser) -> None:
-    """Bests from before the scoring change are ignored, and the neighbour check has its own best."""
-    page = new_page(browser)
-    page.evaluate("""localStorage.setItem('ksv51:gameBest', JSON.stringify({"v4|OH1|rec": 9999, "v5|OH1|rec": 500}))""")
+    """Bests from another scoring are ignored, and the neighbour check has its own best."""
+    bests = '{"v4|OH1|rec": 9999, "v5|OH1|rec": 500, "v6|OH1|rec": 700}'
+    seed = f"localStorage.setItem('ksv51:gameBest', JSON.stringify({bests}))"
+    page = new_page(browser, query="?ff=all,-match-rotate-name&anim=0")
+    page.evaluate(seed)
     page.reload()
     page.wait_for_timeout(300)
     setup_match(page, "OH1", ("rec",))
     text = page.inner_text("#gBest")
     if "500" not in text:
-        fail(f"best line reads {text!r}, expected the v5 best of 500")
+        fail(f"best line with match-rotate-name off reads {text!r}, expected the v5 best of 500")
+    page.close()
+    page = new_page(browser)
+    page.evaluate(seed)
+    page.reload()
+    page.wait_for_timeout(300)
+    setup_match(page, "OH1", ("rec",))
+    text = page.inner_text("#gBest")
+    if "700" not in text:
+        fail(f"best line reads {text!r}, expected the v6 best of 700")
     page.check("#nbGame")
     text = page.inner_text("#gBest")
     if text:

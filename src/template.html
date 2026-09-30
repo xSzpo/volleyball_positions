@@ -5268,7 +5268,7 @@
       }
       function gKey() {
         return (
-          "v5|" +
+          (feature("match-rotate-name") ? "v6|" : "v5|") +
           role +
           "|" +
           gSteps().join(",") +
@@ -5528,6 +5528,11 @@
             shown,
             !G.answered && G.help >= 2 && me ? gHelpArea(me) : "",
           );
+          if (G.answered && (G.mp || G.online) && G.tap)
+            $("courtG").insertAdjacentHTML(
+              "beforeend",
+              `<circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="2.3" fill="var(--net-label)" opacity=".8"/>`,
+            );
           return;
         }
         let s = DEFS + courtBase(shown && !me);

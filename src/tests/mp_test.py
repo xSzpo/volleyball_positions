@@ -183,6 +183,9 @@ with sync_playwright() as p:
                 press_next(pg)
                 assert not VERDICT.search(pg.inner_text("#gFb")), "a Rotate turn leaks the verdict"
                 assert pg.locator("#gFb .rotgrades").count() == 0, "a Rotate turn leaks the grades"
+                saved = pg.locator('#courtG circle[r="2.3"]').count()
+                off = pg.get_attribute("#gOff", "aria-pressed") == "true"
+                assert saved == (0 if off else 1), f"Rotate answer saved {saved} tap marks, off court {off}"
                 rotate_turns += 1
                 continue
             if pg.inner_text("#gStepName").startswith("Attack"):
