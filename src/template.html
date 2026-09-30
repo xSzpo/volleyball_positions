@@ -557,7 +557,7 @@
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 6px;
+      gap: 4px;
       padding: 0 8px 8px;
     }
     .lanim[hidden] {
@@ -602,7 +602,7 @@
     }
     .ldots {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       margin-right: auto;
       padding-left: 4px;
     }
@@ -1733,6 +1733,7 @@
               <div class="ldots" id="lDots" aria-hidden="true"></div>
               <button type="button" class="ictl" id="lReplay" aria-label="Replay">⟲</button>
               <button type="button" class="ictl" id="lPlay" aria-label="Play">▶</button>
+              <button type="button" class="ictl" id="lBack" aria-label="Step back">◀|</button>
               <button type="button" class="ictl" id="lStep" aria-label="Step one stage">▸|</button>
               <button type="button" class="ictl speed" id="lSpeed">1×</button>
             </div>
@@ -3845,7 +3846,9 @@
           a.cap = cap;
           $("lCap").innerHTML = cap.html;
         }
-        $("lCap").style.opacity = cap ? Math.min(1, (a.t - cap.t) / FADE_MS) : "";
+        const fade = cap && a.capShown !== cap ? Math.min(1, (a.t - cap.t) / FADE_MS) : 1;
+        if (fade >= 1) a.capShown = cap;
+        $("lCap").style.opacity = cap ? fade : "";
       }
       function animFrame(now) {
         const a = anim;
@@ -3910,6 +3913,8 @@
         cancelAnimationFrame(anim.raf);
         anim.playing = false;
         anim.stopAt = null;
+        anim.capShown = anim.cap;
+        $("lCap").style.opacity = "";
         renderAnimControls();
       }
       function animCancel() {
@@ -3922,13 +3927,13 @@
         if (!ANIM_OFF && $("courtL").animate)
           $("courtL").animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS });
       }
-      // Plays the current phase from its start to the rest picture; with step, only the first stage.
-      function animPlay(step = false) {
-        if (!animated() || !animPhase(phase)) return;
+      // Draws the current phase's play at its start, paused; false when the phase has none.
+      function animBuild() {
+        if (!animated() || !animPhase(phase)) return false;
         animCancel();
         restList = null;
         const tr = phaseStages(ri, phase);
-        if (!tr.stages.length) return;
+        if (!tr.stages.length) return false;
         const off = !tr.from[role];
         const mark = (p, me) =>
           `<g class="am" data-p="${p}">${chip({ p, x: 0, y: 0 }, { me })}</g>`;
@@ -3970,7 +3975,13 @@
           cap: null,
         };
         paintAnim();
-        animResume(step ? tr.stages[0].start + tr.stages[0].dur : null);
+        return true;
+      }
+      // Plays the current phase from its start to the rest picture; with step, only the first stage.
+      function animPlay(step = false) {
+        if (!animBuild()) return;
+        const first = anim.tr.stages[0];
+        animResume(step ? first.start + first.dur : null);
         learnFit();
       }
       // While a phase plays, the court and caption sit above the sticky Next.
@@ -3990,6 +4001,34 @@
         if (next) animResume(next.start + next.dur);
         else if (!tr.fadeBack) animResume(tr.total);
       }
+      // Where Step back goes: a stage end, 0 for the start picture, null when it is already there.
+      function backTarget() {
+        const tr = anim ? anim.tr : learnTr;
+        if (!animated() || !tr?.stages.length || anim?.playing) return null;
+        const ends = tr.stages.map((st) => st.start + st.dur);
+        const last = ends[ends.length - 1];
+        if (anim?.fading) return last;
+        // Reception rests on its start picture, Base on the end of its last stage; the end hold counts as that end.
+        let t = tr.fadeBack ? 0 : last;
+        if (anim) t = Math.min(anim.t, last);
+        if (t <= 0) return null;
+        return ends.filter((e) => e < t - 1).pop() ?? 0;
+      }
+      function animBack() {
+        const t = backTarget();
+        if (t == null) return;
+        if (t === 0 && learnTr.fadeBack) {
+          animCancel();
+          renderLearn();
+          return;
+        }
+        if (!anim || anim.fading) {
+          if (!animBuild()) return;
+        } else cancelAnimationFrame(anim.raf);
+        anim.t = t;
+        paintAnim();
+        animPause();
+      }
       function renderDots() {
         const tr = anim ? anim.tr : learnTr;
         if (!tr) return;
@@ -4007,6 +4046,7 @@
         $("lPlay").textContent = playing ? "❚❚" : "▶";
         $("lPlay").setAttribute("aria-label", playing ? "Pause" : "Play");
         $("lStep").disabled = playing;
+        $("lBack").disabled = backTarget() == null;
         $("lSpeed").textContent = animSpeed === 1 ? "1×" : "0.5×";
         $("lSpeed").setAttribute("aria-label", `Speed ${animSpeed === 1 ? "normal" : "half"}`);
         renderDots();
@@ -4029,6 +4069,7 @@
       $("lStep").onclick = () => {
         if (!anim?.playing) animStep();
       };
+      $("lBack").onclick = () => animBack();
       $("lSpeed").onclick = () => {
         animSpeed = animSpeed === 1 ? 0.5 : 1;
         store.set("animSpeed", animSpeed);

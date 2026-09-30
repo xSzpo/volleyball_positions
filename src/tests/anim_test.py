@@ -40,7 +40,7 @@ MODES = {
     "official": ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"],
 }
 PHASES = ["start", "serve", "rec", "ar"]
-CONTROLS = ["#lReplay", "#lPlay", "#lStep", "#lSpeed", "#lNext"]
+CONTROLS = ["#lReplay", "#lPlay", "#lBack", "#lStep", "#lSpeed", "#lNext"]
 
 MARKERS = """(sel) => Object.fromEntries([...document.querySelectorAll(sel)].map(g => {
   const m = g.getAttribute('transform');
@@ -1055,6 +1055,176 @@ def check_captions(page: Page) -> None:
                 fail(f"{tag}: caption takes {item['lines']:.1f} lines: {item['c']!r}")
 
 
+FRAME = """() => { const at = (e, ...names) => names.map((n) => e.getAttribute(n)).join(' ');
+  const ball = document.querySelector('#courtL .ball'), cap = document.querySelector('#lCap');
+  return { t: window.ksvLearn.anim() && Math.round(window.ksvLearn.anim().t),
+    marks: [...document.querySelectorAll('#courtL .am')].map((g) => g.dataset.p + at(g, 'transform')),
+    ball: ball && at(ball, 'opacity', 'transform'),
+    trails: [...document.querySelectorAll('#courtL .trail')].map((l) =>
+      l.getAttribute('visibility') === 'visible' ? at(l, 'points', 'opacity') : 'hidden'),
+    dots: document.querySelectorAll('#lDots i.on').length,
+    cap: cap.innerHTML, capOpacity: cap.style.opacity }; }"""
+BAR = """() => { const bar = document.querySelector('#lAnim').getBoundingClientRect();
+  const box = (e) => { const b = e.getBoundingClientRect();
+    return [e.id, b.left - bar.left, b.top - bar.top, b.width, b.height].map((v) => v.toFixed ? Math.round(v) : v); };
+  const buttons = [...document.querySelectorAll('#lAnim button')].map(box);
+  return [Math.round(bar.width), Math.round(bar.height), ...buttons]; }"""
+
+
+def check_step_back(page: Page) -> None:
+    """Step back after Step returns to the same frame; it stops on the start picture and never plays."""
+    for mode in MODES:
+        for ri in (0, 3):
+            open_app(page, "?ff=all", {"role": "OH1", "rulesMode": mode})
+            learn(page, ri, "rec")
+            tag = f"{mode} R{ri + 1} Reception"
+            bar = page.evaluate(BAR)
+            if page.get_attribute("#lBack", "aria-label") != "Step back" or not page.is_disabled("#lBack"):
+                fail(f"{tag}: Step back is not disabled on the start picture")
+            count = len(page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')"))
+            frames = []
+            for _ in range(count):
+                page.click("#lStep")
+                wait_paused(page)
+                frames.append(page.evaluate(FRAME))
+                if page.is_disabled("#lBack"):
+                    fail(f"{tag}: Step back is disabled at the end of stage {len(frames)}")
+            for k in range(count - 2, -1, -1):
+                page.click("#lBack")
+                got = page.evaluate(FRAME)
+                if got != frames[k]:
+                    fail(f"{tag}: Step back to the end of stage {k + 1} shows {got}, expected {frames[k]}")
+                page.click("#lStep")
+                wait_paused(page)
+                if page.evaluate(FRAME) != frames[k + 1]:
+                    fail(f"{tag}: Step after Step back does not return to the end of stage {k + 2}")
+                page.click("#lBack")
+            page.click("#lBack")
+            if anim(page):
+                fail(f"{tag}: Step back from the first stage leaves a play: {anim(page)}")
+            check_reception_rest(page, f"{tag} after Step back", ri, mode)
+            if not page.is_disabled("#lBack"):
+                fail(f"{tag}: Step back is enabled back on the start picture")
+            page.click("#lStep")
+            wait_paused(page)
+            page.click("#lBack")
+            page.click("#lPlay")
+            state = anim(page)
+            if not state or not state["playing"] or not page.is_disabled("#lBack"):
+                fail(f"{tag}: Step back is not disabled while playing: {state}")
+            if page.evaluate(BAR) != bar:
+                fail(f"{tag}: the bar moves while playing: {page.evaluate(BAR)} vs {bar}")
+            page.wait_for_function("window.ksvLearn.anim() && window.ksvLearn.anim().fading", timeout=20000)
+            page.evaluate("document.querySelector('#lBack').click()")
+            state = anim(page)
+            if not state or state["fading"] or state["playing"] or page.evaluate(FRAME) != frames[-1]:
+                fail(f"{tag}: Step back in the fade-back does not show the end of the last stage: {state}")
+            page.click("#lBack")
+            page.click("#lPlay")
+            page.wait_for_timeout(200)
+            state = anim(page)
+            if not state or not state["playing"] or state["t"] < frames[-2]["t"]:
+                fail(f"{tag}: Play after Step back does not go on from there: {state}")
+            page.click("#lPlay")
+
+            learn(page, ri, "ar")
+            tag = f"{mode} R{ri + 1} Base"
+            if page.is_disabled("#lBack"):
+                fail(f"{tag}: Step back is disabled on the Base still")
+            page.click("#lBack")
+            start = page.evaluate(FRAME)
+            state = anim(page)
+            if not state or state["t"] != 0 or state["playing"] or not page.is_disabled("#lBack"):
+                fail(f"{tag}: Step back from the still does not rest on the lead-in start: {state}")
+            if page.inner_text("#lCap") != page.evaluate(f"window.ksvLearn.lead({ri}, 'ar', 'OH1')"):
+                fail(f"{tag}: Step back shows {page.inner_text('#lCap')!r}, not the lead-in caption")
+            page.click("#lStep")
+            wait_paused(page)
+            end = page.evaluate(FRAME)
+            page.click("#lBack")
+            if page.evaluate(FRAME) != start:
+                fail(f"{tag}: Step then Step back does not return to the lead-in start")
+            page.click("#lStep")
+            wait_paused(page)
+            if page.evaluate(FRAME) != end:
+                fail(f"{tag}: Step after Step back does not return to the end of the spike")
+            if page.evaluate(BAR) != bar:
+                fail(f"{tag}: the bar changes: {page.evaluate(BAR)}")
+
+
+PAUSE_WHEN = """([lo, hi]) => { const a = window.ksvLearn.anim();
+  if (!a || !a.playing || a.t <= lo) return false;
+  if (a.t >= hi) return 'late';
+  document.querySelector('#lPlay').click(); return true; }"""
+RESUME_OPACITY = """(button) => new Promise((done) => { const cap = document.querySelector('#lCap');
+  const html = cap.innerHTML, end = performance.now() + 300; let low = 1;
+  document.querySelector(button).click();
+  const look = () => {
+    if (cap.innerHTML === html) low = Math.min(low, cap.style.opacity === '' ? 1 : +cap.style.opacity);
+    if (performance.now() < end) requestAnimationFrame(look); else done(low); };
+  requestAnimationFrame(look); })"""
+
+
+def pause_between(page: Page, tag: str, lo: float, hi: float) -> bool:
+    """Plays Reception from its still and pauses once play time is between lo and hi."""
+    page.click("#lPlay")
+    if page.wait_for_function(PAUSE_WHEN, arg=[lo, hi], timeout=20000).json_value() == "late":
+        fail(f"{tag}: the play passed {hi} ms before it could pause")
+        return False
+    return True
+
+
+def check_step_back_paused(page: Page) -> None:
+    """Step back from a pause mid-stage and in the end hold, disabled in a Step run, no caption fade on resume."""
+    for mode in MODES:
+        for ri in (0, 3):
+            open_app(page, "?ff=all", {"role": "OH1", "rulesMode": mode})
+            learn(page, ri, "rec")
+            tag = f"{mode} R{ri + 1} Reception"
+            count = len(page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')"))
+            frames = []
+            for k in range(count):
+                if k:
+                    low = page.evaluate(RESUME_OPACITY, "#lStep")
+                    if low < 0.99:
+                        fail(f"{tag}: the caption fades to {low} when Step resumes after stage {k}")
+                else:
+                    page.click("#lStep")
+                state = anim(page)
+                if not state or not state["playing"] or not page.is_disabled("#lBack"):
+                    fail(f"{tag}: Step back is not disabled during a Step run: {state}")
+                wait_paused(page)
+                frames.append(page.evaluate(FRAME))
+            ends = page.evaluate("window.ksvLearn.anim().ends")
+            low = page.evaluate(RESUME_OPACITY, "#lPlay")
+            if low < 0.99:
+                fail(f"{tag}: the caption fades to {low} when Play resumes")
+            for k in (0, 2):
+                learn(page, ri, "rec")
+                lo = (ends[k - 1] if k else 0) + 100
+                if not pause_between(page, f"{tag} stage {k + 1}", lo, ends[k] - 50):
+                    continue
+                page.click("#lBack")
+                if k == 0:
+                    if anim(page):
+                        fail(f"{tag}: Step back mid stage 1 leaves a play: {anim(page)}")
+                    check_reception_rest(page, f"{tag} after Step back mid stage 1", ri, mode)
+                elif page.evaluate(FRAME) != frames[k - 1]:
+                    fail(f"{tag}: Step back mid stage {k + 1} does not show the end of stage {k}")
+            learn(page, ri, "rec")
+            if pause_between(page, f"{tag} hold", ends[-1] + 50, ends[-1] + 800):
+                page.click("#lBack")
+                if page.evaluate(FRAME) != frames[-2]:
+                    fail(f"{tag}: Step back in the end hold does not show the end of stage {count - 1}")
+            learn(page, ri, "ar")
+            for button in ("#lStep", "#lPlay"):
+                page.click("#lBack")
+                low = page.evaluate(RESUME_OPACITY, button)
+                if low < 0.99:
+                    fail(f"{mode} R{ri + 1} Base: the lead-in caption fades to {low} when {button} resumes")
+                wait_paused(page)
+
+
 def check_reduced(browser: Browser) -> None:
     """Reduced motion and ?anim=0: no glide, Reception lists its stages on the reception still, only Next in the row.
 
@@ -1241,7 +1411,7 @@ def check_serve_static(page: Page) -> None:
             if not page.evaluate("document.querySelector('#lAnim').offsetHeight"):
                 fail(f"{tag}: the hidden controls bar loses its height")
             check_positions(f"{tag} still", page.evaluate(MARKERS, "#courtL .mk"), spots(ri, "serve", mode))
-            for sel in ("#lPlay", "#lReplay", "#lStep"):
+            for sel in ("#lPlay", "#lReplay", "#lBack", "#lStep"):
                 page.evaluate(f"document.querySelector('{sel}').click()")
                 page.wait_for_timeout(50)
                 if anim(page) or page.locator("#courtL .am").count():
@@ -1379,6 +1549,8 @@ def main() -> None:
         check_fade_back(page)
         check_never_blocks(page)
         check_speed(page)
+        check_step_back(page)
+        check_step_back_paused(page)
         check_still_captions(page)
         check_captions(page)
         check_flag_off(page)
