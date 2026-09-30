@@ -25,7 +25,7 @@
           "vis": { ".validate": "newData.isString() && newData.val().matches(/^(none|ref|all)$/)" },
           "nb": { ".validate": "newData.isBoolean()" },
           "sets": { ".validate": "newData.isBoolean()" },
-          "rulesMode": { ".validate": "newData.isString() && newData.val().matches(/^(official|drill)$/)" },
+          "rulesMode": { ".validate": "newData.isString() && newData.val().matches(/^(simple|official|drill)$/)" },
           "queue": {
             "$k": {
               ".validate": "$k.matches(/^[0-9]{1,2}$/) && newData.hasChildren(['ri', 'phase'])",
@@ -41,7 +41,7 @@
             ".write": "auth != null && auth.uid == $uid",
             ".validate": "$uid.length <= 40 && newData.parent().parent().child('meta').exists() && newData.hasChildren(['name', 'role', 'color', 'joinedAt'])",
             "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 16" },
-            "role": { ".validate": "newData.isString() && newData.val().matches(/^(MB1|MB2|OH1|OH2|OP|S|L)$/)" },
+            "role": { ".validate": "newData.isString() && newData.val().matches(/^(MB|MB1|MB2|OH1|OH2|OP|S|L)$/)" },
             "color": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" },
             "joinedAt": { ".validate": "newData.val() == now || newData.val() == data.val()" },
             "online": { ".validate": "newData.isBoolean()" },

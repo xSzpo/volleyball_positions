@@ -36,7 +36,11 @@ def fail(m: str) -> None:
 
 
 URL = (ROOT / "index.html").as_uri() + "?ff=all"
-ROLES = ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"]
+MODE_ROLES = {
+    "simple": ["MB", "OH1", "OH2", "OP", "S", "L"],
+    "official": ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"],
+}
+RULES = list(MODE_ROLES)
 PHASES = ["start", "rec", "ar", "serve"]
 STEPS = ["start", "serve", "rec", "ar"]
 QUICK_COMBOS = [("start", "rec"), ("serve", "ar")]
@@ -132,16 +136,17 @@ def check_header(pg: Page, tag: str) -> None:
     pg.click("#roleChip")
     if not pg.is_visible("#setupPanel") or pg.get_attribute("#roleChip", "aria-expanded") != "true":
         fail(f"{tag} role chip did not open the sheet")
-    pg.click('.rulesmode [data-rm="drill"]')
-    if "Drill rules" not in (pg.get_attribute("#roleChip", "aria-label") or ""):
-        fail(f"{tag} role chip label does not name the rules")
     pg.click('.rulesmode [data-rm="official"]')
+    if "Official rules" not in (pg.get_attribute("#roleChip", "aria-label") or ""):
+        fail(f"{tag} role chip label does not name the rules")
+    pg.click('.rulesmode [data-rm="simple"]')
     if not pg.evaluate("document.querySelector('.wrap').inert"):
         fail(f"{tag} the page behind the open sheet is not inert")
     for _ in range(12):
         pg.keyboard.press("Tab")
-    if not pg.evaluate("document.getElementById('setupPanel').contains(document.activeElement)"):
-        fail(f"{tag} Tab left the open sheet")
+        if pg.evaluate("document.querySelector('.wrap').contains(document.activeElement)"):
+            fail(f"{tag} Tab left the open sheet")
+            break
     learn_tag = pg.inner_text("#learnTag")
     pg.evaluate("document.body.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true}))")
     if pg.inner_text("#learnTag") != learn_tag:
@@ -191,7 +196,7 @@ def check_court_look(pg: Page, tag: str, phone: bool) -> None:
     if pg.locator("#courtL .me-ring").count() != 1 or pg.locator('#courtL .mk[data-p="OH1"] .me-ring').count() != 1:
         fail(f"{tag} your player is not the one ringed")
     labels: list[str] = pg.eval_on_selector_all("#courtL .mk text", "els => els.map(e => e.textContent)")
-    if sorted(labels) != sorted(["S", "OH1", "MB1", "OP", "OH2", "L"]):
+    if sorted(labels) != sorted(["S", "OH1", "MB", "OP", "OH2", "L"]):
         fail(f"{tag} marker labels read {labels}")
     if pg.locator("#courtL .rt").count():
         fail(f"{tag} routes drawn in Reception")
@@ -294,8 +299,9 @@ def drill_steps(pg: Page, ctx: str, k: int = 30) -> None:
 
 def sweep_learn(pg: Page, tag: str, quick: bool) -> None:
     """Every role, rotation and phase under both rules; quick: one rules mode and one phase per rotation."""
-    for ri, (rm, role) in enumerate(itertools.product(["official", "drill"], ROLES)):
-        if quick and rm != ("official", "drill")[ROLES.index(role) % 2]:
+    combos = [(rm, role) for rm in RULES for role in MODE_ROLES[rm]]
+    for ri, (rm, role) in enumerate(combos):
+        if quick and rm != RULES[MODE_ROLES[rm].index(role) % 2]:
             continue
         pick_rules(pg, rm)
         pick_role(pg, role)
@@ -319,10 +325,10 @@ def sweep_drill(pg: Page, tag: str, quick: bool) -> None:
     """All roles, visibility modes, neighbour on/off and rules modes; quick: each role once."""
     section("DRILL all roles")
     pg.click("#tabDrill")
-    for rm in ["official", "drill"]:
+    for rm in RULES:
         pick_rules(pg, rm)
-        for ri, role in enumerate(ROLES):
-            if quick and rm != ("official", "drill")[ri % 2]:
+        for ri, role in enumerate(MODE_ROLES[rm]):
+            if quick and rm != RULES[ri % 2]:
                 continue
             pick_role(pg, role)
             for v in [["none", "ref", "all"][ri % 3]] if quick else ["none", "ref", "all"]:
@@ -342,7 +348,7 @@ def sweep_drill(pg: Page, tag: str, quick: bool) -> None:
         open_fold(pg, "#dOpts")
         pg.click("#nbDrill")
     tap(pg, "#courtD", 0.5, 0.7)
-    pick_role(pg, "MB1")
+    pick_role(pg, "L")
     drill_steps(pg, f"{tag} drill after role switch mid-check", 5)
     # tab switch mid-check and back
     pick_role(pg, "OH2")
@@ -393,7 +399,9 @@ def sweep_match(pg: Page, tag: str, combos: list[tuple[str, ...]], quick: bool) 
     section(f"MATCH: {len(combos)} step combos")
     pg.click("#tabGame")
     for ci, combo in enumerate(combos):
-        role = ROLES[ci % 7]
+        rm = random.choice(RULES)
+        pick_rules(pg, rm)
+        role = MODE_ROLES[rm][ci % len(MODE_ROLES[rm])]
         pick_role(pg, role)
         if pg.is_visible("#gSettings"):
             pg.click("#gSettings")
@@ -405,7 +413,6 @@ def sweep_match(pg: Page, tag: str, combos: list[tuple[str, ...]], quick: bool) 
         if random.random() < 0.5:
             pg.click("#nbGame")
         pg.click(f'.vis[data-vis="game"] button[data-v="{random.choice(["none", "ref", "all"])}"]')
-        pick_rules(pg, random.choice(["official", "drill"]))
         if pg.is_visible("#gSettings"):
             pg.click("#gSettings")
         pg.click("#gStart")
@@ -446,7 +453,8 @@ def sweep_match(pg: Page, tag: str, combos: list[tuple[str, ...]], quick: bool) 
     if not pg.is_visible("#gSetup"):
         fail(f"{tag} role change mid-match didn't reset")
     pg.click("#gStart")
-    pick_rules(pg, "drill")
+    open_setup(pg)
+    pick_rules(pg, "simple" if pg.get_attribute('[data-rm="official"]', "aria-checked") == "true" else "official")
     if not pg.is_visible("#gSetup"):
         fail(f"{tag} rules change mid-match didn't reset")
     pg.click("#gStart")
@@ -494,19 +502,19 @@ def check_downloads(pg: Page, tag: str) -> None:
 def check_persistence(pg: Page, tag: str) -> None:
     section("PERSISTENCE")
     pg.click("#tabLearn")
+    pick_rules(pg, "official")
     pick_role(pg, "OP")
-    pick_rules(pg, "drill")
     pg.click("#tabDrill")
     pg.click('.vis[data-vis="drill"] button[data-v="ref"]')
     pg.reload()
     wait_ready(pg)
     if pg.get_attribute('.role[data-r="OP"]', "aria-pressed") != "true":
         fail(f"{tag} role not remembered")
-    if pg.get_attribute('[data-rm="drill"]', "aria-checked") != "true":
+    if pg.get_attribute('[data-rm="official"]', "aria-checked") != "true":
         fail(f"{tag} rules mode not remembered")
     if pg.get_attribute('.vis[data-vis="drill"] button[data-v="ref"]', "aria-checked") != "true":
         fail(f"{tag} drill vis not remembered")
-    pick_rules(pg, "official")
+    pick_rules(pg, "simple")
 
 
 CONFIGS: dict[str, tuple[ViewportSize, bool, Literal["light", "dark"]]] = {

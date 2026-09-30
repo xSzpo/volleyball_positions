@@ -32,7 +32,10 @@ ROOT = Path(__file__).resolve().parents[2]
 # A stored role skips the first-visit role sheet, which covers the page.
 SEED_ROLE = "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"
 sys.path.insert(0, str(ROOT / "src"))
-from data import ROWS, SETS  # noqa: E402
+from data import SETS, lineup  # noqa: E402
+
+# The app opens in Simplified KSV.
+ROWS = [lineup(ri, "simple") for ri in range(6)]
 
 SHOTS = ROOT / "src" / "tests" / "_out"
 SHOTS.mkdir(exist_ok=True)
@@ -389,13 +392,13 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
     host.locator("#gLobby").screenshot(path=str(SHOTS / "online0.png"))
     print("lobby shows both")
 
-    assert guest.is_disabled('.rulesmode [data-rm="drill"]'), "a guest can change the rules in the lobby"
+    assert guest.is_disabled('.rulesmode [data-rm="official"]'), "a guest can change the rules in the lobby"
     if host.is_hidden("#setupPanel"):
         host.click("#roleChip")
-    host.click('.rulesmode [data-rm="drill"]')
-    guest.wait_for_function("document.getElementById('lSet').textContent.includes('Drill')")
     host.click('.rulesmode [data-rm="official"]')
     guest.wait_for_function("document.getElementById('lSet').textContent.includes('Official')")
+    host.click('.rulesmode [data-rm="simple"]')
+    guest.wait_for_function("document.getElementById('lSet').textContent.includes('Simplified')")
     host.click("#setupDone")
     print("lobby rules follow the host")
 
@@ -403,7 +406,7 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
 
     host.click("#lStart")
     guest.wait_for_selector("#gPlay", state="visible")
-    assert guest.is_disabled('.rulesmode [data-rm="drill"]'), "rules can change during an online match"
+    assert guest.is_disabled('.rulesmode [data-rm="official"]'), "rules can change during an online match"
     assert "Set by the host" in guest.inner_text("#rmSub"), "locked rules switch not explained"
 
     totals = {"Anna": 0, "Ben": 0}
@@ -573,7 +576,7 @@ def persistent_room(host: Page, guest: Page, emulator_db: str, code: str) -> Non
     host.click("#lStart")
     for page in (host, guest):
         moment_one(page)
-    assert guest.is_disabled('#roles .role[data-r="MB1"]'), "roles can change during an online match"
+    assert guest.is_disabled('#roles .role[data-r="MB"]'), "roles can change during an online match"
     guest.wait_for_function("!document.getElementById('gStrip').textContent.includes('999')")
     assert strip(guest) == {"Anna": (0, False), "Ben": (0, False)}, f"new match strip: {strip(guest)}"
     assert admin(emulator_db, "GET", f"rooms/{code}/answers") is None, "a late answer survived the new Start"
@@ -883,7 +886,7 @@ def failed_join(browser: Browser, url: str, emulator_db: str, errors: list[str])
     guest.click("#onJoin")
     guest.wait_for_selector("#gLobby", state="visible", timeout=20000)
 
-    pick_role(late, "MB1")
+    pick_role(late, "MB")
     open_online(late, "Cal")
     late.wait_for_function("window.firebase?.apps?.length > 0")
     late.evaluate(

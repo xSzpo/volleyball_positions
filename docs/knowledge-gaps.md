@@ -83,3 +83,35 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The height cap has a 381 px floor, so markers stay at 36 px or more; at 390 × 664 the court is 324 × 381 and the page scrolls a little. `docs/v2.md` is updated.
 - **Alternatives:** keep the cap and accept smaller markers on short phones.
 - **Reversible by:** the `max-width` of `svg.court` in `src/template.html`.
+
+### 11. Official while `rules-official` is off
+
+- **Issue:** #19
+- **Problem:** Official is a restored v1 mode behind `rules-official`, which is off by default. A phone that stored `official` in v1 would otherwise keep using it with no way back.
+- **Decision:** While the flag is off, the Official button is not in the DOM and the app plays Simplified, but the stored `ksv51:rulesMode` is left as it is, so the choice comes back when the flag goes on. An online guest still follows the host's `meta.rulesMode`.
+- **Alternatives:** overwrite the stored value with `simple`, or show Official before its flag is on.
+- **Reversible by:** the `rules-official` check at the top of `applyFeatures()` in `src/template.html`.
+
+### 12. Middle roles across a rules switch
+
+- **Issue:** #19
+- **Problem:** Simplified has one middle (`MB`), Official has two (`MB1`, `MB2`). A player who picked a middle needs a role after a switch.
+- **Decision:** `roleIn()` maps `MB1` and `MB2` to `MB`, and `MB` to `MB1`. The last picked role stays stored, so `MB2` → Simplified → Official comes back as `MB2`. Same-device players and online roles are mapped the same way.
+- **Alternatives:** reopen the role sheet after a switch, or map `MB` to the middle who is front row in R1.
+- **Reversible by:** `roleIn()` and `setRules()` in `src/template.html`.
+
+### 13. Rotation step in R3 and R6, and where SUB defends
+
+- **Issue:** #19
+- **Problem:** Coach questions 1 and 3 (#16) are open: whether the Rotation step in R3 and R6 shows L or the server in zone 1, and whether the server defends zone 6 or zone 5.
+- **Decision:** Built to the plan and the v1 data: the Rotation step shows L in zone 1 in both rule sets (the guide's picture); SUB serves from zone 1 and defends zone 6, the outside hitter keeps zone 5. The Official walk-through table lists the real lineup, so the audit reads L there as the middle it stands for.
+- **Alternatives:** show the serving middle or SUB at the Rotation step; SUB in zone 5.
+- **Reversible by:** `lineup()` in `src/data.py` for the lineups, `ROWS[..]["serve"]` for the zones; `tests/audit.py` then checks the walk-through tables.
+
+### 14. Drill stats shared between rule sets
+
+- **Issue:** #19
+- **Problem:** Drill stats are keyed by role, rotation and phase. `docs/v2.md` §7 says only that Simplified MB stats start empty.
+- **Decision:** Keys stay as they are. `MB` is a new role, so its stats start empty; the other roles share their stats between Simplified and Official, which differ only at Our serve in R3 and R6.
+- **Alternatives:** add the rules mode to the stats key, so every role starts empty in Simplified.
+- **Reversible by:** the stats key in the Drill code of `src/template.html`.
