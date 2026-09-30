@@ -1774,7 +1774,8 @@
               <li>
                 <b>Who is in front of or behind me, and who is beside me?</b>
                 When we serve, there is no overlap rule: take your defence spot. When they serve,
-                that confirms your legal spot.
+                that confirms your legal spot at the referee's whistle. From the server's first
+                movement you may move.
               </li>
               <li><b>Am I on court, or is the libero in?</b> Middles, check this every time.</li>
               <li>
@@ -2314,8 +2315,14 @@
         return s[0].toUpperCase() + s.slice(1);
       }
 
+      const WHISTLE_MOVE = "From the server's first movement you may move.";
+      const OVERLAP_WHEN = {
+        start:
+          "This is your rotation order. It counts at the whistle when the other team serves. We serve now, so you may stand anywhere.",
+        rec: `These limits count at the whistle, not during the pass. ${WHISTLE_MOVE}`,
+      };
       const SERVE_RULE =
-        "The serving team may stand anywhere when the ball is served (FIVB 7.4). You stay in your row for play: a back-row player may not block, or attack from the front zone above the net.";
+        "The serving team may stand anywhere: the overlap rule is only for the receiving team (FIVB 7.4). You stay in your row for play: a back-row player may not block, or attack from the front zone above the net.";
       function describe(ri, phase, role) {
         const r = ROWS[ri];
         const pl = players(ri, phase);
@@ -2540,14 +2547,16 @@
         [4, 3, 2],
         [5, 6, 1],
       ];
-      // Your overlap partners at the serve: the player in your column and your row neighbours.
+      // Your overlap partners at the whistle for their serve: the player in your column and your row neighbours.
       function partners(ri, role, phase) {
         const z = zoneOf(ri, role);
         if (!z) return [];
+        // The serving middle is off court when they serve (the libero is in), so it sets no limits.
+        const serving = phase === "start" && middleServes(ri);
+        if (serving && role === server(ri)) return [];
         const zp = {};
-        const swap = phase === "start" && middleServes(ri);
         [...ROWS[ri].front, ...ROWS[ri].back].forEach((p, i) => {
-          zp[ORDER[i]] = swap && p === "L" ? server(ri) : p;
+          zp[ORDER[i]] = p;
         });
         const front = [4, 3, 2].includes(z);
         const out = [{ p: zp[COLUMN[z]], side: front ? "behind" : "front" }];
@@ -2555,7 +2564,7 @@
           i = row.indexOf(z);
         if (i > 0) out.push({ p: zp[row[i - 1]], side: "left" });
         if (i < 2) out.push({ p: zp[row[i + 1]], side: "right" });
-        return out;
+        return serving ? out.filter((o) => o.p !== "L") : out;
       }
       function overlapText(ri, role, phase) {
         const words = {
@@ -3077,13 +3086,15 @@
               ? `<p class="guide">${SERVE_RULE} Our base spots are not in the guide.</p>`
               : "";
         const { tight } = bounds;
-        const overlap =
-          me && (phase === "start" || phase === "rec")
+        const serverNow = phase === "start" && middleServes(ri) && role === server(ri);
+        const overlap = serverNow
+          ? " You serve now, so you have no overlap limits. When they serve, the libero is in for you."
+          : me && (phase === "start" || phase === "rec")
             ? ` ${overlapText(ri, role, phase)}${bounds.lines.length ? " Each line ends at a limit you may not cross." : ""}${
                 tight.length
                   ? ` You stand right at the ${tight.join(" and ")} limit${tight.length > 1 ? "s" : ""}.`
                   : ""
-              }`
+              } ${OVERLAP_WHEN[phase]}`
             : "";
         $("cue").innerHTML =
           `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${guide}`;
@@ -3545,9 +3556,9 @@
       };
       const THUMB = [
         {
-          t: "When we serve: no overlap rule",
+          t: "Overlap counts only when they serve, at the whistle",
           roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
-          d: "Stand in your defence spot (rows still count for blocking and attacking). Not in the guide: FIVB rule 7.4, since 2025.",
+          d: "When they serve, stand in order with your overlap partners when the referee whistles. From the server's first movement you may move. This is the Volleyball Danmark rule from 1 October 2026. When we serve there is no overlap rule: stand in your defence spot (rows still count for blocking and attacking; FIVB rule 7.4). Not in the guide.",
         },
         {
           t: "Three players receive",
@@ -3716,12 +3727,12 @@
           ];
         const qs = [];
         if ([4, 3, 2].includes(z))
-          qs.push({ q: "Who must stay behind you at the serve?", a: zp[col[z]] });
-        else qs.push({ q: "Who must you stay behind at the serve?", a: zp[col[z]] });
+          qs.push({ q: "Who must stay behind you at the whistle?", a: zp[col[z]] });
+        else qs.push({ q: "Who must you stay behind at the whistle?", a: zp[col[z]] });
         const row = rows.find((x) => x.includes(z)),
           i = row.indexOf(z);
-        if (i > 0) qs.push({ q: "Who must stay on your left at the serve?", a: zp[row[i - 1]] });
-        if (i < 2) qs.push({ q: "Who must stay on your right at the serve?", a: zp[row[i + 1]] });
+        if (i > 0) qs.push({ q: "Who must stay on your left at the whistle?", a: zp[row[i - 1]] });
+        if (i < 2) qs.push({ q: "Who must stay on your right at the whistle?", a: zp[row[i + 1]] });
         const pick = qs[Math.floor(Math.random() * qs.length)];
         return { ...pick, opts: all.filter((p) => p !== r) };
       }
@@ -3749,7 +3760,7 @@
         });
         box.insertAdjacentHTML(
           "beforeend",
-          `<p class="hint" style="margin-top:6px">${choice === nq.a ? "Correct." : `${choice ? "" : "Skipped. "}It is ${nq.a}.`} Keep that order until the serve is made, then move.</p>`,
+          `<p class="hint" style="margin-top:6px">${choice === nq.a ? "Correct." : `${choice ? "" : "Skipped. "}It is ${nq.a}.`} Keep that order at the whistle. ${WHISTLE_MOVE}</p>`,
         );
       }
 
@@ -4559,7 +4570,7 @@
             : G.role === "S"
               ? "You don't receive. Stay near your zone, out of the passing lanes, ready to run to the net."
               : "You don't receive. Stay out of the passing lanes.";
-          return `${relation(st.ri, G.role)} That makes your rotational spot zone ${z} (${row} row). ${job} Keep your overlap order.`;
+          return `${relation(st.ri, G.role)} That makes your rotational spot zone ${z} (${row} row). ${job} Keep your overlap order at the whistle. ${WHISTLE_MOVE}`;
         }
         if (st.phase === "ar") {
           if (me.kind === "set") return "You are the setter: where do you set from?";

@@ -1,8 +1,9 @@
 """Playwright test of the Learn tab in index.html.
 
 Walks every role, rotation and step of both rule sets with the Next button and
-checks the cue, the overlap boundary lines, the Our serve rule text, that Next
-stays in view on a phone, and the SUB and MB texts.
+checks the cue, the overlap boundary lines and when they count (at the
+whistle, from 1 October 2026), the Our serve rule text, that Next stays in
+view on a phone, and the SUB and MB texts.
 
 Usage: python src/tests/learn_test.py
 """
@@ -34,6 +35,20 @@ EXPECTED = {
     ("simple", "S", 0, "rec"): ("Overlap: stay behind OH1 and right of L.", []),
     ("official", "OH2", 1, "rec"): ("Overlap: stay in front of L and left of OP.", ["L"]),
     ("simple", "L", 1, "rec"): ("Overlap: stay behind OH2 and left of S.", ["OH2", "S"]),
+    # Official R3 and R6: the serving middle is off court when they serve, so it is nobody's limit.
+    ("official", "OP", 2, "start"): ("Overlap: stay right of OH2.", []),
+    ("official", "OH1", 2, "start"): ("Overlap: stay behind OH2 and right of S.", []),
+    ("official", "OH2", 5, "start"): ("Overlap: stay behind OH1 and right of OP.", []),
+}
+# (mode, role, rotation): the middle who serves from zone 1 at the Rotation step and has no overlap limits.
+SERVING_MIDDLE = {("official", "MB1", 2), ("official", "MB2", 5)}
+# The overlap limits count at the whistle for the serve; before 1 October 2026 they counted at the service hit.
+OLD_TIMING = re.compile(r"service hit|when the ball is served|at the serve\b|until the serve is made", re.IGNORECASE)
+WHISTLE_MOVE = "From the server's first movement you may move."
+OVERLAP_WHEN = {
+    "start": "This is your rotation order. It counts at the whistle when the other team serves."
+    " We serve now, so you may stand anywhere.",
+    "rec": "These limits count at the whistle, not during the pass. " + WHISTLE_MOVE,
 }
 # Caption words -> the axis and direction your line must run from your marker.
 SIDE = {"behind": ("y", -1), "in front of": ("y", 1), "right of": ("x", -1), "left of": ("x", 1)}
@@ -92,6 +107,8 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
         fail(f"{tag}: cue is empty: {state['cue']!r}")
     if re.search(r"undefined|NaN|null|\$\{", state["cue"]):
         fail(f"{tag}: cue has a template leak: {state['cue']!r}")
+    if OLD_TIMING.search(state["cue"]):
+        fail(f"{tag}: cue uses the old overlap timing: {state['cue']!r}")
     here = on_court(page, role)
     if phase == "serve" and (
         "may stand anywhere" not in state["cue"]
@@ -99,7 +116,12 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
         or "front zone above the net" not in state["cue"]
     ):
         fail(f"{tag}: Our serve cue lacks the serving-team rule: {state['cue']!r}")
-    if phase in ("start", "rec") and here:
+    if phase == "start" and (mode, role, rotation) in SERVING_MIDDLE:
+        if not here or state["bounds"] or "Overlap:" in state["cue"] or "no overlap limits" not in state["cue"]:
+            fail(f"{tag}: the serving middle should be on court with no limits: {state['cue']!r}, {state['bounds']}")
+    elif phase in ("start", "rec") and here:
+        if OVERLAP_WHEN[phase] not in state["cue"]:
+            fail(f"{tag}: cue does not say when the overlap limits count: {state['cue']!r}")
         check_overlap(tag, state, EXPECTED.get((mode, role, rotation, phase)))
         for bound in state["bounds"]:
             if bound["stroke"] != f"var(--route-{ROUTE_KEY[bound['p']]})":
@@ -194,6 +216,19 @@ def check_texts(page: Page) -> None:
             fail(f"SUB R{rotation + 1} Reception: {sub[(rotation, 'rec')]!r}")
 
 
+def check_rule_folds(page: Page) -> None:
+    """The pre-serve checklist and the rules of thumb teach the whistle timing, not the service hit."""
+    open_app(page, {"role": "OH1", "rulesMode": "simple"})
+    for fold in ("#checks", "#thumbsBox"):
+        text = " ".join((page.text_content(fold) or "").split())
+        if "whistle" not in text or WHISTLE_MOVE not in text:
+            fail(f"{fold} lacks the whistle timing: {text!r}")
+        if OLD_TIMING.search(text):
+            fail(f"{fold} uses the old overlap timing: {text!r}")
+    if "1 October 2026" not in (page.text_content("#thumbsBox") or ""):
+        fail("rules of thumb do not date the Volleyball Danmark rule")
+
+
 def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -206,6 +241,7 @@ def main() -> None:
                 check_walk(page, mode, role)
         check_next_in_view(page)
         check_texts(page)
+        check_rule_folds(page)
         for error in errors:
             fail(f"page error: {error}")
         browser.close()
