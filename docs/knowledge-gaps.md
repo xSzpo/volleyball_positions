@@ -647,3 +647,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The owner's call: only Reception animates. Base shows its still picture (base defence, the ball over the net, "Our attack is over the net: defend.") with the controls hidden, no Play nudge, and nothing plays. Reception's play still runs on to base defence and fades back. The Base-only code (`cutPlay()`, the lead-in `LEAD_MS`, `leadCaption()`, `ksvLearn.lead()`) is deleted.
 - **Alternatives:** keep the Base play without its lead-in; play the whole rally at Base.
 - **Reversible by:** `animPhase()` and `phaseStages()` in `src/template.html` before #94.
+
+### 79. The Attack texts of the covers
+
+- **Issue:** #92
+- **Problem:** Since #89, Drill and Match grade L, the deep outside hitter and a back-row opposite on or towards their 3-2 cover spots as the pass lands. Their Attack texts still sent them elsewhere: "Cover left back (zone 5)", "Drop back to cover", and for the back-row opposite in R4 and R5 "Go straight to zone 1", though the setter sets zone 4 and the opposite covers deep.
+- **Decision:** The hint, the feedback and the `move.ar` caption use the cover jobs of the Learn play (`ATTACK_NOTES`): L covers the hitter close behind, the deep OH covers deep behind the close cover, the back-row opposite comes in to cover deep, right of the middle. The Rules of thumb entry "The opposite moves directly to position 1" becomes "The back-row opposite covers deep". `audit.py` now wants "cover" in a back-row attacker's caption. The zone the player defends after the attack stays in the caption.
+- **Alternatives:** keep the back-row attack to zone 1 and send the set there in R4 to R6; grade the covers on their `ar` spots again.
+- **Reversible by:** `covers` in `buildReception()`, the `cover` branches of `describe()` and `gHint()`, and the `ar` captions in `src/data.py`.

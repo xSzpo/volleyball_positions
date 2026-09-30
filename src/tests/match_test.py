@@ -305,7 +305,7 @@ def check_libero_hint(browser: Browser) -> None:
 
 def check_hint_rule_numbers(browser: Browser) -> None:
     """A Match hint that cites a rule of thumb by number points to that rule in the Learn list."""
-    cases = (("OH1", 0, "outside hitter starts left"), ("L", 0, "Back-row movement"), ("OP", 3, "opposite moves"))
+    cases = (("OH1", 0, "outside hitter starts left"), ("L", 0, "Back-row movement"), ("OP", 3, "opposite covers deep"))
     for rules in ("simple", "official"):
         for role, rotation, title in cases:
             page = new_page(browser, rules=rules)
@@ -330,7 +330,11 @@ def check_hint_rule_numbers(browser: Browser) -> None:
 
 def check_hints_without_guides(browser: Browser) -> None:
     """With Rules of thumb off, the hints give the advice without citing a rule."""
-    cases = (("OH1", 0, "The front-row outside starts left"), ("L", 0, "The libero finishes"), ("OP", 3, "Go straight"))
+    cases = (
+        ("OH1", 0, "The front-row outside starts left"),
+        ("L", 0, "The libero finishes"),
+        ("OP", 3, "Come in to cover deep"),
+    )
     for role, rotation, advice in cases:
         page = new_page(browser, query="?ff=all,-learn-guides&anim=0")
         setup_match(page, role, ("ar",), sets=False)
@@ -964,6 +968,67 @@ def check_attack_grading(browser: Browser) -> None:
 MODE_ROLES = {"simple": ("MB", "OH1", "OH2", "OP", "S", "L"), "official": ("MB1", "MB2", "OH1", "OH2", "OP", "S", "L")}
 
 
+def cover_job(row: Row, role: str) -> str | None:
+    """The 3-2 cover job Learn gives `role` at Attack: close (L), deep (back-row OH) or side (back-row OP)."""
+    kind = {p: k for p, _, _, k in row["ar"]}
+    if role not in kind:
+        return None
+    if role == "L":
+        return "close"
+    if kind[role] == "back":
+        return "side"
+    return "deep" if kind[role] is None and role in row["back"] else None
+
+
+# What the hint and the feedback say for each cover job, the words of Learn's cover captions.
+COVER_WORDS = {
+    "close": ("cover the hitter close behind", "close behind: dig a ball the block sends back"),
+    "deep": ("cover deep in the middle", "Cover deep behind the close cover"),
+    "side": ("come in to cover deep", "Cover deep in the middle"),
+}
+
+
+def check_attack_texts(browser: Browser) -> None:
+    """At Attack, the hint, the feedback and the caption of L, the deep OH and the back OP name the cover graded."""
+    checked = 0
+    for rules in RULES_MODES:
+        for role in ("L", "OH1", "OH2", "OP"):
+            page = new_page(browser, rules)
+            setup_match(page, role, ("ar",), sets=False)
+            page.click("#gStart")
+            for ri in range(6):
+                tag = f"attack text {rules} {role} R{ri + 1}"
+                row = lineup(ri, rules)
+                job = cover_job(row, role)
+                page.wait_for_selector("#gOff:enabled")
+                if not job:
+                    page.click("#gOff")
+                    press_next(page)
+                    press_next(page)
+                    continue
+                lands = pass_lands(page, ri)
+                page.click("#gHelp")
+                hint = page.inner_text("#gFb")
+                tap_at(page, *lands[role])
+                press_next(page)
+                feedback = page.inner_text("#gFb")
+                caption = row["move"]["ar"][role]
+                hint_words, feedback_words = COVER_WORDS[job]
+                if hint_words not in hint.lower():
+                    fail(f"{tag}: hint {hint!r} does not say {hint_words!r}")
+                if feedback_words not in feedback:
+                    fail(f"{tag}: feedback {feedback!r} does not say {feedback_words!r}")
+                if "cover" not in caption:
+                    fail(f"{tag}: caption {caption!r} does not name the cover")
+                for text in (hint, feedback, caption):
+                    if "zone 1" in text or "straight" in text.lower():
+                        fail(f"{tag}: graded at the {job} cover, the text reads {text!r}")
+                checked += 1
+                press_next(page)
+            page.close()
+    print(f"Attack texts: the cover graded named in hint, feedback and caption on {checked} courts", flush=True)
+
+
 def check_from_label(browser: Browser) -> None:
     """The "from" label stays clear of every marker, the ball and the court edge, for every rotation and role."""
     checked = 0
@@ -1183,6 +1248,7 @@ def main() -> None:
         check_double_check(browser)
         check_attack_match(browser)
         check_attack_grading(browser)
+        check_attack_texts(browser)
         check_from_label(browser)
         check_attack_drill(browser)
         check_receive_limits(browser)

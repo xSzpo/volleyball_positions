@@ -2325,6 +2325,11 @@
         if (phase === "ar") {
           const rp = ROWS[ri].rec.find((x) => x[0] === role);
           const moved = rp && Math.hypot(rp[1] - me.x, rp[2] - me.y) > 0.07;
+          if (me.cover)
+            return {
+              t: role === "L" ? "Close cover" : "Deep cover",
+              d: `${me.cover}${role === "L" && rulesMode === "official" ? ` ${FINGER_SET}` : ""}`,
+            };
           if (me.kind === "set")
             return {
               t: "Setting spot",
@@ -2465,7 +2470,7 @@
           s += route(a, b, c, d, o.p, { mine, dot: true });
         });
         pl.forEach((o) => {
-          if (o.turn || (o.kind !== "front" && o.kind !== "back")) return;
+          if (o.turn || o.cover || (o.kind !== "front" && o.kind !== "back")) return;
           const y1 = o.y * H - MARKER_R - 0.5,
             y2 = o.kind === "back" ? H * AL + 2.5 : 3;
           if (y1 - y2 < 2) return;
@@ -2540,6 +2545,7 @@
             x: at.x,
             y: at.y,
             ...(o.p === quick?.p ? { turn: { x: o.x, y: o.y } } : {}),
+            ...(tr.covers?.[o.p] ? { cover: tr.covers[o.p] } : {}),
           };
         });
       }
@@ -3708,6 +3714,14 @@
                 ...pick(backSide, () => DEEP_COVER.side),
               }
             : {};
+        const covers =
+          setSpot && hit
+            ? {
+                ...(from.L ? { L: ATTACK_NOTES.cupBack(hitter) } : {}),
+                ...pick(deep, () => ATTACK_NOTES.deep),
+                ...pick(backSide, () => ATTACK_NOTES.deepBack),
+              }
+            : {};
         stages.push({
           moves: pick(second, (p) => (p === cupFront ? takeOff : { ...(onCover[p] || to[p]) })),
           first: ["L"],
@@ -3791,7 +3805,7 @@
             ball: { from: spike, to: SPIKE_BALL },
           });
         }
-        const tr = { from, players: order, stages: [] };
+        const tr = { from, players: order, stages: [], covers };
         let t = 0;
         const at = { ...from };
         // Each player's latest move and the start of its stage, to carry a long run on into the next stages.
@@ -4238,9 +4252,9 @@
         },
         {
           k: "opposite",
-          t: "The opposite moves directly to position 1",
+          t: "The back-row opposite covers deep",
           roles: ["OP"],
-          d: "In R4 to R6 the opposite goes straight to zone 1 after the pass for the back-row attack. Take off behind the 3 m line.",
+          d: "In R4 to R6 the opposite is back row, and the setter sets zone 4. Come in to cover deep, right of the middle, behind the 3 m line.",
         },
         {
           k: "names",
@@ -5292,15 +5306,15 @@
         if (st.phase === "ar") {
           if (me.kind === "set") return "You are the setter: where do you set from?";
           if (me.kind === "back")
-            return `You are the back-row opposite. ${thumbRef("opposite", "go straight to zone 1 and take off behind the 3 m line")}`;
+            return `You are the back-row opposite. ${thumbRef("opposite", "come in to cover deep, right of the middle: the setter sets zone 4")}`;
           if (me.turn) return "You are the front-row middle: you run the quick as the pass comes.";
           if (me.kind === "front")
             return G.role.startsWith("MB")
               ? "You are front-row middle: you attack. Which lane?"
               : `You attack. ${thumbRef("outside-left", "the front-row outside starts left, except when the setter is in 1")}`;
           return G.role === "L"
-            ? `You don't attack: cover the hitter, then take your defensive spot. ${thumbRef("back-cover", "the libero finishes in zone 5 after the attack")}`
-            : "You are back row and don't attack now: cover the attack. The libero takes left back.";
+            ? `You don't attack: cover the hitter close behind, then take your defensive spot. ${thumbRef("back-cover", "the libero finishes in zone 5 after the attack")}`
+            : "You are back row and don't attack now: cover deep in the middle, behind the close cover.";
         }
         return `When we serve there is no overlap rule, so everyone except the server stands in base defence before the serve: the front row in the middle of its zones, the back row deep. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;
       }
