@@ -606,6 +606,54 @@ def check_sets_tab(browser: Browser) -> None:
     print("Sets tab lists exactly the sets in SETS; stored data naming Po or Til is harmless", flush=True)
 
 
+QUIZ_LOOK = """() => {
+  const look = (el) => getComputedStyle(el);
+  const paths = [...document.querySelectorAll('#netQ path')].map((path) => {
+    const style = look(path);
+    return [style.stroke, style.strokeDasharray];
+  });
+  const buttons = [...document.querySelectorAll('#setanswers .setchip')].map((button) => {
+    const style = look(button);
+    return [style.borderTopColor, style.borderTopStyle, style.color];
+  });
+  return { paths, buttons };
+}"""
+
+
+def check_set_quiz_neutral(browser: Browser) -> None:
+    """Before the answer, every Name the set path and button looks the same in both themes; after it, families show."""
+    for theme in ("light", "dark"):
+        page = new_page(browser)
+        page.add_init_script(f"localStorage.setItem('ksv51:theme', JSON.stringify('{theme}'))")
+        page.reload()
+        page.click("#tabSets")
+        asked: set[str] = set()
+        paths: set[tuple[str, ...]] = set()
+        buttons: set[tuple[str, ...]] = set()
+        for _ in range(200):
+            look = page.evaluate(QUIZ_LOOK)
+            paths.update(tuple(p) for p in look["paths"])
+            buttons.update(tuple(b) for b in look["buttons"])
+            asked.add(page.evaluate("() => document.querySelector('#netQ path').getAttribute('d')"))
+            if len(asked) == len(SETS):
+                break
+            page.locator("#setanswers .setchip").first.click()
+            page.click("#snext")
+        if len(asked) != len(SETS):
+            fail(f"{theme}: quiz asked {len(asked)} of {len(SETS)} sets")
+        if len(paths) != 1 or len(buttons) != 1:
+            fail(f"{theme}: quiz paths {paths}, buttons {buttons} before the answer")
+        elif next(iter(paths))[0] != next(iter(buttons))[0] or next(iter(paths))[1] != "none":
+            fail(f"{theme}: quiz path {paths} and buttons {buttons} differ")
+        page.locator("#setanswers .setchip").first.click()
+        for s in SETS:
+            classes = (page.get_attribute(f'#setanswers .setchip[data-s="{s[0]}"]', "class") or "").split()
+            if s[3] not in classes:
+                fail(f"{theme}: after the answer, button {s[0]} has no {s[3]} class")
+        page.close()
+    print("Name the set quiz: one neutral path and button style before the answer, families after", flush=True)
+
+
 LABEL_GEOMETRY = """() => {
   const svg = document.getElementById('netS');
   const paths = [...svg.querySelectorAll('path')];
@@ -1257,6 +1305,7 @@ def main() -> None:
         check_hints_without_guides(browser)
         check_set_calls(browser)
         check_sets_tab(browser)
+        check_set_quiz_neutral(browser)
         check_set_labels(browser)
         check_tap_then_continue(browser)
         check_breakdown(browser)

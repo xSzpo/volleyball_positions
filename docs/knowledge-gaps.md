@@ -663,3 +663,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** An unanswered question from a step you switch off is replaced at once by one from the picked steps; an answered one keeps its feedback, and Next brings a picked step. A question from a step still picked stays. In Review weak spots, the items from switched-off steps are dropped from the rest of the review.
 - **Alternatives:** always keep the open question until it is answered; start a new question on every change.
 - **Reversible by:** the `#dSteps` click handler in `src/template.html`.
+
+### 90. Family colours in the Name the set quiz
+
+- **Issue:** #100
+- **Problem:** The quiz drew the path in its family colour (back sets dashed) and coloured the answer buttons by family, which gave the answer away.
+- **Decision:** Before the answer, the path and every button are drawn in `--ink`, solid, for every set. After the answer, the path and buttons show their family colours as feedback. The explore view and the Match set call check are unchanged.
+- **Alternatives:** keep everything neutral after the answer too; use `--muted` instead of `--ink`.
+- **Reversible by:** `newSetQ()` and `answerSet()` in `src/template.html` before #100.
