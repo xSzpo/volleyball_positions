@@ -3,7 +3,8 @@
 Walks every role, rotation and step of both rule sets with the Next button and
 checks the cue, the overlap boundary lines and when they count (at the
 whistle, from 1 October 2026), the Our serve rule text, that Next stays in
-view on a phone, and the SUB and MB texts.
+view on a phone, the SUB and MB texts, the Official walk-through table of
+docs/v2.md and the Official libero rules.
 
 Usage: python src/tests/learn_test.py
 """
@@ -229,6 +230,106 @@ def check_rule_folds(page: Page) -> None:
         fail("rules of thumb do not date the Volleyball Danmark rule")
 
 
+def walkthrough_rows() -> list[list[str]]:
+    """The Official walk-through table of docs/v2.md section 5, one list of cells per rotation."""
+    doc = (ROOT / "docs" / "v2.md").read_text()
+    part = doc.split("### Walk-through: Official", 1)[1].split("\n### ", 1)[0]
+    return [[c.strip() for c in line.strip("|").split("|")] for line in part.splitlines() if re.match(r"\| R\d", line)]
+
+
+def lineup_in(cell: str) -> list[str]:
+    """The first 'A B C / D E F' lineup in a cell; L(MB2) reads as L."""
+    player = r"[A-Z][A-Z0-9]*(?:\([A-Z0-9]+\))?"
+    m = re.search(rf"((?:{player} ){{2}}{player}) / ((?:{player} ){{2}}{player})", cell)
+    return [re.sub(r"\(.*\)", "", p) for p in (m[1] + " " + m[2]).split()] if m else []
+
+
+def check_official_walkthrough(page: Page) -> None:
+    """The app matches the Official walk-through table for all six rotations."""
+    open_app(page, {"role": "OH1", "rulesMode": "official"})
+    rows = walkthrough_rows()
+    if len(rows) != 6:
+        fail(f"Official walk-through has {len(rows)} rows")
+    for ri, (_, rotation, serve, reception, after) in enumerate(rows):
+        tag = f"Official walk-through {ROTATION_NAMES[ri]}"
+        at: dict[str, list[dict[str, Any]]] = {
+            ph: page.evaluate(f"window.ksvLearn.players({ri}, '{ph}')") for ph in PHASES
+        }
+        start = [o["p"] for o in at["start"]]
+        if start != lineup_in(rotation):
+            fail(f"{tag}: Rotation step {start} != {lineup_in(rotation)}")
+        if ("L" in start) != ("L stays on" in rotation):
+            fail(f"{tag}: L on court at the Rotation step is {'L' in start}; the table says {rotation!r}")
+        if [o["p"] for o in at["serve"]] != lineup_in(serve):
+            fail(f"{tag}: Our serve {[o['p'] for o in at['serve']]} != {lineup_in(serve)}")
+        server = re.search(r"(\w+) serves", serve)
+        runs = [
+            r
+            for r in start + ["L"]
+            if "then run to zone" in page.evaluate(f"window.ksvLearn.describe({ri}, 'serve', '{r}').d")
+        ]
+        if not server or runs != [server[1]]:
+            fail(f"{tag}: the server in the app is {runs}; the table says {serve!r}")
+        replaced = re.search(r"L for (MB[12]) \(zone (\d)\)", reception)
+        rec = [o["p"] for o in at["rec"]]
+        if not replaced or "L" not in rec or replaced[1] in rec:
+            fail(f"{tag}: Reception has {rec}; the table says {reception!r}")
+        elif f"The libero takes your zone {replaced[2]}." not in page.evaluate(
+            f"window.ksvLearn.describe({ri}, 'rec', '{replaced[1]}').d"
+        ):
+            fail(f"{tag}: the libero does not take zone {replaced[2]} for {replaced[1]}")
+        kinds = {o["p"]: o["kind"] for o in at["ar"]}
+        attackers = re.match(r"((?:\w+, )+\w+) attack", after)
+        if attackers and any(kinds.get(p) not in ("front", "back") for p in attackers[1].split(", ")):
+            fail(f"{tag}: After reception kinds {kinds}; the table says {after!r}")
+        if "back-row attack" in after and kinds.get("OP") != "back":
+            fail(f"{tag}: OP is {kinds.get('OP')!r} after reception; the table says {after!r}")
+
+
+def check_official_libero(page: Page) -> None:
+    """Official libero rules: no US libero rules, the 19.3 text on exchange screens and the finger-set rule."""
+    open_app(page, {"role": "L", "rulesMode": "official"})
+    order = [(ri, ph) for ri in range(6) for ph in PHASES]
+    was_on = None
+    for ri, ph in order + order[:1]:
+        on = "L" in [o["p"] for o in page.evaluate(f"window.ksvLearn.players({ri}, '{ph}')")]
+        if was_on is not None and on != was_on:
+            if on and ph != "rec":
+                fail(f"Official {ROTATION_NAMES[ri]} {ph}: the libero comes on without a completed rally")
+            if not on and ph != "start":
+                fail(f"Official {ROTATION_NAMES[ri]} {ph}: the libero goes off at {ph}")
+        was_on = on
+    texts: list[str] = page.evaluate(
+        "roles => roles.flatMap(r => [0,1,2,3,4,5].flatMap(ri => ['start','serve','rec','ar']"
+        ".flatMap(ph => [window.ksvLearn.describe(ri, ph, r).d, window.ksvLearn.still(ri, ph, r),"
+        " ...window.ksvLearn.captions(ri, ph, r)])))",
+        MODES["official"],
+    )
+    texts.append(page.inner_text("#sheet"))
+    us_rule = re.compile(r"libero (serves|may serve|can serve)|straight back in", re.IGNORECASE)
+    for text in texts:
+        if us_rule.search(text):
+            fail(f"Official text teaches a US libero rule: {text!r}")
+    if "FIVB 19.3" not in page.inner_text("#sheet"):
+        fail("Official libero rules to remember lack the 19.3 rule")
+    for ri in range(6):
+        if "nobody may attack that ball above the net" not in page.evaluate(
+            f"window.ksvLearn.describe({ri}, 'ar', 'L').d"
+        ):
+            fail(f"Official {ROTATION_NAMES[ri]} After reception: L text lacks the finger-set rule")
+    for ri in range(6):
+        for ph in PHASES:
+            learn(page, ri, ph)
+            shown = "FIVB 19.3" in page.inner_text("#cue")
+            want = ri in (2, 5) and ph in ("start", "rec")
+            if shown != want:
+                fail(f"Official {ROTATION_NAMES[ri]} {ph}: libero rule in the cue is {shown}, expected {want}")
+    open_app(page, {"role": "L", "rulesMode": "simple"})
+    learn(page, 2, "serve")
+    if "FIVB 19.3" in page.inner_text("#cue") or "19.3" in page.inner_text("#sheet"):
+        fail("Simplified shows the Official libero rule text")
+
+
 def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -242,6 +343,8 @@ def main() -> None:
         check_next_in_view(page)
         check_texts(page)
         check_rule_folds(page)
+        check_official_walkthrough(page)
+        check_official_libero(page)
         for error in errors:
             fail(f"page error: {error}")
         browser.close()

@@ -269,3 +269,19 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The R1 OP note now reads "Stand at the left sideline on the 3 m line: in R1 the opposite plays left." Every other `rec` note already says Stand, Receive, Hide or Start. The Our serve notes ("Cross to zone 4 …") are kept: the owner likes that content, and the audit ties them to the zone.
 - **Alternatives:** show a `rec` note only to a player who moves in that stage (most players would then see the setter's caption).
 - **Reversible by:** the R1 `move["rec"]["OP"]` note in `src/data.py`.
+
+### 34. Official exchange captions at the Rotation step
+
+- **Issue:** #22
+- **Problem:** §4.9 gives one caption per rotation for R3 and R6 ("The libero leaves; MB2 comes on in zone 4. MB1 is in zone 1 and serves."), but a still caption is written to your role, and the serving middle had no caption at all.
+- **Decision:** L reads "Go off at the sideline: MB2 comes on in zone 4 and MB1 serves from zone 1.", the middle who comes on keeps "Come on for the libero and take zone 4.", the serving middle reads "Rotate to zone 1 and serve: the libero may not serve, so you stay on.", and everyone else reads the §4.9 sentence without a name. The Reception exchange captions after the serve rally are kept. Nothing animates, as #47 decided. This replaces the generic Official captions of #23.
+- **Alternatives:** the §4.9 sentence for everyone; prefix it with the rotation name.
+- **Reversible by:** the `middleServes()` block in `stillStage()` in `src/template.html`.
+
+### 35. Where the libero rule text shows
+
+- **Issue:** #22
+- **Problem:** §4.9 says the caption states rule 19.3 (back row only, no serve, block or attack above the net, a completed rally between two replacements). That is about 180 characters; a caption holds 90.
+- **Decision:** In Official, the explanation under the court adds the 19.3 text on every screen that follows a libero exchange: Rotation and Reception in R3 and R6. The libero's rules to remember carry it with the finger-set rule, and the libero's After reception text adds "If you set with fingers from the front zone, nobody may attack that ball above the net." Simplified shows none of it: there SUB is a training substitute.
+- **Alternatives:** on every Official screen; in the caption as a third line; in Simplified too.
+- **Reversible by:** `LIBERO_RULE`, `FINGER_SET` and `@LRULES` in `src/template.html`.
