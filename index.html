@@ -4532,6 +4532,8 @@
       $("dSteps").addEventListener("click", (e) => {
         const b = e.target.closest("button[data-s]");
         if (!b) return;
+        // Some phone browsers keep a focus-visible ring after a tap, which reads as pressed.
+        if (e.detail) b.blur();
         const k = b.dataset.s,
           on = drillPick.includes(k);
         if (on && drillPick.length === 1) return;

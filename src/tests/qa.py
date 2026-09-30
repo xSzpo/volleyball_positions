@@ -483,9 +483,16 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
         fail(f"{tag} drill steps picker {picker} covers the court {court} or the buttons {off}")
     check_page(pg, f"{tag} drill steps")
     for step in ["serve", "rec", "ar"]:
-        pg.click(f'#dSteps [data-s="{step}"]')
+        pg.tap(f'#dSteps [data-s="{step}"]')
     if drill_picked(pg) != ["start"] or pg.get_attribute('#dSteps [data-s="start"]', "aria-disabled") != "true":
         fail(f"{tag} drill steps after switching three off: {drill_picked(pg)}")
+    look = (
+        "e => { const c = getComputedStyle(e);"
+        " return [c.outlineStyle, c.outlineWidth, c.outlineColor, c.boxShadow, c.borderColor, c.backgroundColor]; }"
+    )
+    tapped, other = (pg.eval_on_selector(f'#dSteps [data-s="{s}"]', look) for s in ("ar", "serve"))
+    if tapped != other or pg.evaluate("document.activeElement.matches('#dSteps button')"):
+        fail(f"{tag} a tapped off step chip looks {tapped}, other off chips {other}")
     if "Rotation" not in pg.inner_text("#dq"):
         fail(f"{tag} the open question {pg.inner_text('#dq')!r} was not replaced by a Rotation one")
     pg.click('#dSteps [data-s="start"]', force=True)
