@@ -159,7 +159,7 @@ AR_WORDS = {"set": ["setting spot"], "front": ["3 m line"], "back": ["zone 1", "
 
 
 def check_moves(i: int, mode: RulesMode) -> None:
-    """Every player has one short move caption per transition, and it matches their spot."""
+    """Every player has one short move caption per phase, and it matches their spot."""
     r = lineup(i, mode)
     front, back = r["serve"]
     on_court = {

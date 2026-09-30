@@ -2608,13 +2608,15 @@
         return out;
       }
       const SERVE_SPOT = [0.88, 1.1];
-      function serveLayer(ri, pl, role) {
+      // With atSpot the server's marker stands on the serve spot, so the label and route clear it.
+      function serveLayer(ri, pl, role, atSpot = false) {
         const o = pl.find((x) => x.p === server(ri));
         if (!o) return "";
         const [fx, fy] = SERVE_SPOT;
-        const [a, b, c, d] = shorten(fx * W, fy * H, o.x * W, o.y * H, 1.8);
+        const gap = atSpot ? MARKER_R + 0.5 : 1.8;
+        const [a, b, c, d] = shorten(fx * W, fy * H, o.x * W, o.y * H, gap);
         return (
-          `<text x="${fx * W - 3}" y="${fy * H + 1.3}" text-anchor="end" font-size="3.8" fill="var(--net-label)" font-family="Barlow,sans-serif">serve</text>` +
+          `<text x="${fx * W - (atSpot ? gap + 1 : 3)}" y="${fy * H + 1.3}" text-anchor="end" font-size="3.8" fill="var(--net-label)" font-family="Barlow,sans-serif">serve</text>` +
           route(a, b, c, d, o.p, { mine: role == null || o.p === role, dot: true })
         );
       }
@@ -2882,17 +2884,17 @@
       window.ksvLearn = {
         describe: (ri, phase, r) => describe(ri, phase, r),
         captions: (ri, phase, r) =>
-          transition(ri, phase).stages.map((st) => stageCaption(st, r).replace(/<[^>]+>/g, "")),
+          phaseStages(ri, phase).stages.map((st) => stageCaption(st, r).replace(/<[^>]+>/g, "")),
+        still: (ri, phase, r) =>
+          stageCaption({ notes: stillNotes(ri, phase) }, r).replace(/<[^>]+>/g, ""),
         stages: (ri, phase) =>
-          transition(ri, phase).stages.map((st) => ({
+          phaseStages(ri, phase).stages.map((st) => ({
             moves: Object.keys(st.moves),
-            enter: st.enter || [],
-            leave: st.leave || [],
             notes: st.notes,
-            fixed: st.fixed || null,
+            ball: !!st.ball,
           })),
         track: (ri, phase, n) => {
-          const tr = transition(ri, phase);
+          const tr = phaseStages(ri, phase);
           return Array.from({ length: n + 1 }, (_, i) => {
             const t = (tr.total * i) / n;
             return {
@@ -3041,10 +3043,7 @@
         $("rots")
           .querySelectorAll(".rot")
           .forEach((b) => {
-            b.onclick = () => {
-              ri = +b.dataset.i;
-              renderLearn();
-            };
+            b.onclick = () => learnGo(+b.dataset.i, phase);
           });
         $("phases").innerHTML = PHASES.map(
           ([k, l]) =>
@@ -3053,23 +3052,20 @@
         $("phases")
           .querySelectorAll(".ph")
           .forEach((b) => {
-            b.onclick = () => {
-              const at = PHASES.findIndex(([k]) => k === phase);
-              const next = at < PHASES.length - 1 && PHASES[at + 1][0] === b.dataset.k;
-              phase = b.dataset.k;
-              renderLearn();
-              if (next) animPlay();
-            };
+            b.onclick = () => learnGo(ri, b.dataset.k);
           });
         const pl = players(ri, phase);
-        const me = pl.find((o) => o.p === role);
+        const shown = learnSpots(ri, phase);
+        const me = shown.find((o) => o.p === role);
         let s = DEFS + courtBase(!me);
         if (phase === "start") s += rotArrows();
         if (phase === "ar") s += arLayer(ri, pl, role);
-        if (phase === "serve") s += serveLayer(ri, pl, role);
-        pl.filter((o) => o.p !== role).forEach((o) => {
-          s += chip(o);
-        });
+        if (phase === "serve") s += serveLayer(ri, pl, role, true);
+        shown
+          .filter((o) => o.p !== role)
+          .forEach((o) => {
+            s += chip(o);
+          });
         const bounds =
           phase === "start" || phase === "rec"
             ? boundLines(ri, pl, role, phase)
@@ -3100,36 +3096,44 @@
           `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${guide}`;
         const at = PHASES.findIndex(([k]) => k === phase);
         const upNext = at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1];
-        $("lNext").textContent = `${animated() ? "" : "Next: "}${upNext} ▸`;
+        learnTr = animPhase(phase) ? phaseStages(ri, phase) : { stages: [] };
+        const controls = animated() && learnTr.stages.length;
+        $("lNext").textContent = `${controls ? "" : "Next: "}${upNext} ▸`;
         $("lNext").setAttribute("aria-label", `Next: ${upNext}`);
-        learnTr = transition(ri, phase);
-        $("lCap").innerHTML = captionHtml(learnTr);
+        $("lCap").innerHTML = captionHtml(ri, phase, learnTr);
         renderAnimControls();
         renderSheet();
       }
+      // A new screen shows its still picture at once; Our serve and Reception then play once.
+      function learnGo(nextRi, nextPhase) {
+        const changed = nextRi !== ri || nextPhase !== phase;
+        ri = nextRi;
+        phase = nextPhase;
+        renderLearn();
+        if (!changed || !feature("learn-animation")) return;
+        if (animated()) animPlay();
+        else fadeCourt();
+      }
       $("lNext").onclick = () => {
         const at = PHASES.findIndex(([k]) => k === phase);
-        if (at === PHASES.length - 1) ri = (ri + 1) % 6;
-        phase = PHASES[(at + 1) % PHASES.length][0];
-        renderLearn();
-        animPlay();
+        learnGo(at === PHASES.length - 1 ? (ri + 1) % 6 : ri, PHASES[(at + 1) % PHASES.length][0]);
       };
 
       // ---------- Learn animation ----------
       const ANIM_OFF = new URLSearchParams(location.search).get("anim") === "0";
       const motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
-      // Libero and substitute exchanges happen here, at the sideline by the 3 m line.
-      const EXIT = { x: 0.97, y: AL };
       const SERVE_BALL = { x: 0.3, y: -0.08 };
+      const THEIR_SERVE = { x: 0.3, y: -0.12 };
       const HOLD_MS = 900,
         BALL_MS = 450,
         FADE_MS = 150;
-      const ROTATE_TEXT = "The rally goes on. We win the point and rotate.";
-      const SERVE_GO = "Go to the serve spot behind the end line in zone 1.";
+      const SERVE_HIT = "Serve from the spot behind the end line: the ball must clear the net.";
+      const PASS_TEXT = "Pass the serve high to the setter at the net.";
+      const SET_TEXT = "Take the pass at the setting spot: you play the second contact.";
       const SWAP_NOTES = {
         serve: [
           () => "Go off at the sideline: the libero may not serve.",
-          () => "Come on at the sideline and go to the serve spot.",
+          () => "Come on for the libero: you serve from the spot behind the end line.",
         ],
         rec: [
           () => "Go off at the sideline: we lost the serve, so the libero comes back.",
@@ -3146,178 +3150,143 @@
       function animated() {
         return feature("learn-animation") && !ANIM_OFF && !motionQuery.matches;
       }
+      const animPhase = (ph) => ph === "serve" || ph === "rec";
+      // Learn's still picture of Our serve has the server behind the end line, before the serve.
+      function learnSpots(ri, phase) {
+        const list = players(ri, phase);
+        if (phase !== "serve") return list;
+        const sv = server(ri);
+        return list.map((o) => (o.p === sv ? { ...o, x: SERVE_SPOT[0], y: SERVE_SPOT[1] } : o));
+      }
       const spots = (list) => Object.fromEntries(list.map((o) => [o.p, { x: o.x, y: o.y }]));
       const pick = (ps, f) => Object.fromEntries(ps.map((p) => [p, f(p)]));
-      // The move into (ri, phase) from the step before it, in stages; positions come from players().
-      function transition(ri, phase) {
+      const prevStep = (ri, phase) => {
         const k = PHASES.findIndex(([x]) => x === phase);
-        const fromRi = k === 0 ? (ri + 5) % 6 : ri;
-        const from = spots(players(fromRi, PHASES[(k + 3) % 4][0]));
-        const list = players(ri, phase);
-        const to = spots(list);
+        return [k === 0 ? (ri + 5) % 6 : ri, PHASES[(k + 3) % 4][0]];
+      };
+      // One note per player for the still picture: the exchange or reset that brought them here, else their move.
+      function stillNotes(ri, phase) {
+        const [fromRi, fromPhase] = prevStep(ri, phase);
+        const from = spots(players(fromRi, fromPhase));
+        const order = players(ri, phase).map((o) => o.p);
+        const leave = Object.keys(from).filter((p) => !order.includes(p));
+        const enter = order.filter((p) => !from[p]);
+        const notes = phase === "start" ? {} : { ...(ROWS[ri].move?.[phase] || {}) };
+        if (phase === "start") {
+          const nextZone = (z) => (z === 1 ? 6 : z - 1);
+          order
+            .filter((p) => from[p])
+            .forEach((p) => {
+              const was = zoneOf(fromRi, p),
+                now = zoneOf(ri, p);
+              if (!was || !now || now === nextZone(was)) return;
+              const way = isFront(ri, p) ? "along the net" : "across the back";
+              const why = rulesMode === "simple" ? ": the middle pair resets" : "";
+              notes[p] = `Walk ${way} from zone ${was} to zone ${now}${why}.`;
+            });
+        }
+        if (leave.length || enter.length) {
+          const [off, on] = SWAP_NOTES[phase];
+          leave.forEach((p) => {
+            notes[p] = off();
+          });
+          enter.forEach((p) => {
+            notes[p] = on(leave.join(" and "), zoneOf(ri, p));
+          });
+        }
+        return notes;
+      }
+      // What happens in (ri, phase) after its still picture, in stages that end back on that picture.
+      function phaseStages(ri, phase) {
+        const list = learnSpots(ri, phase);
+        const from = spots(list);
         const order = list.map((o) => o.p);
         const notes = ROWS[ri].move?.[phase] || {};
-        const leave = Object.keys(from).filter((p) => !to[p]);
-        const enter = order.filter((p) => !from[p]);
-        const stay = order.filter((p) => from[p]);
-        const sv = server(ri);
-        const serveSpot = { x: SERVE_SPOT[0], y: SERVE_SPOT[1] };
-        const first = (p) => (phase === "serve" && p === sv ? serveSpot : to[p]);
         const stages = [];
-        const stage = (moves, text, extra = {}) => ({ moves, notes: text, ...extra });
-        const own = (ps, f = (p) => to[p]) =>
-          stage(
-            pick(ps, f),
-            pick(ps, (p) => notes[p]),
-          );
-        let swap = null;
-        if (leave.length || enter.length) {
-          const [off, on] = SWAP_NOTES[phase] || SWAP_NOTES.start;
-          swap = stage(
-            { ...pick(leave, () => EXIT), ...pick(enter, first) },
-            {
-              ...pick(leave, () => off()),
-              ...pick(enter, (p) => on(leave.join(" and "), zoneOf(ri, p))),
-            },
-            { enter, leave, src: pick(enter, () => EXIT) },
-          );
-        }
         if (phase === "serve") {
-          stages.push({
-            ...own(stay, first),
-            notes: pick(stay, (p) => (p === sv ? SERVE_GO : notes[p])),
-          });
-          if (to[sv])
+          const sv = server(ri);
+          const base = players(ri, phase).find((o) => o.p === sv);
+          if (base) {
             stages.push({
-              ...own([sv]),
-              ball: { from: serveSpot, to: SERVE_BALL, early: true },
+              moves: { [sv]: from[sv] },
+              notes: { ...notes, [sv]: SERVE_HIT },
+              ball: { from: from[sv], to: SERVE_BALL },
             });
-        } else if (phase === "rec") stages.push(own(stay));
-        else if (phase === "ar") {
-          const kind = Object.fromEntries(list.map((o) => [o.p, o.kind]));
-          const setter = stay.filter((p) => kind[p] === "set");
-          const setSpot = to[setter[0]];
-          const hitter = stay
-            .filter((p) => kind[p] === "front")
-            .sort((a, b) => to[a].x - to[b].x)[0];
-          const cover = stay.filter((p) => !kind[p]);
-          const passer = from.L ? "L" : cover[0];
-          stages.push({ ...own(setter), ball: setSpot && { from: from[passer], to: setSpot } });
+            stages.push({ moves: { [sv]: { x: base.x, y: base.y } }, notes: { [sv]: notes[sv] } });
+          }
+        } else if (phase === "rec") {
+          const ar = players(ri, "ar");
+          const kind = Object.fromEntries(ar.map((o) => [o.p, o.kind]));
+          const to = spots(ar);
+          const arNotes = ROWS[ri].move?.ar || {};
+          const setter = order.filter((p) => kind[p] === "set");
+          const attackers = order.filter((p) => kind[p] === "front" || kind[p] === "back");
+          const passer = from.L ? "L" : order.find((p) => !kind[p]);
+          const setSpot = setter.length ? to[setter[0]] : null;
           stages.push({
-            ...own(stay.filter((p) => kind[p] === "front" || kind[p] === "back")),
-            ball: setSpot && hitter && { from: setSpot, to: { x: to[hitter].x, y: 0.08 } },
-          });
-          const cov = own(cover);
-          cover.forEach((p) => {
-            const round = /round behind (\w+)/.exec(notes[p] || "");
-            const o = round && to[round[1]];
-            if (o) cov.moves[p] = { ...to[p], via: { x: o.x, y: o.y + 0.15 } };
-          });
-          stages.push(cov);
-        } else {
-          const home = spots(players(fromRi, "start"));
-          const nextZone = (z) => (z === 1 ? 6 : z - 1);
-          const reset = stay.filter((p) => {
-            const z = zoneOf(fromRi, p);
-            return z && zoneOf(ri, p) && zoneOf(ri, p) !== nextZone(z);
+            moves: pick(setter, (p) => to[p]),
+            notes: { ...notes, ...pick(setter, (p) => arNotes[p]) },
+            ball: passer && { from: THEIR_SERVE, to: from[passer] },
           });
           stages.push({
-            ...stage(
-              {
-                ...pick(stay, (p) => (reset.includes(p) ? home[p] : to[p])),
-                ...pick(swap ? leave : [], () => EXIT),
-              },
-              {},
-            ),
-            fixed: ROTATE_TEXT,
+            moves: pick(attackers, (p) => to[p]),
+            notes: {
+              ...pick(attackers, (p) => arNotes[p]),
+              ...(passer ? { [passer]: PASS_TEXT } : {}),
+              ...pick(setter, () => SET_TEXT),
+            },
+            ball: passer && setSpot && { from: from[passer], to: setSpot },
           });
-          if (swap) stages.push(swap);
-          swap = null;
-          if (reset.length)
-            stages.push(
-              stage(
-                pick(reset, (p) => to[p]),
-                pick(reset, (p) => {
-                  const way = isFront(ri, p) ? "along the net" : "across the back";
-                  const why = rulesMode === "simple" ? ": the middle pair resets" : "";
-                  return `Walk ${way} from zone ${zoneOf(fromRi, p)} to zone ${zoneOf(ri, p)}${why}.`;
-                }),
-              ),
-            );
         }
-        if (swap) stages.unshift(swap);
         const tr = {
           from,
-          to,
-          stages: stages.filter((st) => st.fixed || Object.keys(st.moves).length),
+          players: order,
+          stages: stages.filter((st) => Object.keys(st.moves).length),
         };
-        tr.players = [...new Set([...Object.keys(from), ...order])];
         let t = 0;
         const at = { ...from };
-        tr.stages.forEach((st, i) => {
+        tr.stages.forEach((st) => {
           st.start = t;
-          st.src = { ...st.src };
+          st.src = {};
           st.glide = {};
           Object.entries(st.moves).forEach(([p, end]) => {
-            const src = st.src[p] || at[p];
-            st.src[p] = src;
-            st.glide[p] = Math.min(900, Math.max(600, pathLength(src, end) * 1000));
+            st.src[p] = at[p];
+            st.glide[p] = Math.min(
+              900,
+              Math.max(600, Math.hypot(end.x - at[p].x, end.y - at[p].y) * 1000),
+            );
             at[p] = { x: end.x, y: end.y };
           });
           st.dur = Math.max(600, ...Object.values(st.glide));
-          t += st.dur + (i < tr.stages.length - 1 ? HOLD_MS : 0);
+          t += st.dur + HOLD_MS;
         });
         tr.total = t;
         return tr;
       }
       function stageCaption(st, r) {
-        if (st.fixed) return st.fixed;
-        const who = st.notes[r] ? r : Object.keys(st.moves).find((p) => st.notes[p]);
+        const who = st.notes[r] ? r : Object.keys(st.moves || st.notes).find((p) => st.notes[p]);
         return who ? `<b>${who === r ? `You (${r})` : NAMES[who]}:</b> ${st.notes[who]}` : "";
       }
-      // At rest the caption shows your own last move in this transition.
-      function captionHtml(tr) {
+      // At rest the caption says why you stand where the still picture shows you.
+      function captionHtml(ri, phase, tr) {
+        const still = stageCaption({ notes: stillNotes(ri, phase) }, role);
+        if (animated() || tr.stages.length < 2) return still;
         const list = tr.stages.map((st) => stageCaption(st, role));
-        if (!animated() && list.length > 1)
-          return `<ol>${list.map((c) => `<li>${c}</li>`).join("")}</ol>`;
-        const mine = tr.stages.filter((st) => st.notes[role]).pop();
-        return stageCaption(mine || tr.stages[tr.stages.length - 1], role);
-      }
-      const pathLength = (a, b) =>
-        b.via
-          ? Math.hypot(b.via.x - a.x, b.via.y - a.y) + Math.hypot(b.x - b.via.x, b.y - b.via.y)
-          : Math.hypot(b.x - a.x, b.y - a.y);
-      function along(a, b, e) {
-        let [u, from, to] = [e, a, b];
-        if (b.via) {
-          const first = Math.hypot(b.via.x - a.x, b.via.y - a.y) / pathLength(a, b);
-          [u, from, to] = e < first ? [e / first, a, b.via] : [(e - first) / (1 - first), b.via, b];
-        }
-        return { x: from.x + (to.x - from.x) * u, y: from.y + (to.y - from.y) * u };
+        if (still && !list.includes(still)) list.unshift(still);
+        return `<ol>${list.map((c) => `<li>${c}</li>`).join("")}</ol>`;
       }
       function posAt(tr, p, t) {
-        let pos = tr.from[p] || null,
-          op = pos ? 1 : 0;
+        let pos = tr.from[p];
         for (const st of tr.stages) {
-          if (!(p in st.moves)) continue;
-          const src = st.src[p],
+          if (!(p in st.moves) || t <= st.start) continue;
+          const u = Math.min(1, (t - st.start) / st.glide[p]),
+            e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2,
+            src = st.src[p],
             end = st.moves[p];
-          if (t <= st.start) {
-            if (!pos) pos = src;
-            break;
-          }
-          const ms = t - st.start,
-            u = Math.min(1, ms / st.glide[p]),
-            e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
-          pos = along(src, end, e);
-          op = st.enter?.includes(p)
-            ? Math.min(1, ms / FADE_MS)
-            : st.leave?.includes(p)
-              ? Math.max(0, Math.min(1, (st.glide[p] - ms) / FADE_MS))
-              : 1;
+          pos = { x: src.x + (end.x - src.x) * e, y: src.y + (end.y - src.y) * e };
           if (u < 1) break;
         }
-        return { ...pos, op };
+        return pos;
       }
       function stageAt(tr, t) {
         let i = 0;
@@ -3334,14 +3303,13 @@
             g = a.els[p];
           if (!g) return;
           g.setAttribute("transform", `translate(${s.x * W} ${s.y * H})`);
-          g.setAttribute("opacity", s.op);
         });
         const i = stageAt(tr, a.t),
           st = tr.stages[i];
         let ball = null;
         tr.stages.forEach((b, k) => {
           if (!b.ball) return;
-          const start = b.ball.early ? b.start : b.start + b.dur - BALL_MS;
+          const start = b.start;
           const until = k + 1 < tr.stages.length ? tr.stages[k + 1].start : tr.total + 1;
           if (a.t >= start && a.t < until)
             ball = { ...b.ball, u: Math.min(1, (a.t - start) / BALL_MS) };
@@ -3370,6 +3338,7 @@
         if (a.t >= a.tr.total) {
           anim = null;
           renderLearn();
+          fadeCourt();
           return;
         }
         if (a.t >= stop) {
@@ -3399,19 +3368,19 @@
         anim = null;
         $("lCap").style.opacity = "";
       }
-      // Plays the transition into the current step; with step, only its first stage.
+      function fadeCourt() {
+        if (!ANIM_OFF && $("courtL").animate)
+          $("courtL").animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS });
+      }
+      // Plays what happens in the current phase once, then returns to its still picture; with step, only the first stage.
       function animPlay(step = false) {
-        if (!feature("learn-animation")) return;
-        if (!animated()) {
-          if (!ANIM_OFF && $("courtL").animate)
-            $("courtL").animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS });
-          return;
-        }
+        if (!animated() || !animPhase(phase)) return;
         animCancel();
-        const tr = transition(ri, phase);
-        const off = !tr.to[role];
+        const tr = phaseStages(ri, phase);
+        if (!tr.stages.length) return;
+        const off = !tr.from[role];
         const mark = (p, me) =>
-          `<g class="am" data-p="${p}" opacity="0">${chip({ p, x: 0, y: 0 }, { me })}</g>`;
+          `<g class="am" data-p="${p}">${chip({ p, x: 0, y: 0 }, { me })}</g>`;
         let s = DEFS + courtBase(off);
         tr.players
           .filter((p) => p !== role)
@@ -3439,7 +3408,7 @@
         animResume(step ? tr.stages[0].dur : null);
         learnFit();
       }
-      // While a transition plays, the court and caption sit above the sticky controls.
+      // While a phase plays, the court and caption sit above the sticky controls.
       function learnFit() {
         const court = $("courtL").getBoundingClientRect();
         const cap = $("lCap").getBoundingClientRect();
@@ -3457,13 +3426,13 @@
       function renderDots() {
         const tr = anim ? anim.tr : learnTr;
         if (!tr) return;
-        const at = anim ? anim.stage : tr.stages.length - 1;
+        const at = anim ? anim.stage : -1;
         $("lDots").innerHTML = tr.stages
           .map((_, i) => `<i${i <= at ? ' class="on"' : ""}></i>`)
           .join("");
       }
       function renderAnimControls() {
-        const on = animated();
+        const on = animated() && !!learnTr?.stages.length;
         $("lAnim").hidden = !on;
         $("lDots").hidden = !on;
         if (!on) return;
@@ -3495,14 +3464,8 @@
       motionQuery.addEventListener("change", () => renderLearn());
       document.addEventListener("keydown", (e) => {
         if ($("learn").hidden || !$("setup").hidden || e.target.tagName === "INPUT") return;
-        if (e.key === "ArrowRight") {
-          ri = (ri + 1) % 6;
-          renderLearn();
-        }
-        if (e.key === "ArrowLeft") {
-          ri = (ri + 5) % 6;
-          renderLearn();
-        }
+        if (e.key === "ArrowRight") learnGo((ri + 1) % 6, phase);
+        if (e.key === "ArrowLeft") learnGo((ri + 5) % 6, phase);
       });
       const RULES = {
         S: [
