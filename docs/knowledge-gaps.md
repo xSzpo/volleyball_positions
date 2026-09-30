@@ -392,3 +392,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** One stage: the server runs in at the contact while the ball crosses the net (about 2 s). The caption says "Serve from the spot behind the end line, then run in at once." With reduced motion the caption shows that line only, not a list. In R3 and R6 the off-court libero's Our serve caption says to wait at the sideline while the middle (Official) or SUB (Simplified) serves, in both rule sets.
 - **Alternatives:** two stages (#30).
 - **Reversible by:** the `serve` branch of `buildStages()` and `OFF_SERVE` in `src/template.html`.
+
+### 49. The PDF downloads are removed
+
+- **Issue:** #57
+- **Problem:** The owner asked to remove the download option of the PDFs. The printable cheat sheets were v1 pictures in the old colours, and #56 planned a cheat-sheet box to replace them.
+- **Decision:** The Downloads card, the `downloads` flag, the `download` event, the embedded PDFs and their generators (`gen_schema.py`, `gen_sets.py`, `pdf.py`, `downloads/`, `cairosvg`) are gone. A stored `ksv51:ffOverride`, `ksv51:flags` or PostHog value for `downloads` is ignored. #56 is closed as superseded. Coach question 8 now asks only about the all-rotations table.
+- **Alternatives:** keep the downloads behind the flag, off; regenerate the sheets in the v2 colours (#56).
+- **Reversible by:** reverting the #57 PR.
