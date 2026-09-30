@@ -913,6 +913,25 @@ def check_switch_behind(page: Page) -> None:
                     fail(f"{mode} R{ri + 1} {phase} after the spike: {p} crosses the middle at y {y:.2f}")
 
 
+def check_cross_captions(page: Page) -> None:
+    """After the spike, a run to base across the centre line by more than 0.3 is captioned as a cross; no other is."""
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        crossed = 0
+        for ri in range(6):
+            stage = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")[-1]
+            for p in stage["moves"]:
+                a, b = stage["from"][p]["x"], stage["to"][p]["x"]
+                switch = (a - 0.5) * (b - 0.5) < 0 and abs(a - b) > 0.3
+                crossed += switch
+                still = page.evaluate(f"window.ksvLearn.still({ri}, 'ar', '{p}')")
+                for tag, text in (("caption", stage["notes"][p]), ("Base still caption", still)):
+                    if ("cross" in text.lower()) != switch or len(stage["notes"][p]) > 78:
+                        fail(f"{mode} R{ri + 1} after the spike: {p} {a:.2f} to {b:.2f}, {tag} {text!r}")
+        if not crossed:
+            fail(f"{mode}: no run after the spike crosses the court")
+
+
 def check_no_overlap(page: Page) -> None:
     """No marker passes through another at any moment, and no run is faster than TOP_SPEED.
 
@@ -1545,6 +1564,7 @@ def main() -> None:
         check_rest_list(page)
         check_path_shapes(page)
         check_switch_behind(page)
+        check_cross_captions(page)
         check_no_overlap(page)
         check_passer(page)
         check_static_phases(page)
