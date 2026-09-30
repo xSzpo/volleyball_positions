@@ -761,8 +761,8 @@ def check_ball_moving(page: Page) -> None:
 
     Every rotation, both rule sets: the pass flies about 1 s and reaches the setter at the set spot, the next contact
     follows each ball's arrival within BALL_WAIT_MS, the hold comes only after the last stage, a run carried on starts
-    the player's next move only when it ends and, into the set or the spike, never turns back into it, and L's run
-    in stage 2 stays in front of y DEEP_LIMIT.
+    the player's next move only when it ends and, into the pass, the set or the spike, never turns back into it, and
+    L's run in stage 2 stays in front of y DEEP_LIMIT.
     """
     for mode, roles in MODES.items():
         open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
@@ -801,7 +801,7 @@ def check_ball_moving(page: Page) -> None:
                     if begin < ends.get(p, 0) - 1:
                         fail(f"{tag} stage {n + 1}: {p} starts a move at {begin:.0f} ms, before the last ends")
                     path = [(q["x"], q["y"]) for q in stage["paths"][p]]
-                    carried = n >= 2 and ends.get(p, 0) > stage["start"] + 1
+                    carried = n >= 1 and ends.get(p, 0) > stage["start"] + 1
                     joined = runs[p] + path[1:] if carried else path
                     if turns_back(joined):
                         fail(f"{tag} stage {n + 1}: {p}'s run turns back: {joined}")
