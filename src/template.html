@@ -2321,6 +2321,10 @@
           "This is your rotation order. It counts at the whistle when the other team serves. We serve now, so you may stand anywhere.",
         rec: `These limits count at the whistle, not during the pass. ${WHISTLE_MOVE}`,
       };
+      const LIBERO_RULE =
+        "Libero rules (FIVB 19.3): the libero replaces only a back-row player, only while the ball is out of play and before the whistle for the serve. The libero may not serve, block or try to block, or attack a ball above the net. A completed rally must come between two replacements.";
+      const FINGER_SET =
+        "If you set with fingers from the front zone, nobody may attack that ball above the net.";
       const SERVE_RULE =
         "The serving team may stand anywhere: the overlap rule is only for the receiving team (FIVB 7.4). You stay in your row for play: a back-row player may not block, or attack from the front zone above the net.";
       function describe(ri, phase, role) {
@@ -2430,7 +2434,7 @@
           }
           return {
             t: `Cover ${me.x < 0.34 ? "left back (zone 5)" : "middle back (zone 6)"}`,
-            d: "Cover the attack, then defend from here.",
+            d: `Cover the attack, then defend from here.${role === "L" && rulesMode === "official" ? ` ${FINGER_SET}` : ""}`,
           };
         }
         const sv = r.serve;
@@ -2714,7 +2718,7 @@
       const FEATURES = {
         "learn-tab": true,
         "learn-animation": true,
-        "rules-official": false,
+        "rules-official": true,
         "learn-guides": true,
         "rotations-table": true,
         "drill-tab": true,
@@ -2883,10 +2887,10 @@
       }
       window.ksvLearn = {
         describe: (ri, phase, r) => describe(ri, phase, r),
+        players: (ri, phase) => players(ri, phase),
         captions: (ri, phase, r) =>
           phaseStages(ri, phase).stages.map((st) => stageCaption(st, r).replace(/<[^>]+>/g, "")),
-        still: (ri, phase, r) =>
-          stageCaption({ notes: stillNotes(ri, phase) }, r).replace(/<[^>]+>/g, ""),
+        still: (ri, phase, r) => stageCaption(stillStage(ri, phase), r).replace(/<[^>]+>/g, ""),
         stages: (ri, phase) =>
           phaseStages(ri, phase).stages.map((st) => ({
             moves: Object.keys(st.moves),
@@ -3081,6 +3085,10 @@
             : phase === "serve"
               ? `<p class="guide">${SERVE_RULE} Our base spots are not in the guide.</p>`
               : "";
+        const libero =
+          rulesMode === "official" && stillStage(ri, phase).swap
+            ? `<p class="guide">${LIBERO_RULE}</p>`
+            : "";
         const { tight } = bounds;
         const serverNow = phase === "start" && middleServes(ri) && role === server(ri);
         const overlap = serverNow
@@ -3093,7 +3101,7 @@
               } ${OVERLAP_WHEN[phase]}`
             : "";
         $("cue").innerHTML =
-          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${guide}`;
+          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${guide}${libero}`;
         const at = PHASES.findIndex(([k]) => k === phase);
         const upNext = at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1];
         learnTr = animPhase(phase) ? phaseStages(ri, phase) : { stages: [] };
@@ -3165,7 +3173,7 @@
         return [k === 0 ? (ri + 5) % 6 : ri, PHASES[(k + 3) % 4][0]];
       };
       // One note per player for the still picture: the exchange or reset that brought them here, else their move.
-      function stillNotes(ri, phase) {
+      function stillStage(ri, phase) {
         const [fromRi, fromPhase] = prevStep(ri, phase);
         const from = spots(players(fromRi, fromPhase));
         const order = players(ri, phase).map((o) => o.p);
@@ -3194,7 +3202,16 @@
             notes[p] = on(leave.join(" and "), zoneOf(ri, p));
           });
         }
-        return notes;
+        let team = "";
+        if (phase === "start" && middleServes(ri) && enter.length) {
+          const sv = server(ri),
+            on = enter[0],
+            z = zoneOf(ri, on);
+          notes.L = `Go off at the sideline: ${on} comes on in zone ${z} and ${sv} serves from zone 1.`;
+          notes[sv] = "Rotate to zone 1 and serve: the libero may not serve, so you stay on.";
+          team = `The libero leaves; ${on} comes on in zone ${z}. ${sv} is in zone 1 and serves.`;
+        }
+        return { notes, team, swap: leave.length + enter.length > 0 };
       }
       // What happens in (ri, phase) after its still picture, in stages that end back on that picture.
       function phaseStages(ri, phase) {
@@ -3264,12 +3281,13 @@
         return tr;
       }
       function stageCaption(st, r) {
+        if (st.team && !st.notes[r]) return st.team;
         const who = st.notes[r] ? r : Object.keys(st.moves || st.notes).find((p) => st.notes[p]);
         return who ? `<b>${who === r ? `You (${r})` : NAMES[who]}:</b> ${st.notes[who]}` : "";
       }
       // At rest the caption says why you stand where the still picture shows you.
       function captionHtml(ri, phase, tr) {
-        const still = stageCaption({ notes: stillNotes(ri, phase) }, role);
+        const still = stageCaption(stillStage(ri, phase), role);
         if (animated() || tr.stages.length < 2) return still;
         const list = tr.stages.map((st) => stageCaption(st, role));
         if (still && !list.includes(still)) list.unshift(still);
@@ -3509,6 +3527,7 @@
           "@LSERVE",
           "You receive in every rotation: in the middle of the line in R1, R2 and R5, on the right in R3, R4 and R6.",
           "After reception: cover the hitter, then move to left back (zone 5).",
+          "@LRULES",
         ],
         OH2: [
           "Front row in R2, R3, R4: attack left (zone 4).",
@@ -3567,9 +3586,12 @@
           "@LSERVE": off
             ? "When we serve: defend zone 5. Exception: in R3 and R6 the back-row middle is in zone 1 and must serve, because the libero may never serve (FIVB rules). You are off until your team loses the serve."
             : "When we serve: defend zone 5. Exception: in R3 and R6 you are in zone 1, but the libero may never serve. A substitute (SUB) serves and defends zone 6. You come back on for SUB when your team loses the serve.",
+          "@LRULES": off
+            ? `${LIBERO_RULE} ${FINGER_SET.replace("you set", "the libero sets")}`
+            : "",
           "@OHSERVE": `When we serve: front → middle of zone 4; back → defend zone 6 (zone 5 in R3 and R6, when ${off ? "a middle" : "SUB"} serves).`,
         };
-        return lab(T[x] || x);
+        return lab(x in T ? T[x] : x);
       }
       function renderSheet() {
         const rows = ROWS.map((r, i) => {
@@ -3580,8 +3602,11 @@
           (t, i) =>
             `<li${t.roles.includes(role) ? ' class="mine"' : ""}><b>${t.t}</b>${t.roles.includes(role) ? ' <span class="tag">your rule</span>' : ""}<br>${t.d}</li>`,
         ).join("");
-        $("sheet").innerHTML =
-          `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role].map((x) => `<li>${ruleText(x)}</li>`).join("")}</ul>`;
+        $("sheet").innerHTML = `<h2>${NAMES[role]}: rules to remember</h2><ul>${RULES[role]
+          .map(ruleText)
+          .filter(Boolean)
+          .map((x) => `<li>${x}</li>`)
+          .join("")}</ul>`;
         $("rotTable").innerHTML =
           `<table><thead><tr><th></th><th>Rotation</th><th>Our serve</th><th>Reception</th><th>After reception</th></tr></thead><tbody>${rows}</tbody></table>`;
         $("thumbs").innerHTML = thumbs;

@@ -439,8 +439,13 @@ def check_official(page: Page) -> None:
         if "L" in got or serves not in got or on not in got:
             fail(f"{tag} Rotation step shows {sorted(got)}: expected {serves} and {on} on, L off")
         checks = {
-            ("start", "L"): "You (L): Go off at the sideline: the libero may not play in the front row.",
+            (
+                "start",
+                "L",
+            ): f"You (L): Go off at the sideline: {on} comes on in zone 4 and {serves} serves from zone 1.",
             ("start", on): f"You ({on}): Come on for the libero and take zone 4.",
+            ("start", serves): f"You ({serves}): Rotate to zone 1 and serve: the libero may not serve, so you stay on.",
+            ("start", "OP"): f"The libero leaves; {on} comes on in zone 4. {serves} is in zone 1 and serves.",
             ("rec", serves): f"You ({serves}): Go off at the sideline: we lost the serve, so the libero comes back.",
             ("rec", "L"): f"You (L): Come back on for {serves} and take your reception spot.",
         }
