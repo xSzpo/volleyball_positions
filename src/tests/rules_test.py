@@ -210,16 +210,17 @@ def check_outside_tap(page: Page) -> None:
         fail("Drill: the tap that closed the role list also answered")
     page.click("#tabGame")
     page.click("#gStart")
+    court = page.inner_html("#courtG")
     tap_court_with_list_open(page, "#courtG")
     if page.is_visible("#setupPanel"):
         fail("Match: a tap on the court did not close the role list")
-    if page.is_enabled("#gNext"):
+    if page.inner_html("#courtG") != court:
         fail("Match: the tap that closed the role list also placed your spot")
     open_setup(page)
     x, y = court_point(page, "#courtG")
     close_setup(page)
     page.mouse.click(x, y)
-    if not page.is_enabled("#gNext"):
+    if page.inner_html("#courtG") == court:
         fail("Match: the next court tap after closing the role list did not place your spot")
 
 

@@ -123,9 +123,9 @@ with sync_playwright() as p:
             assert pg.locator("#rWhy li").count() >= 1, "reveal has no explanation"
             if moment_seen and moment_seen.endswith("· Rotation"):
                 grades = pg.locator("#rList .rotgrades").all_inner_texts()
-                assert len(grades) == 3 and all(re.fullmatch(r"\w+: (right|wrong)( · \w+: (right|wrong))*", g) for g in grades), (
-                    f"Rotate reveal grades: {grades}"
-                )
+                assert len(grades) == 3 and all(
+                    re.fullmatch(r"\w+: (right|wrong)( · \w+: (right|wrong))*", g) for g in grades
+                ), f"Rotate reveal grades: {grades}"
                 rotate_reveals += 1
             for row in rows:
                 if "Set call:" in row:
@@ -174,7 +174,9 @@ with sync_playwright() as p:
                     if pg.is_enabled("#gNext"):
                         break
                     assert pg.inner_text("#gAsk").startswith("Tap where"), f"Rotate prompt {pg.inner_text('#gAsk')!r}"
-                    pg.mouse.click(box["x"] + box["width"] * (4 + 100 * x) / 108, box["y"] + box["height"] * (14 + 100 * y) / 127)
+                    pg.mouse.click(
+                        box["x"] + box["width"] * (4 + 100 * x) / 108, box["y"] + box["height"] * (14 + 100 * y) / 127
+                    )
                 if not pg.is_enabled("#gNext"):
                     pg.click("#gOff")
                 assert pg.inner_text("#gAsk").startswith("All placed"), f"Rotate not ready: {pg.inner_text('#gAsk')!r}"
