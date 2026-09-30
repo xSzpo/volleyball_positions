@@ -84,12 +84,26 @@ def tap_spot(page: Page, role: str, ri: int, phase: str, check: bool = True) -> 
     """Picks the role's correct spot for ``phase`` in rotation ``ri`` (or I'm off court), then presses Continue."""
     spots = [(s[0], s[1], s[2]) for s in (ROWS[ri]["ar"] if phase == "ar" else ROWS[ri]["rec"])]
     found = next(((x, y) for p, x, y in spots if p == role), None)
+    if phase == "ar" and found is not None:
+        found = pass_lands(page, ri).get(role, found)
     if found is None:
         page.click("#gOff")
     else:
         tap_at(page, *found)
     if check:
         press_next(page)
+
+
+def pass_lands(page: Page, ri: int) -> dict[str, tuple[float, float]]:
+    """Where Learn's Reception play has everyone at the moment the pass reaches the setter."""
+    spots = page.evaluate(
+        """(ri) => {
+            const pass = window.ksvLearn.stages(ri, 'rec')[1];
+            return window.ksvLearn.at(ri, 'rec', pass.start + pass.ball.ms);
+        }""",
+        ri,
+    )
+    return {p: (at["x"], at["y"]) for p, at in spots.items()}
 
 
 def breakdown_total(line: str) -> tuple[int, int]:
@@ -209,6 +223,11 @@ def check_our_serve(browser: Browser) -> None:
     page.wait_for_selector("#gOff:enabled")
     if "Our serve" not in page.inner_text("#gStepName"):
         fail(f"step name reads {page.inner_text('#gStepName')!r}, expected Our serve")
+    if not page.inner_text("#gStory").endswith("We serve. Where do you stand?"):
+        fail(f"R1 OH1 our serve question reads {page.inner_text('#gStory')!r}")
+    ball = court_picture(page, "courtG")["ball"]
+    if not ball or dist(ball, SERVE_BALL) > 0.01:
+        fail(f"our serve ball at {ball}, expected over the net at {SERVE_BALL} as in Learn")
     tap_at(page, 0.5, 0.5)
     press_next(page)
     page.wait_for_selector("#gFb .pts")
@@ -227,8 +246,17 @@ def check_our_serve(browser: Browser) -> None:
             fail(f"our serve feedback reads {feedback!r}, expected {want!r}")
     if "at the net" in feedback:
         fail(f"our serve feedback reads {feedback!r}, the front row should not be at the net")
+    if dist(court_picture(page, "courtG")["ball"] or (0, 0), SERVE_BALL) > 0.01:
+        fail("our serve feedback lost the ball over the net")
     page.close()
-    print("our serve: front-row spot mid-zone, only the server's arrow", flush=True)
+    page = new_page(browser)
+    setup_match(page, "S", ("serve",))
+    page.click("#gStart")
+    page.wait_for_selector("#gOff:enabled")
+    if not page.inner_text("#gStory").endswith("You serve. Where do you go after it?"):
+        fail(f"R1 server question reads {page.inner_text('#gStory')!r}, expected where they go after the serve")
+    page.close()
+    print("our serve: ball over the net, server asked where they go, front-row spot mid-zone, one arrow", flush=True)
 
 
 def check_off_court_pill(browser: Browser) -> None:
@@ -277,7 +305,7 @@ def check_libero_hint(browser: Browser) -> None:
 
 def check_hint_rule_numbers(browser: Browser) -> None:
     """A Match hint that cites a rule of thumb by number points to that rule in the Learn list."""
-    cases = (("OH1", 0, "outside hitter starts left"), ("L", 0, "Back-row movement"), ("OP", 3, "opposite moves"))
+    cases = (("OH1", 0, "outside hitter starts left"), ("L", 0, "Back-row movement"), ("OP", 3, "opposite covers deep"))
     for rules in ("simple", "official"):
         for role, rotation, title in cases:
             page = new_page(browser, rules=rules)
@@ -302,7 +330,11 @@ def check_hint_rule_numbers(browser: Browser) -> None:
 
 def check_hints_without_guides(browser: Browser) -> None:
     """With Rules of thumb off, the hints give the advice without citing a rule."""
-    cases = (("OH1", 0, "The front-row outside starts left"), ("L", 0, "The libero finishes"), ("OP", 3, "Go straight"))
+    cases = (
+        ("OH1", 0, "The front-row outside starts left"),
+        ("L", 0, "The libero finishes"),
+        ("OP", 3, "Come in to cover deep"),
+    )
     for role, rotation, advice in cases:
         page = new_page(browser, query="?ff=all,-learn-guides&anim=0")
         setup_match(page, role, ("ar",), sets=False)
@@ -782,14 +814,22 @@ def check_court_not_covered(browser: Browser) -> None:
 # The Learn Reception passer, one per rotation.
 PASSER = ["L", "OH2", "OH1", "L", "OH1", "OH2"]
 HELD = 6 + 1 + 6 * 0.65  # marker radius, its edge and the ball radius, in court units
+SERVE_BALL = (30.0, -8.0)
 
 
 def attack_question(ri: int, role: str) -> str:
-    return (
-        "You pass to the setter. Where do you go?"
-        if PASSER[ri] == role
-        else f"{PASSER[ri]} passes to the setter. Where do you go?"
-    )
+    if PASSER[ri] == role:
+        return "You pass to the setter. Where are you as it arrives?"
+    if role == "S":
+        return f"{PASSER[ri]} passes to you. Where do you take it?"
+    return f"{PASSER[ri]} passes to the setter. Where are you as it arrives?"
+
+
+def check_ball_at_setter(pic: dict[str, Any], row: Row, lands: dict[str, tuple[float, float]], tag: str) -> None:
+    setter = next(p for p, _, _, kind in row["ar"] if kind == "set")
+    set_spot = (lands[setter][0] * 100, lands[setter][1] * 100)
+    if not pic["ball"] or abs(dist(pic["ball"], set_spot) - HELD) > 0.02:
+        fail(f"{tag}: ball at {pic['ball']}, not with the setter at {set_spot}")
 
 
 def court_picture(page: Page, court: str) -> dict[str, Any]:
@@ -870,11 +910,13 @@ def check_attack_match(browser: Browser) -> None:
                 story = page.inner_text("#gStory")
                 if not story.endswith(attack_question(ri, "OH1")):
                     fail(f"{tag}: question reads {story!r}")
-                spot = next((x, y) for p, x, y, _ in rows[ri]["ar"] if p == "OH1")
+                lands = pass_lands(page, ri)
+                spot = lands["OH1"]
                 tap_at(page, *spot)
                 check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, tag)
                 press_next(page)
                 check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, f"{tag} feedback")
+                check_ball_at_setter(court_picture(page, "courtG"), rows[ri], lands, f"{tag} feedback")
                 line = page.inner_text("#gBd")
                 parts, total = breakdown_total(line)
                 if "%" in line or not parts == total == points(page) or total < 100:
@@ -887,7 +929,104 @@ def check_attack_match(browser: Browser) -> None:
     print("match Attack: reception picture, ball, tap line, full points", flush=True)
 
 
+def check_attack_grading(browser: Browser) -> None:
+    """Attack grades everyone where Learn's Reception play has them as the pass lands, and rings them there."""
+    checked = 0
+    for rules in RULES_MODES:
+        for role in MODE_ROLES[rules]:
+            page = new_page(browser, rules)
+            setup_match(page, role, ("ar",), sets=False)
+            page.click("#gStart")
+            for ri in range(6):
+                tag = f"attack grading {rules} {role} R{ri + 1}"
+                row = lineup(ri, rules)
+                page.wait_for_selector("#gOff:enabled")
+                lands = pass_lands(page, ri)
+                if not any(p == role for p, _, _, _ in row["ar"]):
+                    page.click("#gOff")
+                    press_next(page)
+                    press_next(page)
+                    continue
+                spot = lands[role]
+                if role in row["front"] and role.startswith("MB") and spot[1] > 0.25:
+                    fail(f"{tag}: Learn has the middle at {spot} as the pass lands, not at the net")
+                tap_at(page, *spot)
+                press_next(page)
+                if "Spot on" not in page.inner_text("#gFb"):
+                    fail(f"{tag}: a tap where Learn has you {spot} reads {page.inner_text('#gFb')!r}")
+                pic = court_picture(page, "courtG")
+                me = next(m for m in pic["markers"] if m["me"])
+                if dist((me["x"], me["y"]), (spot[0] * 100, spot[1] * 100)) > 0.5:
+                    fail(f"{tag}: feedback rings you at ({me['x']}, {me['y']}), not at {spot}")
+                check_ball_at_setter(pic, row, lands, tag)
+                checked += 1
+                press_next(page)
+            page.close()
+    print(f"Attack: graded where Learn has everyone as the pass lands on {checked} courts", flush=True)
+
+
 MODE_ROLES = {"simple": ("MB", "OH1", "OH2", "OP", "S", "L"), "official": ("MB1", "MB2", "OH1", "OH2", "OP", "S", "L")}
+
+
+def cover_job(row: Row, role: str) -> str | None:
+    """The 3-2 cover job Learn gives `role` at Attack: close (L), deep (back-row OH) or side (back-row OP)."""
+    kind = {p: k for p, _, _, k in row["ar"]}
+    if role not in kind:
+        return None
+    if role == "L":
+        return "close"
+    if kind[role] == "back":
+        return "side"
+    return "deep" if kind[role] is None and role in row["back"] else None
+
+
+# What the hint and the feedback say for each cover job, the words of Learn's cover captions.
+COVER_WORDS = {
+    "close": ("cover the hitter close behind", "close behind: dig a ball the block sends back"),
+    "deep": ("cover deep in the middle", "Cover deep behind the close cover"),
+    "side": ("come in to cover deep", "Cover deep in the middle"),
+}
+
+
+def check_attack_texts(browser: Browser) -> None:
+    """At Attack, the hint, the feedback and the caption of L, the deep OH and the back OP name the cover graded."""
+    checked = 0
+    for rules in RULES_MODES:
+        for role in ("L", "OH1", "OH2", "OP"):
+            page = new_page(browser, rules)
+            setup_match(page, role, ("ar",), sets=False)
+            page.click("#gStart")
+            for ri in range(6):
+                tag = f"attack text {rules} {role} R{ri + 1}"
+                row = lineup(ri, rules)
+                job = cover_job(row, role)
+                page.wait_for_selector("#gOff:enabled")
+                if not job:
+                    page.click("#gOff")
+                    press_next(page)
+                    press_next(page)
+                    continue
+                lands = pass_lands(page, ri)
+                page.click("#gHelp")
+                hint = page.inner_text("#gFb")
+                tap_at(page, *lands[role])
+                press_next(page)
+                feedback = page.inner_text("#gFb")
+                caption = row["move"]["ar"][role]
+                hint_words, feedback_words = COVER_WORDS[job]
+                if hint_words not in hint.lower():
+                    fail(f"{tag}: hint {hint!r} does not say {hint_words!r}")
+                if feedback_words not in feedback:
+                    fail(f"{tag}: feedback {feedback!r} does not say {feedback_words!r}")
+                if "cover" not in caption:
+                    fail(f"{tag}: caption {caption!r} does not name the cover")
+                for text in (hint, feedback, caption):
+                    if "zone 1" in text or "straight" in text.lower():
+                        fail(f"{tag}: graded at the {job} cover, the text reads {text!r}")
+                checked += 1
+                press_next(page)
+            page.close()
+    print(f"Attack texts: the cover graded named in hint, feedback and caption on {checked} courts", flush=True)
 
 
 def check_from_label(browser: Browser) -> None:
@@ -935,6 +1074,101 @@ def check_from_label(browser: Browser) -> None:
     print(f"from label clear of markers, ball and edge on {checked} Attack courts", flush=True)
 
 
+def limit_lines(page: Page, court: str) -> int:
+    return int(page.locator(f"#{court} g.bnd").count())
+
+
+def check_receive_limits(browser: Browser) -> None:
+    """Receive feedback draws your overlap limits as Learn does, only after the answer and the neighbour check."""
+    checked = 0
+    for rules in RULES_MODES:
+        for role in MODE_ROLES[rules]:
+            page = new_page(browser, rules)
+            setup_match(page, role, ("rec",))
+            page.click("#gStart")
+            for ri in range(6):
+                tag = f"limits match {rules} {role} R{ri + 1}"
+                page.wait_for_selector("#gOff:enabled")
+                tap_spot(page, role, ri, "rec", check=False)
+                if limit_lines(page, "courtG"):
+                    fail(f"{tag}: limit lines before the answer")
+                press_next(page)
+                want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
+                if limit_lines(page, "courtG") != want:
+                    fail(f"{tag}: {limit_lines(page, 'courtG')} limit lines, Learn draws {want}")
+                on_court = any(p == role for p, _, _ in lineup(ri, rules)["rec"])
+                if on_court != ("Overlap: stay" in page.inner_text("#gFb")):
+                    fail(f"{tag}: feedback reads {page.inner_text('#gFb')!r}")
+                checked += 1
+                press_next(page)
+            page.close()
+    page = new_page(browser)
+    setup_match(page, "OH1", ("rec",), neighbour=True)
+    page.click("#gStart")
+    tap_spot(page, "OH1", 0, "rec")
+    if limit_lines(page, "courtG") or "Overlap: stay" in page.inner_text("#gFb"):
+        fail("limits shown while the neighbour check is open")
+    page.locator("#gnb button").first.click()
+    if limit_lines(page, "courtG") != page.evaluate("() => window.ksvLearn.bounds(0, 'rec')"):
+        fail("limits missing after the neighbour check")
+    page.close()
+    for rules in RULES_MODES:
+        page = new_page(browser, rules)
+        pick_role(page, "OH1")
+        page.click("#tabDrill")
+        if page.get_attribute("#dOpts", "open") is None:
+            page.click("#dOpts > summary")
+        page.set_checked("#nbDrill", False)
+        seen: set[int] = set()
+        for _ in range(400):
+            if len(seen) == 6:
+                break
+            question = page.inner_text("#dq")
+            if not question.endswith("· Reception"):
+                page.click("#resetBtn")
+                continue
+            ri = int(question[1]) - 1
+            seen.add(ri)
+            tag = f"limits drill {rules} R{ri + 1}"
+            if limit_lines(page, "courtD"):
+                fail(f"{tag}: limit lines before the answer")
+            spot = next((x, y) for p, x, y in lineup(ri, rules)["rec"] if p == "OH1")
+            tap_at(page, *spot, court="courtD")
+            want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
+            if limit_lines(page, "courtD") != want or "Overlap: stay" not in page.inner_text("#fb"):
+                fail(f"{tag}: {limit_lines(page, 'courtD')} limit lines, Learn draws {want}")
+            page.click("#resetBtn")
+        if len(seen) < 6:
+            fail(f"limits drill {rules}: Receive came up only in {sorted(seen)}")
+        page.close()
+    page = new_page(browser)
+    pick_role(page, "OH1")
+    page.click("#tabDrill")
+    if page.get_attribute("#dOpts", "open") is None:
+        page.click("#dOpts > summary")
+    page.set_checked("#nbDrill", True)
+    for _ in range(400):
+        if page.inner_text("#dq").endswith("· Reception"):
+            break
+        page.click("#resetBtn")
+    else:
+        fail("limits drill neighbour: Receive never came up")
+    ri = int(page.inner_text("#dq")[1]) - 1
+    spot = next((x, y) for p, x, y in lineup(ri, "simple")["rec"] if p == "OH1")
+    tap_at(page, *spot, court="courtD")
+    page.wait_for_selector("#dnb button")
+    if limit_lines(page, "courtD") or "Overlap: stay" in page.inner_text("#fb"):
+        fail("limits drill: shown while the neighbour check is open")
+    page.locator("#dnb button").first.click()
+    want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
+    if limit_lines(page, "courtD") != want or "Overlap: stay" not in page.inner_text("#fb"):
+        fail(f"limits drill: {limit_lines(page, 'courtD')} limit lines after the neighbour check, Learn draws {want}")
+    page.close()
+    print(
+        f"Receive limits: after the answer as in Learn on {checked} Match courts, Drill and after the neighbour check"
+    )
+
+
 def check_attack_drill(browser: Browser) -> None:
     """Drill Attack: the reception picture in every rotation, both rule sets and every Show on court value.
 
@@ -964,9 +1198,11 @@ def check_attack_drill(browser: Browser) -> None:
                 check_from_picture(court_picture(page, "courtD"), rows[ri], ri, "OH1", tag)
                 if page.inner_text("#dsub") != attack_question(ri, "OH1"):
                     fail(f"{tag}: question reads {page.inner_text('#dsub')!r}")
-                spot = next((x, y) for p, x, y, _ in rows[ri]["ar"] if p == "OH1")
+                lands = pass_lands(page, ri)
+                spot = lands["OH1"]
                 tap_at(page, *spot, court="courtD")
                 check_tap_line(court_picture(page, "courtD"), rows[ri], "OH1", spot, tag)
+                check_ball_at_setter(court_picture(page, "courtD"), rows[ri], lands, f"{tag} feedback")
                 page.click("#resetBtn")
             if len(seen) < 6:
                 fail(f"drill {rules} {vis}: Attack came up only in {sorted(seen)}")
@@ -1011,8 +1247,11 @@ def main() -> None:
         check_court_not_covered(browser)
         check_double_check(browser)
         check_attack_match(browser)
+        check_attack_grading(browser)
+        check_attack_texts(browser)
         check_from_label(browser)
         check_attack_drill(browser)
+        check_receive_limits(browser)
         browser.close()
     print("MATCH TEST:", "ok" if not FAIL else f"{len(FAIL)} failures", flush=True)
     sys.exit(1 if FAIL else 0)
