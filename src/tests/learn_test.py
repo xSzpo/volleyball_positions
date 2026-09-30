@@ -366,7 +366,10 @@ def check_official_libero(page: Page) -> None:
         if "nobody may attack that ball above the net" not in page.evaluate(
             f"window.ksvLearn.describe({ri}, 'ar', 'L').d"
         ):
-            fail(f"Official {ROTATION_NAMES[ri]} Base: L text lacks the finger-set rule")
+            fail(f"Official {ROTATION_NAMES[ri]} Attack: L text in Drill and Match lacks the finger-set rule")
+        learn(page, ri, "ar")
+        if "nobody may attack that ball above the net" not in page.inner_text("#cue"):
+            fail(f"Official {ROTATION_NAMES[ri]} Base: L's cue lacks the finger-set rule")
     for ri in range(6):
         for ph in PHASES:
             learn(page, ri, ph)
@@ -378,6 +381,9 @@ def check_official_libero(page: Page) -> None:
     learn(page, 2, "serve")
     if "FIVB 19.3" in page.inner_text("#cue") or "19.3" in page.inner_text("#sheet"):
         fail("Simplified shows the Official libero rule text")
+    learn(page, 2, "ar")
+    if "nobody may attack that ball above the net" in page.inner_text("#cue"):
+        fail("Simplified Base shows the Official finger-set rule")
 
 
 def main() -> None:

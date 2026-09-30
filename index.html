@@ -2828,7 +2828,7 @@
             from: st.src,
             to: st.moves,
             notes: st.notes,
-            ball: !!st.ball,
+            ball: st.ball ? { from: st.ball.from, to: st.ball.to } : null,
             paths: Object.fromEntries(Object.entries(st.mv).map(([p, m]) => [p, m.path])),
             delays: Object.fromEntries(Object.entries(st.mv).map(([p, m]) => [p, m.delay])),
             start: st.start,
@@ -3090,6 +3090,8 @@
       const SERVE_BALL = { x: 0.3, y: -0.08 };
       const THEIR_SERVE = { x: 0.3, y: -0.09 };
       const BALL_R = MARKER_R * 0.65;
+      // A ball that rests on a still or a lead-in sits clear of the marker and its edge.
+      const HELD = MARKER_R + 1 + BALL_R;
       // A unit volleyball, scaled to BALL_R: three curved panels with dark seams.
       const BALL_SVG =
         '<g class="ball" opacity="0"><clipPath id="ballClip"><circle r="1"/></clipPath>' +
@@ -3258,7 +3260,7 @@
             : "";
         return {
           t: front ? `Base: zone ${z}, front row` : `Base: defend zone ${z}`,
-          d: `Our attack is over the net: defend. ${job}${same} The overlap limits don't apply now.`,
+          d: `Our attack is over the net: defend. ${job}${same} The overlap limits don't apply now.${role === "L" && rulesMode === "official" ? ` ${FINGER_SET}` : ""}`,
         };
       }
       const spots = (list) => Object.fromEntries(list.map((o) => [o.p, { x: o.x, y: o.y }]));
@@ -3310,11 +3312,11 @@
         return { notes, team, swap: leave.length + enter.length > 0 };
       }
       // Where the ball meets a player: at the marker edge toward its next target, so the label stays readable.
-      function touch(at, next) {
+      function touch(at, next, gap = MARKER_R + BALL_R * 0.3) {
         const dx = next ? next.x - at.x : 0,
           dy = next ? next.y - at.y : -1,
           d = Math.hypot(dx, dy) || 1,
-          k = (MARKER_R + BALL_R * 0.3) / 100 / d;
+          k = gap / 100 / d;
         return { x: at.x + dx * k, y: at.y + dy * k };
       }
       // A mover stops a marker width from anyone standing there, so no two markers overlap in a hold.
@@ -3518,7 +3520,7 @@
               moves: { [sv]: { x: base.x, y: base.y } },
               noWait: true,
               notes: { ...notes, [sv]: SERVE_HIT, ...(from.L ? {} : { L: OFF_SERVE(sv) }) },
-              ball: { from: touch(from[sv], SERVE_BALL), to: SERVE_BALL },
+              ball: { from: touch(from[sv], SERVE_BALL, HELD), to: SERVE_BALL },
             });
           }
         } else if (phase === "rec") {
@@ -3592,7 +3594,7 @@
             deep.forEach((p) => {
               moves[p] = { x: to[p].x, y: Math.max(to[p].y, DEEP_Y) };
             });
-            const spike = touch(hit, SPIKE_BALL);
+            const spike = touch(hit, SPIKE_BALL, HELD);
             stages.push({
               moves,
               via,
@@ -3948,7 +3950,7 @@
           "R1, R2, R3: you are back row. Stay out of the passing lanes, then run to the net.",
           "R4, R5, R6: you are front row and start at the net. In R4 you run along the net from zone 4.",
           "When we serve: back row → defend zone 1 (run to the net only after we dig); front row → middle of zone 2.",
-          "After reception: your setting spot is at the net, right of the middle.",
+          "Attack: your setting spot is at the net, right of the middle. Base: middle of zone 2 in the front row, zone 1 in the back row.",
         ],
         OP: [
           "Front row in R1, R2, R3 (setter back row). R1: at the left sideline, attack left. R2: at the net in the middle. R3: at the right sideline.",
@@ -3978,20 +3980,20 @@
           "Front row in R1, R5, R6: attack left (zone 4). R1 is the exception: the setter is in 1, you receive on the right and attack right.",
           "@OHSERVE",
           "You receive in every rotation, with the libero and the other outside.",
-          "Back row in R2, R3, R4: after reception cover middle back (zone 6); the libero covers left back.",
+          "Back row in R2, R3, R4: at the attack cover deep in middle back (zone 6) and defend there at base; the libero covers left back.",
         ],
         L: [
           "@LSLOT",
           "@LSERVE",
           "You receive in every rotation: in the middle of the line in R1, R2 and R5, on the right in R3, R4 and R6.",
-          "After reception: cover the hitter, then move to left back (zone 5).",
+          "Attack: cover the hitter from left back. Base: defend zone 5.",
           "@LRULES",
         ],
         OH2: [
           "Front row in R2, R3, R4: attack left (zone 4).",
           "@OHSERVE",
           "You receive in every rotation, with the libero and the other outside.",
-          "Back row in R1, R5, R6: after reception cover middle back (zone 6); the libero covers left back.",
+          "Back row in R1, R5, R6: at the attack cover deep in middle back (zone 6) and defend there at base; the libero covers left back.",
         ],
       };
       const THUMB = [

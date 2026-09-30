@@ -343,7 +343,7 @@ def check_match_order(browser: Browser) -> None:
     if "We won the rally" not in page.inner_text("#gStory"):
         fail(f"R2 rotation story reads {page.inner_text('#gStory')!r}, expected 'We won the rally'")
     page.close()
-    print("match order: rotate, our serve, receive, after reception", flush=True)
+    print("match order: rotate, our serve, receive, attack", flush=True)
 
 
 MATCH_SETS = [s for s in SETS if s[0] not in UNCONFIRMED_SETS]

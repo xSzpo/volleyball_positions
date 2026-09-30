@@ -132,6 +132,14 @@ BALL = """() => { const g = document.querySelector('#courtL .ball');
     seams: g.querySelectorAll('path.seam').length,
     panels: [...g.querySelectorAll('path[fill]')].map((e) => e.getAttribute('fill')) }; }"""
 SERVE_BALL, THEIR_SERVE, SPIKE_BALL = (0.3, -0.08), (0.3, -0.09), (0.62, -0.09)
+HELD = 6 + 1 + 6 * 0.65  # marker radius, its edge and the ball radius, in court units
+
+
+def check_ball_clear(tag: str, at: list[float], markers: dict[str, list[float]]) -> None:
+    """A resting ball leaves every label whole: its centre is HELD or more from every marker centre."""
+    p, near = min(((p, math.dist(at, m)) for p, m in markers.items()), key=lambda x: x[1])
+    if near < HELD - 0.05:
+        fail(f"{tag}: the ball at {at} covers {p}'s label ({near:.1f} from its centre, need {HELD:.1f})")
 
 
 def check_still_ball(page: Page, tag: str, phase: str, markers: dict[str, list[float]]) -> None:
@@ -144,9 +152,7 @@ def check_still_ball(page: Page, tag: str, phase: str, markers: dict[str, list[f
     if not ball or ball["opacity"] != "1" or not ball["at"]:
         fail(f"{tag}: no ball on the still picture: {ball}")
         return
-    near = min(math.dist(ball["at"], m) for m in markers.values())
-    if near < MARKER_R * 100:
-        fail(f"{tag}: the ball at {ball['at']} covers a label ({near:.1f} from a marker)")
+    check_ball_clear(tag, ball["at"], markers)
     want = {"serve": SERVE_BALL, "ar": SPIKE_BALL}.get(phase)
     if want and not close(ball["at"], want):
         fail(f"{tag}: the ball rests at {ball['at']}, expected {want} over the net")
@@ -209,6 +215,8 @@ def check_opens_at_rest(page: Page) -> None:
             or "You receive" not in start["cue"]
         ):
             fail(f"Reception: the paused lead-in lacks the whistle limits or the reception text: {start}")
+        if start["ball"]:
+            check_ball_clear(f"{label} lead-in", start["ball"], start["pos"])
         ball_from = {"serve": (SERVE_SPOT, 0.2), "rec": (THEIR_SERVE, 0.01)}.get(phase)
         if not start["ball"] or (
             ball_from and math.dist(start["ball"], [v * 100 for v in ball_from[0]]) > 100 * ball_from[1]
@@ -256,6 +264,16 @@ def check_rest_pictures(page: Page) -> None:
                 check_positions(f"{tag} at rest", got, want)
                 ends = play_end(page, ri, phase)
                 check_positions(f"{tag} play end", {p: [x * 100, y * 100] for p, (x, y) in ends.items()}, want)
+            for phase in ("serve", "ar"):
+                first: dict[str, Any] = page.evaluate(
+                    f"({{ ball: window.ksvLearn.stages({ri}, '{phase}')[0].ball.from,"
+                    f" pos: window.ksvLearn.track({ri}, '{phase}', 1)[0].pos }})"
+                )
+                check_ball_clear(
+                    f"{mode} R{ri + 1} {phase} lead-in",
+                    [first["ball"]["x"] * 100, first["ball"]["y"] * 100],
+                    {p: [v["x"] * 100, v["y"] * 100] for p, v in first["pos"].items()},
+                )
             starts: dict[str, dict[str, float]] = page.evaluate(f"window.ksvLearn.track({ri}, 'ar', 1)[0].pos")
             check_positions(
                 f"{mode} R{ri + 1} Base play start",
