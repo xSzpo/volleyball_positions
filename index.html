@@ -4982,7 +4982,7 @@
         return { ask, opts: shuffle([ask, near, ...rest]), who, done: false };
       }
       function setHtml(q) {
-        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press Next</span><p style="margin:2px 0 0">${{ setter: "You set this ball. What is the call?", hitter: "The setter sets this ball for you. What is the call?", other: "The setter sets this ball. What is the call?" }[q.who]}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip ${s[3]}" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
+        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press Next</span><p style="margin:2px 0 0">${{ setter: "You set this ball. What is the call?", hitter: "The setter sets this ball for you. What is the call?", other: "The setter sets this ball. What is the call?" }[q.who]}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false, plain: true })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
       }
       function setMark(q, pick) {
         const ok = pick === q.ask[0];
@@ -4991,6 +4991,7 @@
           .querySelectorAll("button")
           .forEach((b) => {
             b.disabled = true;
+            b.classList.add(SETS.find((s) => s[0] === b.dataset.s)[3]);
             if (b.dataset.s === q.ask[0]) b.setAttribute("aria-pressed", "true");
             else if (b.dataset.s === pick) b.classList.add("faded");
           });

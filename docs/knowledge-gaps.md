@@ -664,10 +664,10 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** always keep the open question until it is answered; start a new question on every change.
 - **Reversible by:** the `#dSteps` click handler in `src/template.html`.
 
-### 90. Family colours in the Name the set quiz
+### 90. Family colours in the Name the set quiz and the set call check
 
 - **Issue:** #100
-- **Problem:** The quiz drew the path in its family colour (back sets dashed) and coloured the answer buttons by family, which gave the answer away.
-- **Decision:** Before the answer, the path and every button are drawn in `--ink`, solid, for every set. After the answer, the path and buttons show their family colours as feedback. The explore view and the Match set call check are unchanged.
+- **Problem:** The Name the set quiz and the Match set call check drew the path in its family colour (back sets dashed) and coloured the answer buttons by family, which gave the answer away.
+- **Decision:** Before the answer, the path and every button are drawn in `--ink`, solid, for every set. After the answer, the path and buttons show their family colours as feedback (in same-device and online Match, only on the solo feedback path; "Saved." stays neutral). The explore view is unchanged.
 - **Alternatives:** keep everything neutral after the answer too; use `--muted` instead of `--ink`.
-- **Reversible by:** `newSetQ()` and `answerSet()` in `src/template.html` before #100.
+- **Reversible by:** `newSetQ()`, `answerSet()`, `setHtml()` and `setMark()` in `src/template.html` before #100.
