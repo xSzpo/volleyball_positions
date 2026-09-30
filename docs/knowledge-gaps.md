@@ -365,6 +365,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The setter follows the ball a step towards the hitter and off the net (0.1 left, 0.1 back) and stays within 0.2 of the set spot, from where it covers tips and blocked balls. The caption says "Set X in zone 4, then follow a step or two to cover the tip."
 - **Alternatives:** the full cup spot (#37); the setter stays on the set spot.
 - **Reversible by:** `SETTER_STEP` in `src/template.html`.
+- **Superseded in #72:** the setter now takes its 3-2 cover spot, see [#68](#68-a-real-3-2-cover-round-the-hitter).
 
 ### 45. L covers from the guide's zone 5 spot
 
@@ -373,6 +374,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** L does not move in stage 3: it covers from its `ar` spot, reached in stage 2. In R3, R4 and R6 L curves behind the deep outside hitter where the two cross; in R1 OH2 curves behind L, which runs straight; in R2 and R5 nobody crosses. The caption: "Cover X from zone 5: play a ball the block sends back."
 - **Alternatives:** L in the close cup (#37).
 - **Reversible by:** the L branch of stage 3 in `buildStages()` in `src/template.html`.
+- **Superseded in #72:** the L now takes its 3-2 cover spot, see [#68](#68-a-real-3-2-cover-round-the-hitter).
 
 ### 46. The deep outside hitter stays deep
 
@@ -381,6 +383,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The back-row outside hitter goes to y 0.86 or deeper at the set (`DEEP_Y`, the zone 6 base depth) and never comes forward of its reception or after-reception spot before the spike; it covers wipes deep.
 - **Alternatives:** the deep cup spot (#37).
 - **Reversible by:** `DEEP_Y` in `src/template.html`.
+- **Superseded in #72:** the deep outside hitter now takes its 3-2 cover spot, see [#68](#68-a-real-3-2-cover-round-the-hitter).
 
 ### 47. Paths, speed and waiting
 
@@ -556,6 +559,14 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** A new last entry in Rules of thumb (key `names`, for every role): "H in R2 (H6) is the setter", saying H is Danish hæver, the number is the setter's zone, and to find the setter first. It goes last so the numbers the Match hints cite do not change. No first-visit text is added.
 - **Alternatives:** a line in the first-visit header subtitle; a tooltip on the Learn title tag; the entry first in the list.
 - **Reversible by:** the `names` entry in `THUMB` in `src/template.html`.
+
+### 68. A real 3-2 cover round the hitter
+
+- **Issue:** #72
+- **Problem:** The cover at the spike was not a cup: only the middle stood within about 2 m of the zone 4 hitter; the setter was 4 to 5 m away (#44), L 6 to 7 m (#45) and the deep outside hitter 7.7 m off the net (#46). The guide draws the after-reception spots, not the cover at the spike.
+- **Decision:** A 3-2 cover. During the set the setter, the middle and L stand about 3 m (0.34) from the hitter, behind and inside it, in an arc, each at least a marker width (0.14) inside the hitter's lane: the setter nearest the net (hitter + 0.33 across, + 0.07 back), the middle (+ 0.26, + 0.21), L (+ 0.15, + 0.31). Two deep covers stand behind the gaps: the back-row outside hitter at (0.44, 0.56), and the attacker who neither hits nor fakes the quick at (0.62, 0.44): in R1 to R3 the front-row right-side attacker comes in from the sideline, in R4 to R6 the back-row opposite does not approach. L, the deep OH and the back-row opposite run straight on to their cover during the pass, so L does not stop at the guide's zone 5 spot. The set flies until the close cover stands, at most 1.1 s (0.85 to 0.9 s in every rotation), and lands as the hitter's planned run ends; a late cover covers from where it is. The setter sets from the set spot, so the setter's cover is up to 3 m from it. Captions: the setter "then follow in to cover X close on the right", the middle "cover X close, between the setter and L", L "Cover X close behind", the deep covers "Cover deep …". The coach question stays #16 Q9/Q10.
+- **Alternatives:** L goes to the guide's zone 5 spot first and turns to the cover (an L-shaped run, and the set waits up to 1.6 s for it); the right-side attacker keeps its approach, a 3-1 cover; the deep outside hitter in the close cover instead of L where L passes from the right.
+- **Reversible by:** `COVER`, `DEEP_COVER`, `SET_MAX_MS`, the pass stage's `onCover` and the set ball's `cover` list in `buildReception()` in `src/template.html`.
 
 ### 75. What goes with the Learn rules to remember box
 

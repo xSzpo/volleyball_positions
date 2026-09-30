@@ -14,7 +14,7 @@ for exchanges and the middle pair reset, the caption length and
 height, reduced motion and ?anim=0, the movement trails (through the stage and a
 run carried on), that the ball never waits in a player's hands, L's run in
 front of the deep outside hitter,
-the passer, the setter's cover, the deep outside hitter, the top speed, no
+the passer, the 3-2 cover at the spike, the top speed, no
 marker passing through another, the controls in the court panel on a short
 phone, and that the flag off leaves no trace.
 
@@ -492,10 +492,16 @@ def check_static(page: Page) -> None:
         fail(f"Rotation has animation stages: {stages}")
 
 
-HIT_Y, APPROACH_Y, BACK_HIT_Y = 0.08, 0.17, 0.5
+HIT_Y, APPROACH_Y = 0.08, 0.17
 MARKER_R = 0.06
 GAP = 0.14  # a marker width plus its ring
 MIN_MOVE = 0.04
+COVER_NEAR = 0.35  # the three close covers, 1 to 3 m from the hitter
+COVER_MIN = 0.11
+COVER_BEHIND = 0.05
+DEEP_COVER = {"back": (0.44, 0.56), "side": (0.62, 0.44)}
+SET_MAX_MS = 1100
+COVER_L = (0.22, 0.39)  # R1: the hitter at (0.07, 0.08)
 TRAILS = """() => [...document.querySelectorAll('#courtL .trail')]
   .filter((l) => l.getAttribute('visibility') === 'visible').map((l) => l.dataset.p)"""
 TRAIL_LENGTHS = """() => Object.fromEntries([...document.querySelectorAll('#courtL .trail')]
@@ -584,7 +590,7 @@ def check_reception_stages(page: Page) -> None:
         if stage == 0:
             check_ball(page, got["L"])
         if stage == 1:
-            for p, spot in ar.items():
+            for p, spot in {**ar, "L": COVER_L, "OH2": DEEP_COVER["back"]}.items():
                 if p == "MB":
                     if abs(got[p][1] / 100 - APPROACH_Y) > 0.06:
                         fail(f"after the pass: MB at {got[p]}, not at the quick take-off")
@@ -670,12 +676,29 @@ def check_ball(page: Page, passer: list[float]) -> None:
         fail(f"the ball covers the passer's label: ball at {ball['at']}, passer at {passer}")
 
 
+def to_segment(p: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> float:
+    """The distance from p to the segment a-b."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    k = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy or 1)))
+    return math.dist(p, (a[0] + k * dx, a[1] + k * dy))
+
+
+def turns_back(path: list[tuple[float, float]]) -> bool:
+    """Whether a path turns more than a right angle at any corner."""
+    return any(
+        (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1]) < -1e-6
+        for a, b, c in zip(path, path[1:], path[2:], strict=False)
+    )
+
+
 def check_reception_ends(page: Page) -> None:
     """Every rotation, both rule sets: release at the serve, the set and cover, then the spike and base defence.
 
-    The setter covers from within 0.2 of the set spot, the middle is at its quick take-off when the pass reaches
-    the setter and then only drops back to cover close,
-    L covers from the guide's zone 5 spot and the back-row outside hitter stays deep.
+    The setter sets from within 0.2 of the set spot, the set flies at most SET_MAX_MS and lands as the hitter's run
+    ends. At the spike a 3-2 cover stands round the hitter: the setter, the middle and L 1 to 3 m from the hitter,
+    behind and inside and a marker width clear of its run, and two deep covers behind them (the back-row outside
+    hitter, and the right-side attacker who does not hit). The middle is at its quick take-off when the pass reaches
+    the setter and then only drops back to cover.
     """
     zones = {z: spot[:2] for z, spot in BASE_DEF.items()}
     for mode, roles in MODES.items():
@@ -693,7 +716,6 @@ def check_reception_ends(page: Page) -> None:
             if any(stages[0]["delays"][p] > (1000 if kind[p] == "set" else 0) for p in release):
                 fail(f"{tag}: someone waits after the serve contact: {stages[0]['delays']}")
             ar = {p: (x, y) for p, x, y, _ in row["ar"]}
-            rec = {p: (x, y) for p, x, y in row["rec"]}
             track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, 'rec', 600)")
             base: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, 'ar', 600)")
             s3 = stages[2]
@@ -703,16 +725,30 @@ def check_reception_ends(page: Page) -> None:
             if abs(hit[1] - HIT_Y) > 0.005:
                 fail(f"{tag}: {hitter} hits at {hit}")
             setter = next(p for p in kind if kind[p] == "set")
-            far = max(
-                math.dist((s["pos"][setter]["x"], s["pos"][setter]["y"]), ar[setter])
-                for s in track
-                if s3["start"] <= s["t"] <= s3["start"] + s3["dur"]
-            )
-            if far > 0.2:
-                fail(f"{tag}: the setter goes {far:.2f} from the set spot while covering")
             middle = next(p for p in s3["moves"] if p.startswith("MB"))
-            if not 0.22 <= math.dist(at_set[middle], hit) <= 0.34:
-                fail(f"{tag}: {middle} does not cover close to {hitter}: {at_set[middle]}")
+            set_from = s3["from"][setter]
+            if math.dist((set_from["x"], set_from["y"]), ar[setter]) > 0.2:
+                fail(f"{tag}: the setter sets from {set_from}, not within 0.2 of the set spot {ar[setter]}")
+            set_ms, hitter_ms = s3["ball"]["ms"], s3["arrive"][hitter]
+            if set_ms > SET_MAX_MS or abs(set_ms - hitter_ms) > 20:
+                fail(f"{tag}: the set flies {set_ms:.0f} ms, {hitter} gets to the net at {hitter_ms:.0f} ms")
+            run = [(q["x"], q["y"]) for q in s3["paths"][hitter]]
+            close = sorted(
+                p
+                for p, spot in at_set.items()
+                if p != hitter
+                and COVER_MIN <= math.dist(spot, hit) <= COVER_NEAR
+                and spot[1] >= hit[1] + COVER_BEHIND
+                and spot[0] - hit[0] >= GAP
+                and min(to_segment(spot, a, b) for a, b in zip(run, run[1:], strict=False)) >= GAP
+            )
+            if close != sorted({setter, middle, "L"}):
+                fail(f"{tag}: close cover behind and inside {hitter} at {hit} is {close}: {at_set}")
+            side = next(p for p in kind if kind[p] in ("front", "back") and p not in (hitter, middle))
+            deep = next(p for p in row["back"] if p.startswith("OH"))
+            for p, want in ((deep, DEEP_COVER["back"]), (side, DEEP_COVER["side"])):
+                if math.dist(at_set[p], want) > 0.05 or math.dist(at_set[p], hit) <= COVER_NEAR:
+                    fail(f"{tag}: {p} covers from {at_set[p]}, not deep behind the close cover at {want}")
             take_off = (stages[1]["paths"].get(middle) or [{"y": 1.0}])[-1]
             if abs(take_off["y"] - APPROACH_Y) > 0.06:
                 fail(f"{tag}: {middle} is not ready for the quick when the pass reaches the setter: {take_off}")
@@ -725,18 +761,6 @@ def check_reception_ends(page: Page) -> None:
             netward = [v["y"] for v in s3["paths"][middle]]
             if any(b < a - 0.005 for a, b in zip(netward, netward[1:], strict=False)):
                 fail(f"{tag}: {middle} runs towards the net during the set: {s3['paths'][middle]}")
-            for p, spot in at_set.items():
-                if p in (hitter, middle) or kind[p] not in ("front", "back"):
-                    continue
-                want = APPROACH_Y if kind[p] == "front" else BACK_HIT_Y
-                if abs(spot[1] - want) > 0.005:
-                    fail(f"{tag}: {p} does not finish the approach: {spot}")
-            if math.dist(at_set["L"], ar["L"]) > 0.005:
-                fail(f"{tag}: L covers from {at_set['L']}, not the guide's spot {ar['L']}")
-            deep = next(p for p in row["back"] if p.startswith("OH"))
-            lowest = min(s["pos"][deep]["y"] for s in track)
-            if lowest < min(rec[deep][1], ar[deep][1]) - 0.005 or at_set[deep][1] < 0.85:
-                fail(f"{tag}: the deep {deep} comes to y {lowest:.2f}, ends the cover at {at_set[deep]}")
             for play, ends in (("Reception", track), ("Base", base)):
                 last = {p: (v["x"], v["y"]) for p, v in ends[-1]["pos"].items()}
                 check_positions(f"{tag} {play} end", {p: [x * 100, y * 100] for p, (x, y) in last.items()}, end)
@@ -758,7 +782,8 @@ def check_ball_moving(page: Page) -> None:
 
     Every rotation, both rule sets: the pass flies about 1 s and reaches the setter at the set spot, the next contact
     follows each ball's arrival within BALL_WAIT_MS, the hold comes only after the last stage, a run carried on starts
-    the player's next move only when it ends, and L's run in stage 2 stays in front of y DEEP_LIMIT.
+    the player's next move only when it ends and, into the set or the spike, never turns back into it, and L's run
+    in stage 2 stays in front of y DEEP_LIMIT.
     """
     for mode, roles in MODES.items():
         open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
@@ -790,12 +815,19 @@ def check_ball_moving(page: Page) -> None:
                 if off > HELD + 0.01:
                     fail(f"{tag}: stage {k + 1}'s ball lands {off:.2f} from {who}")
             ends: dict[str, float] = {}
+            runs: dict[str, list[tuple[float, float]]] = {}
             for n, stage in enumerate(stages):
                 for p in stage["moves"]:
                     begin = stage["start"] + stage["delays"][p]
                     if begin < ends.get(p, 0) - 1:
                         fail(f"{tag} stage {n + 1}: {p} starts a move at {begin:.0f} ms, before the last ends")
+                    path = [(q["x"], q["y"]) for q in stage["paths"][p]]
+                    carried = n >= 2 and ends.get(p, 0) > stage["start"] + 1
+                    joined = runs[p] + path[1:] if carried else path
+                    if turns_back(joined):
+                        fail(f"{tag} stage {n + 1}: {p}'s run turns back: {joined}")
                     ends[p] = stage["start"] + stage["arrive"][p]
+                    runs[p] = path
             deepest = max((q["y"] for q in stages[1]["paths"].get("L", [])), default=0)
             if deepest > DEEP_LIMIT:
                 fail(f"{tag} stage 2: L runs back to y {deepest:.2f}")
