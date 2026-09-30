@@ -1064,6 +1064,21 @@ FRAME = """() => { const at = (e, ...names) => names.map((n) => e.getAttribute(n
       l.getAttribute('visibility') === 'visible' ? at(l, 'points', 'opacity') : 'hidden'),
     dots: document.querySelectorAll('#lDots i.on').length,
     cap: cap.innerHTML, capOpacity: cap.style.opacity }; }"""
+GLYPHS = """() => {
+  const size = (id) => {
+    const range = document.createRange();
+    range.selectNodeContents(document.getElementById(id));
+    const box = range.getBoundingClientRect();
+    return [box.width, box.height];
+  };
+  return {
+    back: document.getElementById("lBack").textContent,
+    step: document.getElementById("lStep").textContent,
+    backSize: size("lBack"),
+    stepSize: size("lStep"),
+    sameSize: size("lBack").every((side, i) => Math.abs(side - size("lStep")[i]) <= 2),
+  };
+}"""
 BAR = """() => { const bar = document.querySelector('#lAnim').getBoundingClientRect();
   const box = (e) => { const b = e.getBoundingClientRect();
     return [e.id, b.left - bar.left, b.top - bar.top, b.width, b.height].map((v) => v.toFixed ? Math.round(v) : v); };
@@ -1081,6 +1096,9 @@ def check_step_back(page: Page) -> None:
             bar = page.evaluate(BAR)
             if page.get_attribute("#lBack", "aria-label") != "Step back" or not page.is_disabled("#lBack"):
                 fail(f"{tag}: Step back is not disabled on the start picture")
+            glyphs = page.evaluate(GLYPHS)
+            if glyphs["back"] != "|◂" or glyphs["step"] != "▸|" or not glyphs["sameSize"]:
+                fail(f"{tag}: Step back does not mirror Step: {glyphs}")
             count = len(page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')"))
             frames = []
             for _ in range(count):
