@@ -6,8 +6,9 @@ stage end positions, the controls (Replay, Pause, Step, speed), that Next and
 the chips never animate or wait, the still captions for exchanges and the
 middle pair reset, the caption length and height, reduced motion and ?anim=0,
 Reception through the set and spike to the after-reception spots, the movement
-trails, the controls in the court panel on a short phone, and that the flag off
-leaves no trace.
+trails (one stage at a time), the passer, the setter's cover, the deep outside
+hitter, the top speed, no marker passing through another, the controls in the
+court panel on a short phone, and that the flag off leaves no trace.
 
 Usage: python src/tests/anim_test.py
 """
@@ -203,8 +204,10 @@ TRAILS = """() => [...document.querySelectorAll('#courtL .trail')]
   .filter((l) => l.getAttribute('visibility') === 'visible').map((l) => l.dataset.p)"""
 TRAIL_LENGTHS = """() => Object.fromEntries([...document.querySelectorAll('#courtL .trail')]
   .filter((l) => l.getAttribute('visibility') === 'visible')
-  .map((l) => [l.dataset.p, Math.hypot(l.getAttribute('x2') - l.getAttribute('x1'),
-    l.getAttribute('y2') - l.getAttribute('y1'))]))"""
+  .map((l) => { const q = [...l.points];
+    return [l.dataset.p, q.slice(1).reduce((s, b, i) => s + Math.hypot(b.x - q[i].x, b.y - q[i].y), 0)]; }))"""
+RECEIVERS = ("OH1", "OH2", "L")
+TOP_SPEED = 5.0  # m/s; 1 unit is 9 m
 
 
 def base_zone(p: str, front: bool) -> int:
@@ -215,17 +218,19 @@ def base_zone(p: str, front: bool) -> int:
     return {"L": 5, "OH": 6, "S": 1, "OP": 1}.get(job, 6)
 
 
-def reception_plan(ri: int, mode: str) -> tuple[list[list[str]], dict[str, tuple[float, float]], str]:
-    """The movers per Reception stage, the base defence end positions and the zone 4 hitter."""
+def reception_plan(ri: int, mode: str) -> tuple[list[str], dict[str, tuple[float, float]], str]:
+    """Who leaves at the serve contact (setter and the attackers who do not receive), base defence, the hitter."""
     row = lineup(ri, mode)  # type: ignore[arg-type]
     ar = {p: (x, y) for p, x, y, _ in row["ar"]}
+    rec = {p: (x, y) for p, x, y in row["rec"]}
     kind = {p: k for p, _, _, k in row["ar"]}
-    order = [p for p, _, _ in row["rec"]]
+    order = list(rec)
     attackers = [p for p in order if kind[p] in ("front", "back")]
     hitter = min((p for p in attackers if kind[p] == "front"), key=lambda p: ar[p][0])
-    moves = [[p for p in order if kind[p] == "set"], attackers, order, order]
+    release = [p for p in order if kind[p] == "set" or (p in attackers and p not in RECEIVERS)]
+    release = [p for p in release if math.dist(rec[p], ar[p]) >= 0.005]
     end = {p: BASE_DEF[base_zone(p, p in row["front"])][:2] for p in order}
-    return moves, end, hitter
+    return release, end, hitter
 
 
 def trail_movers(stage: dict[str, Any]) -> list[str]:
@@ -245,14 +250,13 @@ def check_reception_stages(page: Page) -> None:
     wait_done(page)
     rec = spots(0, "rec")
     ar = spots(0, "ar")
-    moves, end, hitter = reception_plan(0, "simple")
+    release, end, hitter = reception_plan(0, "simple")
     stages: list[dict[str, Any]] = page.evaluate("window.ksvLearn.stages(0, 'rec')")
-    if [sorted(st["moves"]) for st in stages] != [sorted(m) for m in moves]:
-        fail(f"Reception stages move {[st['moves'] for st in stages]}, expected {moves}")
+    if len(stages) != 4 or sorted(stages[0]["moves"]) != sorted(release):
+        fail(f"Reception stages move {[st['moves'] for st in stages]}, expected {release} at the serve contact")
+        return
     if not all(st["ball"] for st in stages):
         fail("a Reception stage has no ball")
-    after_pass = {p: ar[p] if p in moves[0] + moves[1] else rec[p] for p in rec}
-    trails: list[str] = []
     for stage in range(4):
         page.click("#lStep")
         wait_paused(page)
@@ -266,20 +270,21 @@ def check_reception_stages(page: Page) -> None:
         if stage == 0:
             check_ball(page, got["L"])
         if stage == 1:
-            check_positions("after the pass", got, after_pass)
+            check_positions("after the pass", got, ar)
         if stage == 3:
             check_positions("after the spike", got, end)
-        trails += trail_movers(stages[stage])
+        trails = trail_movers(stages[stage])
         if sorted(page.evaluate(TRAILS)) != sorted(trails):
             fail(f"after Step {stage + 1}: trails {sorted(page.evaluate(TRAILS))}, expected {sorted(trails)}")
     page.click("#lReplay")
     if not (anim(page) or {}).get("playing"):
         page.click("#lPlay")
     ends = (anim(page) or {}).get("ends", [0, 0, 0, 0])
-    page.wait_for_function(f"(window.ksvLearn.anim() || {{t: 1e9}}).t > {(ends[1] + ends[2]) / 2}", timeout=15000)
+    page.wait_for_function(f"(window.ksvLearn.anim() || {{t: 1e9}}).t > {ends[2] - 100}", timeout=15000)
+    page.click("#lPlay")
     mid = page.evaluate(TRAIL_LENGTHS)
-    if not set(trail_movers(stages[0]) + trail_movers(stages[1])) <= set(mid) or not all(v > 1 for v in mid.values()):
-        fail(f"mid stage 3: trails {mid}, expected at least the setter and the attackers")
+    if set(mid) != set(trail_movers(stages[2])) or not all(v > 0.5 for v in mid.values()):
+        fail(f"paused at the end of stage 3: trails {mid}, expected the set and cover moves")
     page.click("#lReplay")
     state = anim(page)
     fresh = page.evaluate(TRAIL_LENGTHS)
@@ -319,36 +324,59 @@ def check_ball(page: Page, passer: list[float]) -> None:
 
 
 def check_reception_ends(page: Page) -> None:
-    """Every rotation, both rule sets: set and 3-2 cup, then the spike and base defence in every zone."""
+    """Every rotation, both rule sets: release at the serve, the set and cover, then the spike and base defence.
+
+    The setter covers from within 0.2 of the set spot, the middle approaches for the quick and covers close,
+    L covers from the guide's zone 5 spot and the back-row outside hitter stays deep.
+    """
     zones = {z: spot[:2] for z, spot in BASE_DEF.items()}
     for mode, roles in MODES.items():
         open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             tag = f"{mode} R{ri + 1} Reception"
             row = lineup(ri, mode)  # type: ignore[arg-type]
-            moves, end, hitter = reception_plan(ri, mode)
+            release, end, hitter = reception_plan(ri, mode)
             stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")
-            if [sorted(st["moves"]) for st in stages] != [sorted(m) for m in moves]:
-                fail(f"{tag}: stages move {[st['moves'] for st in stages]}, expected {moves}")
+            if len(stages) != 4 or sorted(stages[0]["moves"]) != sorted(release):
+                fail(f"{tag}: stages move {[st['moves'] for st in stages]}, expected {release} at the serve contact")
                 continue
+            if any(stages[0]["delays"][p] > 0 for p in release):
+                fail(f"{tag}: someone waits after the serve contact: {stages[0]['delays']}")
             kind = {p: k for p, _, _, k in row["ar"]}
-            at_set = {p: (v["x"], v["y"]) for p, v in stages[2]["to"].items()}
+            ar = {p: (x, y) for p, x, y, _ in row["ar"]}
+            rec = {p: (x, y) for p, x, y in row["rec"]}
+            track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, 'rec', 600)")
+            s3 = stages[2]
+            at_set = {p: s["pos"][p] for s in track if s["t"] <= s3["start"] + s3["dur"] for p in s["pos"]}
+            at_set = {p: (v["x"], v["y"]) for p, v in at_set.items()}
             hit = at_set[hitter]
             if abs(hit[1] - HIT_Y) > 0.005:
                 fail(f"{tag}: {hitter} hits at {hit}")
-            for p, spot in at_set.items():
-                if p == hitter:
-                    continue
-                gap = math.dist(spot, hit)
-                if kind[p] == "front" and abs(spot[1] - APPROACH_Y) > 0.005 and not 0.22 <= gap <= 0.34:
-                    fail(f"{tag}: {p} neither finishes the approach nor covers close: {spot}")
-                if kind[p] == "back" and abs(spot[1] - BACK_HIT_Y) > 0.005 and not 0.22 <= gap <= 0.34:
-                    fail(f"{tag}: {p} does not take off behind the 3 m line: {spot}")
-            close_cover = [p for p, spot in at_set.items() if p != hitter and 0.22 <= math.dist(spot, hit) <= 0.34]
             setter = next(p for p in kind if kind[p] == "set")
-            if len(close_cover) != 3 or setter not in close_cover or "L" not in close_cover:
-                fail(f"{tag}: the close cover is {close_cover}, expected the setter, L and a front player")
-            track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, 'rec', 1)")
+            far = max(
+                math.dist((s["pos"][setter]["x"], s["pos"][setter]["y"]), ar[setter])
+                for s in track
+                if s3["start"] <= s["t"] <= s3["start"] + s3["dur"]
+            )
+            if far > 0.2:
+                fail(f"{tag}: the setter goes {far:.2f} from the set spot while covering")
+            middle = next(p for p in s3["moves"] if p.startswith("MB"))
+            if not 0.22 <= math.dist(at_set[middle], hit) <= 0.34:
+                fail(f"{tag}: {middle} does not cover close to {hitter}: {at_set[middle]}")
+            if min(v["y"] for v in s3["paths"][middle]) > APPROACH_Y + 0.005:
+                fail(f"{tag}: {middle} never approaches for the quick: {s3['paths'][middle]}")
+            for p, spot in at_set.items():
+                if p in (hitter, middle) or kind[p] not in ("front", "back"):
+                    continue
+                want = APPROACH_Y if kind[p] == "front" else BACK_HIT_Y
+                if abs(spot[1] - want) > 0.005:
+                    fail(f"{tag}: {p} does not finish the approach: {spot}")
+            if math.dist(at_set["L"], ar["L"]) > 0.005:
+                fail(f"{tag}: L covers from {at_set['L']}, not the guide's spot {ar['L']}")
+            deep = next(p for p in row["back"] if p.startswith("OH"))
+            lowest = min(s["pos"][deep]["y"] for s in track if s["t"] <= stages[3]["start"])
+            if lowest < min(rec[deep][1], ar[deep][1]) - 0.005 or at_set[deep][1] < 0.85:
+                fail(f"{tag}: the deep {deep} comes to y {lowest:.2f}, ends the cover at {at_set[deep]}")
             last = {p: (v["x"], v["y"]) for p, v in track[-1]["pos"].items()}
             check_positions(f"{tag} end", {p: [x * 100, y * 100] for p, (x, y) in last.items()}, end)
             held = sorted(z for z, spot in zones.items() for p in last if math.dist(last[p], spot) < 0.005)
@@ -362,22 +390,35 @@ def check_reception_ends(page: Page) -> None:
 
 
 def check_no_overlap(page: Page) -> None:
-    """No two markers overlap whenever the players stand still, in any animated phase, rotation and rule set."""
+    """No marker passes through another at any moment, and no run is faster than TOP_SPEED.
+
+    Every animated phase, rotation and rule set, sampled about every 10 ms; the ball may touch a marker.
+    """
     for mode, roles in MODES.items():
         open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             for phase in ("serve", "rec"):
-                track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, '{phase}', 300)")
+                track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, '{phase}', 1000)")
                 seen: set[tuple[str, str]] = set()
-                for now, then in zip(track, track[1:], strict=False):
-                    if now["pos"] != then["pos"]:
-                        continue
+                fast = max(
+                    (
+                        math.dist((a["pos"][p]["x"], a["pos"][p]["y"]), (b["pos"][p]["x"], b["pos"][p]["y"]))
+                        * 9000
+                        / (b["t"] - a["t"]),
+                        p,
+                    )
+                    for a, b in zip(track, track[1:], strict=False)
+                    for p in a["pos"]
+                )
+                if fast[0] > TOP_SPEED:
+                    fail(f"{mode} R{ri + 1} {phase}: {fast[1]} runs at {fast[0]:.1f} m/s")
+                for now in track:
                     pos = now["pos"]
                     names = sorted(pos)
                     for i, a in enumerate(names):
                         for b in names[i + 1 :]:
                             gap = math.dist((pos[a]["x"], pos[a]["y"]), (pos[b]["x"], pos[b]["y"]))
-                            if gap < 2 * MARKER_R - 1e-6 and (a, b) not in seen:
+                            if gap < 2 * MARKER_R - 1e-3 and (a, b) not in seen:
                                 seen.add((a, b))
                                 fail(f"{mode} R{ri + 1} {phase} t={now['t']:.0f}: {a} and {b} overlap ({gap:.3f})")
 
@@ -513,9 +554,9 @@ def check_reduced(browser: Browser) -> None:
                 fail(f"{label} {phase}: Next plays a glide")
             if page.is_visible("#lAnim") or page.is_visible("#lDots") or not page.is_visible("#lNext"):
                 fail(f"{label} {phase}: Replay/Pause/Step/speed and dots must be hidden, Next shown")
-            count = 2 if phase == "serve" else 4
+            count = 0 if phase == "serve" else 4
             if page.locator("#lCap ol li").count() != count:
-                fail(f"{label} {phase}: the caption is not the list of {count} stages: {page.inner_text('#lCap')!r}")
+                fail(f"{label} {phase}: the caption lists {page.inner_text('#lCap')!r}, expected {count} stages")
         page.click("#lNext")
         if page.locator("#courtL .rt").count() == 0 or page.locator("#lCap ol").count():
             fail(f"{label}: After reception has no routes or lists stages")
@@ -596,7 +637,7 @@ def check_official(page: Page) -> None:
         open_app(page, "?ff=all", {"role": serves, "rulesMode": "official"})
         tag = f"Official R{ri + 1}"
         serve: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'serve')")
-        if [st["moves"] for st in serve] != [[serves], [serves]] or not serve[0]["ball"]:
+        if [st["moves"] for st in serve] != [[serves]] or not serve[0]["ball"]:
             fail(f"{tag} Our serve: stages move {[st['moves'] for st in serve]}, expected {serves} to serve")
         learn(page, ri, "start")
         got = page.evaluate(MARKERS, "#courtL .mk")
@@ -612,11 +653,69 @@ def check_official(page: Page) -> None:
             ("start", "OP"): f"The libero leaves; {on} comes on in zone 4. {serves} is in zone 1 and serves.",
             ("rec", serves): f"You ({serves}): Go off at the sideline: we lost the serve, so the libero comes back.",
             ("rec", "L"): f"You (L): Come back on for {serves} and take your reception spot.",
+            ("serve", "L"): f"You (L): Wait at the sideline while {serves} serves: the libero may not serve.",
         }
         for (phase, r), want in checks.items():
             still = page.evaluate(f"window.ksvLearn.still({ri}, '{phase}', '{r}')")
             if still != want:
                 fail(f"{tag} {phase} still caption for {r}: {still!r}")
+
+
+def check_passer(page: Page) -> None:
+    """The serve goes to a guide rule 01 receiver, the passer changes across rotations and the caption names them."""
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        passers = set()
+        for ri in range(6):
+            tag = f"{mode} R{ri + 1} Reception"
+            stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")
+            told = [p for p, n in stages[0]["notes"].items() if "serve comes to you" in n]
+            if len(told) != 1 or told[0] not in RECEIVERS:
+                fail(f"{tag}: the serve comes to {told}, expected one of {RECEIVERS}")
+                continue
+            passer = told[0]
+            passers.add(passer)
+            setter = next(p for p in stages[1]["notes"] if p == "S")
+            if passer not in stages[1]["notes"][setter]:
+                fail(f"{tag}: the setter's pass caption does not name {passer}: {stages[1]['notes'][setter]!r}")
+        if passers != set(RECEIVERS):
+            fail(f"{mode}: the passers are {sorted(passers)}, expected all of {RECEIVERS}")
+
+
+def check_serve_run(page: Page) -> None:
+    """Our serve is one stage: the server runs in at the serve contact, every rotation and rule set."""
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            sv = server(ri, mode)  # type: ignore[arg-type]
+            stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'serve')")
+            if len(stages) != 1 or stages[0]["moves"] != [sv] or stages[0]["delays"][sv] > 0:
+                fail(f"{mode} R{ri + 1} Our serve: {[(st['moves'], st['delays']) for st in stages]}, expected {sv}")
+
+
+def check_trails_in_play(page: Page) -> None:
+    """While Reception plays, only the current stage's trails show, and the last stage's while they fade."""
+    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    learn(page, 3, "start")
+    page.click('.ph[data-k="rec"]')
+    seen = set()
+    for _ in range(80):
+        state = anim(page)
+        if not state:
+            break
+        shown: list[int] = page.evaluate(
+            """() => [...document.querySelectorAll('#courtL .trail')]
+            .filter((l) => l.getAttribute('visibility') === 'visible' && +(l.getAttribute('opacity') ?? 1) > 0)
+            .map((l) => +l.dataset.stage)"""
+        )
+        old = [k for k in shown if k not in (state["stage"], state["stage"] - 1)]
+        if old:
+            fail(f"at {state['t']:.0f} ms (stage {state['stage'] + 1}) trails of stages {sorted(set(old))} still show")
+            break
+        seen |= set(shown)
+        page.wait_for_timeout(120)
+    if len(seen) < 3:
+        fail(f"trails showed only for stages {sorted(seen)}")
 
 
 def check_flag_off(page: Page) -> None:
@@ -642,6 +741,9 @@ def main() -> None:
         check_reception_stages(page)
         check_reception_ends(page)
         check_no_overlap(page)
+        check_passer(page)
+        check_serve_run(page)
+        check_trails_in_play(page)
         check_never_blocks(page)
         check_speed(page)
         check_still_captions(page)
