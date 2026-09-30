@@ -655,3 +655,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The hint, the feedback and the `move.ar` caption use the cover jobs of the Learn play (`ATTACK_NOTES`): L covers the hitter close behind, the deep OH covers deep behind the close cover, the back-row opposite comes in to cover deep, right of the middle. The Rules of thumb entry "The opposite moves directly to position 1" becomes "The back-row opposite covers deep". `audit.py` now wants "cover" in a back-row attacker's caption. The zone the player defends after the attack stays in the caption.
 - **Alternatives:** keep the back-row attack to zone 1 and send the set there in R4 to R6; grade the covers on their `ar` spots again.
 - **Reversible by:** `covers` in `buildReception()`, the `cover` branches of `describe()` and `gHint()`, and the `ar` captions in `src/data.py`.
+
+### 82. A Drill steps change replaces the open question
+
+- **Issue:** #98
+- **Problem:** The issue says a change of the Drill steps applies from the next question, but not what happens to a question already on screen from a step you just switched off.
+- **Decision:** An unanswered question from a step you switch off is replaced at once by one from the picked steps; an answered one keeps its feedback, and Next brings a picked step. A question from a step still picked stays. In Review weak spots, the items from switched-off steps are dropped from the rest of the review.
+- **Alternatives:** always keep the open question until it is answered; start a new question on every change.
+- **Reversible by:** the `#dSteps` click handler in `src/template.html`.

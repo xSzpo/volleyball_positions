@@ -1204,9 +1204,19 @@
       letter-spacing: 0.01em;
       cursor: pointer;
     }
-    .vis button[aria-checked="true"] {
+    .vis button[aria-checked="true"],
+    .vis button[aria-pressed="true"] {
       background: var(--accent);
       color: var(--on-accent);
+    }
+    .dsteps {
+      flex-wrap: nowrap;
+    }
+    .dsteps button {
+      flex: 1 1 auto;
+      min-height: 44px;
+      padding: 6px 4px;
+      white-space: nowrap;
     }
     .visbox {
       margin: 12px 0 0;
@@ -1773,6 +1783,9 @@
             <div class="score">
               <strong id="dscore">0/0</strong>streak <span id="dstreak">0</span>
             </div>
+          </div>
+          <div class="vis dsteps" id="dSteps" role="group" aria-label="Steps to drill">
+            <span class="vislabel">Train</span>
           </div>
           <div class="vis " role="radiogroup" aria-label="Who to show on court" data-vis="drill">
             <span class="vislabel">Show on court</span>
@@ -2846,6 +2859,7 @@
         "rotations-table": true,
         "drill-tab": true,
         "drill-review": true,
+        "drill-steps": true,
         "neighbour-check": true,
         "match-solo": true,
         "set-call-check": true,
@@ -2862,6 +2876,7 @@
         "rotations-table": ["learn-tab"],
         "drill-tab": ["learn-tab"],
         "drill-review": ["drill-tab"],
+        "drill-steps": ["drill-tab"],
         "neighbour-check": ["drill-tab"],
         "match-solo": ["learn-tab"],
         "set-call-check": ["match-solo", "sets-tab"],
@@ -2878,6 +2893,7 @@
         "rotations-table": ["allRots"],
         "drill-tab": ["tabDrill", "drill"],
         "drill-review": ["reviewRow"],
+        "drill-steps": ["dSteps"],
         "neighbour-check": ["nbDrillCheck", "nbGameCheck"],
         "match-solo": ["tabGame", "game"],
         "set-call-check": ["setGameCheck", "setGameHint"],
@@ -4386,7 +4402,7 @@
           gDraw();
         }
       }
-      document.querySelectorAll(".vis").forEach((g) => {
+      document.querySelectorAll(".vis[data-vis]").forEach((g) => {
         g.addEventListener("click", (e) => {
           const b = e.target.closest("button");
           if (!b) return;
@@ -4454,6 +4470,14 @@
         box.insertAdjacentHTML("beforeend", '<p class="hint" style="margin-top:6px">Saved.</p>');
       }
 
+      const STEP_ORDER = ["start", "serve", "rec", "ar"];
+      const STEP_SHORT = {
+        start: "Rotate",
+        serve: "Our serve",
+        rec: "Receive",
+        ar: "Attack",
+      };
+
       // ---------- Drill ----------
       let cur = null,
         answered = false,
@@ -4465,13 +4489,58 @@
         dNb = null;
       $("nbDrill").checked = store.get("nbDrill", true);
       $("nbDrill").onchange = () => store.set("nbDrill", $("nbDrill").checked);
+      function storedDrillSteps() {
+        const value = store.get("drillSteps", null);
+        const steps = Array.isArray(value) ? STEP_ORDER.filter((k) => value.includes(k)) : [];
+        return steps.length ? steps : [...STEP_ORDER];
+      }
+      let drillPick = storedDrillSteps();
+      function drillSteps() {
+        return feature("drill-steps") ? drillPick : STEP_ORDER;
+      }
+      function renderDrillSteps() {
+        $("dSteps")
+          .querySelectorAll("button")
+          .forEach((b) => {
+            const on = drillPick.includes(b.dataset.s);
+            b.setAttribute("aria-pressed", on);
+            b.setAttribute("aria-disabled", on && drillPick.length === 1);
+          });
+      }
+      $("dSteps").insertAdjacentHTML(
+        "beforeend",
+        STEP_ORDER.map((k) => `<button type="button" data-s="${k}">${STEP_SHORT[k]}</button>`).join(
+          "",
+        ),
+      );
+      renderDrillSteps();
+      $("dSteps").addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-s]");
+        if (!b) return;
+        const k = b.dataset.s,
+          on = drillPick.includes(k);
+        if (on && drillPick.length === 1) return;
+        drillPick = STEP_ORDER.filter((s) => (s === k ? !on : drillPick.includes(s)));
+        store.set("drillSteps", drillPick);
+        renderDrillSteps();
+        const picked = (ph) => drillPick.includes(ph);
+        const dropCurrent = cur && !answered && !picked(cur.phase);
+        if (review) {
+          review.queue = review.queue.filter(
+            (q, i) => i < review.i || picked(q.phase) || (i === review.i && !dropCurrent),
+          );
+          if (dropCurrent) review.i--;
+        }
+        if (dropCurrent) newQuestion();
+        else updateScore();
+      });
       const HINT =
         '<p class="hint">Tap the court where you stand. If the libero is in for you, press “I\'m off court”.</p>';
       function weakKeys() {
         const out = [];
         for (const k in stats) {
-          const [r] = k.split("|");
-          if (r !== role) continue;
+          const [r, , ph] = k.split("|");
+          if (r !== role || !drillSteps().includes(ph)) continue;
           const st = stats[k];
           if (st.miss > st.ok) out.push(k);
         }
@@ -4523,7 +4592,7 @@
         } else {
           let pool = [];
           for (let i = 0; i < 6; i++)
-            for (const [ph] of PHASES) {
+            for (const ph of drillSteps()) {
               const st = stats[`${role}|${i}|${ph}`] || { ok: 0, miss: 0 };
               pool.push({
                 ri: i,
@@ -4613,6 +4682,7 @@
           role: cur.role,
           rotation: `R${cur.ri + 1}`,
           phase: cur.phase,
+          steps: drillSteps().join(","),
           result: { good: "right", close: "close", bad: "wrong" }[cls],
         });
         const d = describe(cur.ri, cur.phase, cur.role);
@@ -4713,19 +4783,19 @@
       function updateScore() {
         $("dscore").textContent = `${score.ok}/${score.n}`;
         $("dstreak").textContent = streak;
-        const weak = [];
-        for (const k in stats) {
-          const [r, i, ph] = k.split("|");
-          if (r !== role) continue;
-          const st = stats[k];
-          if (st.miss > st.ok) weak.push(`${ROWS[i].name} ${FULL[ph].toLowerCase()}`);
-        }
+        const weak = weakKeys().map((k) => {
+          const [, i, ph] = k.split("|");
+          return `${ROWS[i].name} ${FULL[ph].toLowerCase()}`;
+        });
+        const tried = Object.keys(stats).some((k) => k.split("|")[0] === role);
         const last = store.get("lastPractice", 0),
           days = last ? Math.floor((Date.now() - last) / 864e5) : 0;
         $("weak").textContent =
           (weak.length
             ? `Needs practice (${NAMES[role]}): ${weak.join(", ")}. These come up more often.`
-            : "") +
+            : tried
+              ? "No weak spots in the steps you picked."
+              : "") +
           (days >= 2
             ? ` Your last practice was ${days} days ago. A short review now helps you remember.`
             : "");
@@ -4961,13 +5031,6 @@
       }
 
       // ---------- Match mode ----------
-      const STEP_ORDER = ["start", "serve", "rec", "ar"];
-      const STEP_SHORT = {
-        start: "Rotate",
-        serve: "Our serve",
-        rec: "Receive",
-        ar: "Attack",
-      };
       let G = null;
       const gSettings = store.get("gameSteps", { start: true, serve: true, rec: true, ar: true });
       STEP_ORDER.forEach((k) => {
