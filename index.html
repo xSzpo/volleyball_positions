@@ -522,7 +522,8 @@
       border-radius: var(--radius-lg);
       background: linear-gradient(var(--court-g0), var(--court-g1) 50%, var(--court-g2));
     }
-    svg.court .faded {
+    svg.court .faded,
+    svg.court .am {
       pointer-events: none;
     }
     .ttag {
@@ -553,11 +554,70 @@
       position: sticky;
       bottom: 0;
       z-index: 2;
-      display: flex;
       margin-top: 12px;
       padding: 8px 0;
       border-top: 1px solid var(--line);
       background: var(--panel);
+    }
+    .lrow {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .lanim {
+      display: flex;
+      gap: 6px;
+    }
+    .lanim[hidden],
+    .ldots[hidden] {
+      display: none;
+    }
+    .ictl {
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--ink);
+      font:
+        700 18px Barlow,
+        sans-serif;
+      cursor: pointer;
+    }
+    .ictl.speed {
+      width: 52px;
+      font-size: 16px;
+    }
+    .ictl:disabled {
+      color: var(--muted);
+      opacity: 0.5;
+      cursor: default;
+    }
+    .ldots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      padding-top: 6px;
+    }
+    .ldots i {
+      width: 8px;
+      height: 8px;
+      border: 1.5px solid var(--accent);
+      border-radius: 50%;
+    }
+    .ldots i.on {
+      background: var(--accent);
+    }
+    .lcap {
+      margin-top: 10px;
+      min-height: calc(2 * 1.45em);
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    .lcap ol {
+      margin: 0;
+      padding-left: 20px;
     }
     .lctl .btn.primary {
       flex: 1;
@@ -1641,8 +1701,22 @@
           <div class="phases" id="phases"></div>
           <p class="ttag" id="learnTag" aria-live="polite"></p>
           <svg class="court" id="courtL" viewBox="-4 -14 108 127" aria-label="Court diagram"></svg>
+          <div class="lcap" id="lCap" aria-live="polite"></div>
           <div class="cue" id="cue"></div>
-          <div class="lctl"><button type="button" class="btn primary" id="lNext"></button></div>
+          <div class="lctl">
+            <div class="lrow">
+              <span class="lanim" id="lAnim">
+                <button type="button" class="ictl" id="lReplay" aria-label="Replay">⟲</button>
+                <button type="button" class="ictl" id="lPlay" aria-label="Play">▶</button>
+                <button type="button" class="ictl" id="lStep" aria-label="Step one stage">
+                  ▸|
+                </button>
+                <button type="button" class="ictl speed" id="lSpeed">1×</button>
+              </span>
+              <button type="button" class="btn primary" id="lNext"></button>
+            </div>
+            <div class="ldots" id="lDots" aria-hidden="true"></div>
+          </div>
         </div>
         <details class="card fold" id="howTo">
           <summary>How to learn with this app</summary>
@@ -2105,7 +2179,7 @@
 
     <script>
     (() => {
-      const DATA = {"rows": {"simple": [{"name": "R1", "setter": 1, "liberofor": "", "server": "S", "front": ["OP", "MB", "OH1"], "back": ["OH2", "L", "S"], "rec": [["MB", 0.5, 0.18], ["OP", 0.07, 0.42], ["OH2", 0.2, 0.73], ["L", 0.5, 0.73], ["OH1", 0.8, 0.73], ["S", 0.9, 0.84]], "ar": [["OP", 0.07, 0.44, "front"], ["MB", 0.5, 0.44, "front"], ["OH1", 0.9, 0.44, "front"], ["L", 0.18, 0.66, null], ["OH2", 0.5, 0.86, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH1", "MB", "OP"], ["L", "OH2", "S"]], "note": "Setter in 1: the opposite plays left, outside hitter 1 plays right."}, {"name": "R2", "setter": 6, "liberofor": "", "server": "OH1", "front": ["OH2", "OP", "MB"], "back": ["L", "S", "OH1"], "rec": [["OP", 0.58, 0.1], ["S", 0.58, 0.31], ["MB", 0.76, 0.32], ["OH2", 0.17, 0.7], ["L", 0.5, 0.72], ["OH1", 0.84, 0.72]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.2, 0.72, null], ["OH1", 0.5, 0.87, null], ["S", 0.7, 0.11, "set"]], "serve": [["OH2", "MB", "OP"], ["L", "OH1", "S"]], "note": "The front-row middle may start near the middle or farther right, but must be ready to attack."}, {"name": "R3", "setter": 5, "liberofor": "SUB", "server": "SUB", "front": ["MB", "OH2", "OP"], "back": ["S", "OH1", "L"], "rec": [["MB", 0.1, 0.31], ["S", 0.36, 0.47], ["OP", 0.93, 0.4], ["OH2", 0.25, 0.72], ["OH1", 0.52, 0.76], ["L", 0.82, 0.76]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.15, 0.74, null], ["OH1", 0.52, 0.76, null], ["S", 0.66, 0.09, "set"]], "serve": [["OH2", "MB", "OP"], ["OH1", "SUB", "S"]], "note": "Front-row outside hitter 2 stands slightly ahead of back-row outside hitter 1."}, {"name": "R4", "setter": 4, "liberofor": "", "server": "OP", "front": ["S", "MB", "OH2"], "back": ["OH1", "L", "OP"], "rec": [["S", 0.08, 0.09], ["MB", 0.15, 0.24], ["OH2", 0.25, 0.73], ["OH1", 0.5, 0.73], ["L", 0.76, 0.73], ["OP", 0.92, 0.92]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB", 0.48, 0.44, "front"], ["OP", 0.93, 0.7, "back"], ["L", 0.13, 0.77, null], ["OH1", 0.5, 0.73, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH2", "MB", "S"], ["L", "OH1", "OP"]], "note": "Setter runs along the net from zone 4. Opposite goes straight to zone 1 for the back-row attack."}, {"name": "R5", "setter": 3, "liberofor": "", "server": "OH2", "front": ["OH1", "S", "MB"], "back": ["L", "OP", "OH2"], "rec": [["S", 0.58, 0.1], ["MB", 0.81, 0.28], ["OH1", 0.18, 0.71], ["L", 0.5, 0.76], ["OH2", 0.81, 0.69], ["OP", 0.66, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB", 0.5, 0.44, "front"], ["OP", 0.93, 0.69, "back"], ["L", 0.2, 0.72, null], ["OH2", 0.5, 0.87, null], ["S", 0.58, 0.1, "set"]], "serve": [["OH1", "MB", "S"], ["L", "OH2", "OP"]], "note": "The libero stands slightly behind front-row outside hitter 1."}, {"name": "R6", "setter": 2, "liberofor": "SUB", "server": "SUB", "front": ["MB", "OH1", "S"], "back": ["OP", "OH2", "L"], "rec": [["MB", 0.07, 0.1], ["S", 0.75, 0.12], ["OH1", 0.23, 0.7], ["OH2", 0.52, 0.76], ["L", 0.83, 0.74], ["OP", 0.4, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB", 0.48, 0.44, "front"], ["OP", 0.93, 0.78, "back"], ["L", 0.16, 0.74, null], ["OH2", 0.52, 0.76, null], ["S", 0.75, 0.12, "set"]], "serve": [["OH1", "MB", "S"], ["OH2", "SUB", "OP"]], "note": "Front-row outside hitter 1 stands slightly ahead of back-row outside hitter 2."}], "official": [{"name": "R1", "setter": 1, "liberofor": "MB2", "server": "S", "front": ["OP", "MB1", "OH1"], "back": ["OH2", "L", "S"], "rec": [["MB1", 0.5, 0.18], ["OP", 0.07, 0.42], ["OH2", 0.2, 0.73], ["L", 0.5, 0.73], ["OH1", 0.8, 0.73], ["S", 0.9, 0.84]], "ar": [["OP", 0.07, 0.44, "front"], ["MB1", 0.5, 0.44, "front"], ["OH1", 0.9, 0.44, "front"], ["L", 0.18, 0.66, null], ["OH2", 0.5, 0.86, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH1", "MB1", "OP"], ["L", "OH2", "S"]], "note": "Setter in 1: the opposite plays left, outside hitter 1 plays right."}, {"name": "R2", "setter": 6, "liberofor": "MB2", "server": "OH1", "front": ["OH2", "OP", "MB1"], "back": ["L", "S", "OH1"], "rec": [["OP", 0.58, 0.1], ["S", 0.58, 0.31], ["MB1", 0.76, 0.32], ["OH2", 0.17, 0.7], ["L", 0.5, 0.72], ["OH1", 0.84, 0.72]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB1", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.2, 0.72, null], ["OH1", 0.5, 0.87, null], ["S", 0.7, 0.11, "set"]], "serve": [["OH2", "MB1", "OP"], ["L", "OH1", "S"]], "note": "The front-row middle may start near the middle or farther right, but must be ready to attack."}, {"name": "R3", "setter": 5, "liberofor": "MB1", "server": "MB1", "front": ["MB2", "OH2", "OP"], "back": ["S", "OH1", "L"], "rec": [["MB2", 0.1, 0.31], ["S", 0.36, 0.47], ["OP", 0.93, 0.4], ["OH2", 0.25, 0.72], ["OH1", 0.52, 0.76], ["L", 0.82, 0.76]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB2", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.15, 0.74, null], ["OH1", 0.52, 0.76, null], ["S", 0.66, 0.09, "set"]], "serve": [["OH2", "MB2", "OP"], ["OH1", "MB1", "S"]], "note": "Front-row outside hitter 2 stands slightly ahead of back-row outside hitter 1."}, {"name": "R4", "setter": 4, "liberofor": "MB1", "server": "OP", "front": ["S", "MB2", "OH2"], "back": ["OH1", "L", "OP"], "rec": [["S", 0.08, 0.09], ["MB2", 0.15, 0.24], ["OH2", 0.25, 0.73], ["OH1", 0.5, 0.73], ["L", 0.76, 0.73], ["OP", 0.92, 0.92]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB2", 0.48, 0.44, "front"], ["OP", 0.93, 0.7, "back"], ["L", 0.13, 0.77, null], ["OH1", 0.5, 0.73, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH2", "MB2", "S"], ["L", "OH1", "OP"]], "note": "Setter runs along the net from zone 4. Opposite goes straight to zone 1 for the back-row attack."}, {"name": "R5", "setter": 3, "liberofor": "MB1", "server": "OH2", "front": ["OH1", "S", "MB2"], "back": ["L", "OP", "OH2"], "rec": [["S", 0.58, 0.1], ["MB2", 0.81, 0.28], ["OH1", 0.18, 0.71], ["L", 0.5, 0.76], ["OH2", 0.81, 0.69], ["OP", 0.66, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB2", 0.5, 0.44, "front"], ["OP", 0.93, 0.69, "back"], ["L", 0.2, 0.72, null], ["OH2", 0.5, 0.87, null], ["S", 0.58, 0.1, "set"]], "serve": [["OH1", "MB2", "S"], ["L", "OH2", "OP"]], "note": "The libero stands slightly behind front-row outside hitter 1."}, {"name": "R6", "setter": 2, "liberofor": "MB2", "server": "MB2", "front": ["MB1", "OH1", "S"], "back": ["OP", "OH2", "L"], "rec": [["MB1", 0.07, 0.1], ["S", 0.75, 0.12], ["OH1", 0.23, 0.7], ["OH2", 0.52, 0.76], ["L", 0.83, 0.74], ["OP", 0.4, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB1", 0.48, 0.44, "front"], ["OP", 0.93, 0.78, "back"], ["L", 0.16, 0.74, null], ["OH2", 0.52, 0.76, null], ["S", 0.75, 0.12, "set"]], "serve": [["OH1", "MB1", "S"], ["OH2", "MB2", "OP"]], "note": "Front-row outside hitter 1 stands slightly ahead of back-row outside hitter 2."}]}, "attackLine": 0.42, "baseDef": {"4": [0.15, 0.21, "zone"], "3": [0.5, 0.21, "zone"], "2": [0.85, 0.21, "zone"], "5": [0.12, 0.66, null], "6": [0.5, 0.86, null], "1": [0.88, 0.66, null]}, "sets": [["1", 0.02, 1.0, "left", "High ball to the left antenna (zone 4). Most time for the attacker."], ["0", 0.02, 0.52, "left", "Lower, faster ball to the left antenna."], ["2", 0.18, 0.46, "left", "Medium-fast ball landing about 1.5 m inside the left antenna."], ["Shoot", 0.36, 0.3, "mid", "Flat, fast ball between zone 4 and the middle."], ["4", 0.56, 0.72, "mid", "Higher ball just in front of the setter. More time for the middle."], ["Po", 0.56, 0.3, "mid", "Low quick just in front of the setter."], ["Til", 0.75, 0.22, "right", "Short quick just behind the setter."], ["7", 0.97, 0.5, "right", "Lower, faster back set to the right antenna."], ["6", 0.97, 0.92, "right", "High back set to the right antenna (zone 2)."]], "setterX": 0.64, "unconfirmedSets": ["Po", "4"]};
+      const DATA = {"rows": {"simple": [{"name": "R1", "setter": 1, "liberofor": "", "server": "S", "front": ["OP", "MB", "OH1"], "back": ["OH2", "L", "S"], "rec": [["MB", 0.5, 0.18], ["OP", 0.07, 0.42], ["OH2", 0.2, 0.73], ["L", 0.5, 0.73], ["OH1", 0.8, 0.73], ["S", 0.9, 0.84]], "ar": [["OP", 0.07, 0.44, "front"], ["MB", 0.5, 0.44, "front"], ["OH1", 0.9, 0.44, "front"], ["L", 0.18, 0.66, null], ["OH2", 0.5, 0.86, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH1", "MB", "OP"], ["L", "OH2", "S"]], "note": "Setter in 1: the opposite plays left, outside hitter 1 plays right.", "move": {"serve": {"OH1": "Cross to zone 4: outside hitters block and attack on the left.", "MB": "Stay in zone 3, in the middle of the net, ready to block.", "OP": "Cross to zone 2: the opposite blocks and attacks on the right.", "L": "Move to zone 5 and defend deep on the left.", "OH2": "Move to zone 6 and defend deep in the middle.", "S": "Serve from behind the end line, then defend zone 1 until we dig."}, "rec": {"MB": "Stand at the net in the middle, out of the receivers' way.", "OP": "Go to the left sideline on the 3 m line: in R1 the opposite plays left.", "OH2": "Receive on the left of the passing line.", "L": "Receive in the middle of the passing line.", "OH1": "Receive on the right: in R1 outside hitter 1 plays right.", "S": "Hide behind OH1 in zone 1, out of the passing lanes."}, "ar": {"S": "Leave zone 1 for the setting spot as soon as the serve is hit.", "OP": "Stay at the left sideline on the 3 m line, then attack in zone 4.", "MB": "Come off the net to the 3 m line to approach in the middle.", "OH1": "Move up to the 3 m line at the right and attack in zone 2.", "L": "Move left to cover the attack, then defend zone 5.", "OH2": "Drop back to cover in the middle, then defend zone 6."}}}, {"name": "R2", "setter": 6, "liberofor": "", "server": "OH1", "front": ["OH2", "OP", "MB"], "back": ["L", "S", "OH1"], "rec": [["OP", 0.58, 0.1], ["S", 0.58, 0.31], ["MB", 0.76, 0.32], ["OH2", 0.17, 0.7], ["L", 0.5, 0.72], ["OH1", 0.84, 0.72]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.2, 0.72, null], ["OH1", 0.5, 0.87, null], ["S", 0.7, 0.11, "set"]], "serve": [["OH2", "MB", "OP"], ["L", "OH1", "S"]], "note": "The front-row middle may start near the middle or farther right, but must be ready to attack.", "move": {"serve": {"OH2": "Stay in zone 4, ready to block and attack on the left.", "MB": "Move to zone 3, in the middle of the net, ready to block.", "OP": "Move to zone 2: the opposite blocks and attacks on the right.", "L": "Stay in zone 5 and defend deep on the left.", "OH1": "Serve from behind the end line, then run to zone 6 and defend deep.", "S": "Move to zone 1 and defend there until we dig."}, "rec": {"OP": "Stand at the net just right of the middle, in front of the setter.", "S": "Hide behind OP near the net, ready to run to the setting spot.", "MB": "Start near the middle or farther right, ready to attack.", "OH2": "Receive on the left of the passing line.", "L": "Receive in the middle of the passing line.", "OH1": "Receive on the right of the passing line."}, "ar": {"S": "Step up to the setting spot, right of the middle.", "OH2": "Move up to the 3 m line at the left and attack in zone 4.", "MB": "Get to the 3 m line in the middle to approach.", "OP": "Leave the net for the 3 m line at the right and attack in zone 2.", "L": "Move left to cover the attack, then defend zone 5.", "OH1": "Drop back to cover in the middle, then defend zone 6."}}}, {"name": "R3", "setter": 5, "liberofor": "SUB", "server": "SUB", "front": ["MB", "OH2", "OP"], "back": ["S", "OH1", "L"], "rec": [["MB", 0.1, 0.31], ["S", 0.36, 0.47], ["OP", 0.93, 0.4], ["OH2", 0.25, 0.72], ["OH1", 0.52, 0.76], ["L", 0.82, 0.76]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.15, 0.74, null], ["OH1", 0.52, 0.76, null], ["S", 0.66, 0.09, "set"]], "serve": [["OH2", "MB", "OP"], ["OH1", "SUB", "S"]], "note": "Front-row outside hitter 2 stands slightly ahead of back-row outside hitter 1.", "move": {"serve": {"OH2": "Move to zone 4, ready to block and attack on the left.", "MB": "Move to zone 3, in the middle of the net, ready to block.", "OP": "Stay in zone 2: the opposite blocks and attacks on the right.", "OH1": "Move to zone 5 and defend deep on the left.", "SUB": "Serve from behind the end line, then run to zone 6 and defend deep.", "S": "Move to zone 1 and defend there until we dig."}, "rec": {"MB": "Stand at the left, in front of the setter, out of the receivers' way.", "S": "Stand just behind the 3 m line, left of the middle, out of the lanes.", "OP": "Stand at the right sideline near the 3 m line, ready to attack.", "OH2": "Receive on the left, slightly ahead of OH1.", "OH1": "Receive in the middle, slightly behind OH2.", "L": "Receive on the right of the passing line."}, "ar": {"S": "Run forward to the setting spot, right of the middle.", "OH2": "Move up to the 3 m line at the left and attack in zone 4.", "MB": "Cut across to the 3 m line in the middle to approach.", "OP": "Stay at the right sideline on the 3 m line, then attack in zone 2.", "L": "Run round behind OH1 to the left to cover, then defend zone 5.", "OH1": "Stay in the middle to cover, then defend zone 6."}}}, {"name": "R4", "setter": 4, "liberofor": "", "server": "OP", "front": ["S", "MB", "OH2"], "back": ["OH1", "L", "OP"], "rec": [["S", 0.08, 0.09], ["MB", 0.15, 0.24], ["OH2", 0.25, 0.73], ["OH1", 0.5, 0.73], ["L", 0.76, 0.73], ["OP", 0.92, 0.92]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB", 0.48, 0.44, "front"], ["OP", 0.93, 0.7, "back"], ["L", 0.13, 0.77, null], ["OH1", 0.5, 0.73, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH2", "MB", "S"], ["L", "OH1", "OP"]], "note": "Setter runs along the net from zone 4. Opposite goes straight to zone 1 for the back-row attack.", "move": {"serve": {"OH2": "Cross to zone 4: outside hitters block and attack on the left.", "MB": "Stay in zone 3, in the middle of the net, ready to block.", "S": "Cross to zone 2: the setter blocks on the right and sets from there.", "L": "Move to zone 5 and defend deep on the left.", "OH1": "Move to zone 6 and defend deep in the middle.", "OP": "Serve from behind the end line, then defend zone 1."}, "rec": {"S": "Stand at the net in the left corner, out of the receivers' way.", "MB": "Stand left, just behind the setter, out of the receivers' way.", "OH2": "Receive on the left of the passing line.", "OH1": "Receive in the middle of the passing line.", "L": "Receive on the right of the passing line.", "OP": "Stand deep in the right corner, out of the passing lanes."}, "ar": {"S": "Run along the net from zone 4 to the setting spot.", "OH2": "Move up to the 3 m line at the left and attack in zone 4.", "MB": "Come off the net to the 3 m line to approach in the middle.", "OP": "Go straight to zone 1 for the back-row attack, behind the 3 m line.", "L": "Run round behind OH1 to the left to cover, then defend zone 5.", "OH1": "Stay in the middle to cover, then defend zone 6."}}}, {"name": "R5", "setter": 3, "liberofor": "", "server": "OH2", "front": ["OH1", "S", "MB"], "back": ["L", "OP", "OH2"], "rec": [["S", 0.58, 0.1], ["MB", 0.81, 0.28], ["OH1", 0.18, 0.71], ["L", 0.5, 0.76], ["OH2", 0.81, 0.69], ["OP", 0.66, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB", 0.5, 0.44, "front"], ["OP", 0.93, 0.69, "back"], ["L", 0.2, 0.72, null], ["OH2", 0.5, 0.87, null], ["S", 0.58, 0.1, "set"]], "serve": [["OH1", "MB", "S"], ["L", "OH2", "OP"]], "note": "The libero stands slightly behind front-row outside hitter 1.", "move": {"serve": {"OH1": "Stay in zone 4, ready to block and attack on the left.", "MB": "Move to zone 3, in the middle of the net, ready to block.", "S": "Move to zone 2: the setter blocks on the right and sets from there.", "L": "Stay in zone 5 and defend deep on the left.", "OH2": "Serve from behind the end line, then run to zone 6 and defend deep.", "OP": "Move to zone 1 and defend deep on the right."}, "rec": {"S": "Stand at the net, just right of the middle, ready to set.", "MB": "Stand on the right, off the net, out of the receivers' way.", "OH1": "Receive on the left, slightly ahead of the libero.", "L": "Receive in the middle, slightly behind OH1.", "OH2": "Receive on the right of the passing line.", "OP": "Stand deep behind the receivers, out of the passing lanes."}, "ar": {"S": "Stay at the net: you are already at the setting spot.", "OH1": "Move up to the 3 m line at the left and attack in zone 4.", "MB": "Cut in to the 3 m line in the middle to approach.", "OP": "Go to zone 1 for the back-row attack, behind the 3 m line.", "L": "Move left to cover the attack, then defend zone 5.", "OH2": "Drop back to cover in the middle, then defend zone 6."}}}, {"name": "R6", "setter": 2, "liberofor": "SUB", "server": "SUB", "front": ["MB", "OH1", "S"], "back": ["OP", "OH2", "L"], "rec": [["MB", 0.07, 0.1], ["S", 0.75, 0.12], ["OH1", 0.23, 0.7], ["OH2", 0.52, 0.76], ["L", 0.83, 0.74], ["OP", 0.4, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB", 0.48, 0.44, "front"], ["OP", 0.93, 0.78, "back"], ["L", 0.16, 0.74, null], ["OH2", 0.52, 0.76, null], ["S", 0.75, 0.12, "set"]], "serve": [["OH1", "MB", "S"], ["OH2", "SUB", "OP"]], "note": "Front-row outside hitter 1 stands slightly ahead of back-row outside hitter 2.", "move": {"serve": {"OH1": "Move to zone 4, ready to block and attack on the left.", "MB": "Move to zone 3, in the middle of the net, ready to block.", "S": "Stay in zone 2: the setter blocks on the right and sets from there.", "OH2": "Move to zone 5 and defend deep on the left.", "SUB": "Serve from behind the end line, then run to zone 6 and defend deep.", "OP": "Move to zone 1 and defend deep on the right."}, "rec": {"MB": "Stand at the net in the left corner, out of the receivers' way.", "S": "Stand at the net on the right, ready to set.", "OH1": "Receive on the left, slightly ahead of OH2.", "OH2": "Receive in the middle, slightly behind OH1.", "L": "Receive on the right of the passing line.", "OP": "Stand deep behind the receivers, out of the passing lanes."}, "ar": {"S": "Stay at the net: you are already at the setting spot.", "OH1": "Move up to the 3 m line at the left and attack in zone 4.", "MB": "Come off the net to the 3 m line to approach in the middle.", "OP": "Go to zone 1 for the back-row attack, behind the 3 m line.", "L": "Run round behind OH2 to the left to cover, then defend zone 5.", "OH2": "Stay in the middle to cover, then defend zone 6."}}}], "official": [{"name": "R1", "setter": 1, "liberofor": "MB2", "server": "S", "front": ["OP", "MB1", "OH1"], "back": ["OH2", "L", "S"], "rec": [["MB1", 0.5, 0.18], ["OP", 0.07, 0.42], ["OH2", 0.2, 0.73], ["L", 0.5, 0.73], ["OH1", 0.8, 0.73], ["S", 0.9, 0.84]], "ar": [["OP", 0.07, 0.44, "front"], ["MB1", 0.5, 0.44, "front"], ["OH1", 0.9, 0.44, "front"], ["L", 0.18, 0.66, null], ["OH2", 0.5, 0.86, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH1", "MB1", "OP"], ["L", "OH2", "S"]], "note": "Setter in 1: the opposite plays left, outside hitter 1 plays right.", "move": {"serve": {"OH1": "Cross to zone 4: outside hitters block and attack on the left.", "MB1": "Stay in zone 3, in the middle of the net, ready to block.", "OP": "Cross to zone 2: the opposite blocks and attacks on the right.", "L": "Move to zone 5 and defend deep on the left.", "OH2": "Move to zone 6 and defend deep in the middle.", "S": "Serve from behind the end line, then defend zone 1 until we dig."}, "rec": {"MB1": "Stand at the net in the middle, out of the receivers' way.", "OP": "Go to the left sideline on the 3 m line: in R1 the opposite plays left.", "OH2": "Receive on the left of the passing line.", "L": "Receive in the middle of the passing line.", "OH1": "Receive on the right: in R1 outside hitter 1 plays right.", "S": "Hide behind OH1 in zone 1, out of the passing lanes."}, "ar": {"S": "Leave zone 1 for the setting spot as soon as the serve is hit.", "OP": "Stay at the left sideline on the 3 m line, then attack in zone 4.", "MB1": "Come off the net to the 3 m line to approach in the middle.", "OH1": "Move up to the 3 m line at the right and attack in zone 2.", "L": "Move left to cover the attack, then defend zone 5.", "OH2": "Drop back to cover in the middle, then defend zone 6."}}}, {"name": "R2", "setter": 6, "liberofor": "MB2", "server": "OH1", "front": ["OH2", "OP", "MB1"], "back": ["L", "S", "OH1"], "rec": [["OP", 0.58, 0.1], ["S", 0.58, 0.31], ["MB1", 0.76, 0.32], ["OH2", 0.17, 0.7], ["L", 0.5, 0.72], ["OH1", 0.84, 0.72]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB1", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.2, 0.72, null], ["OH1", 0.5, 0.87, null], ["S", 0.7, 0.11, "set"]], "serve": [["OH2", "MB1", "OP"], ["L", "OH1", "S"]], "note": "The front-row middle may start near the middle or farther right, but must be ready to attack.", "move": {"serve": {"OH2": "Stay in zone 4, ready to block and attack on the left.", "MB1": "Move to zone 3, in the middle of the net, ready to block.", "OP": "Move to zone 2: the opposite blocks and attacks on the right.", "L": "Stay in zone 5 and defend deep on the left.", "OH1": "Serve from behind the end line, then run to zone 6 and defend deep.", "S": "Move to zone 1 and defend there until we dig."}, "rec": {"OP": "Stand at the net just right of the middle, in front of the setter.", "S": "Hide behind OP near the net, ready to run to the setting spot.", "MB1": "Start near the middle or farther right, ready to attack.", "OH2": "Receive on the left of the passing line.", "L": "Receive in the middle of the passing line.", "OH1": "Receive on the right of the passing line."}, "ar": {"S": "Step up to the setting spot, right of the middle.", "OH2": "Move up to the 3 m line at the left and attack in zone 4.", "MB1": "Get to the 3 m line in the middle to approach.", "OP": "Leave the net for the 3 m line at the right and attack in zone 2.", "L": "Move left to cover the attack, then defend zone 5.", "OH1": "Drop back to cover in the middle, then defend zone 6."}}}, {"name": "R3", "setter": 5, "liberofor": "MB1", "server": "MB1", "front": ["MB2", "OH2", "OP"], "back": ["S", "OH1", "L"], "rec": [["MB2", 0.1, 0.31], ["S", 0.36, 0.47], ["OP", 0.93, 0.4], ["OH2", 0.25, 0.72], ["OH1", 0.52, 0.76], ["L", 0.82, 0.76]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB2", 0.5, 0.44, "front"], ["OP", 0.93, 0.44, "front"], ["L", 0.15, 0.74, null], ["OH1", 0.52, 0.76, null], ["S", 0.66, 0.09, "set"]], "serve": [["OH2", "MB2", "OP"], ["OH1", "MB1", "S"]], "note": "Front-row outside hitter 2 stands slightly ahead of back-row outside hitter 1.", "move": {"serve": {"OH2": "Move to zone 4, ready to block and attack on the left.", "MB2": "Move to zone 3, in the middle of the net, ready to block.", "OP": "Stay in zone 2: the opposite blocks and attacks on the right.", "OH1": "Move to zone 5 and defend deep on the left.", "MB1": "Serve from behind the end line, then run to zone 6 and defend deep.", "S": "Move to zone 1 and defend there until we dig."}, "rec": {"MB2": "Stand at the left, in front of the setter, out of the receivers' way.", "S": "Stand just behind the 3 m line, left of the middle, out of the lanes.", "OP": "Stand at the right sideline near the 3 m line, ready to attack.", "OH2": "Receive on the left, slightly ahead of OH1.", "OH1": "Receive in the middle, slightly behind OH2.", "L": "Receive on the right of the passing line."}, "ar": {"S": "Run forward to the setting spot, right of the middle.", "OH2": "Move up to the 3 m line at the left and attack in zone 4.", "MB2": "Cut across to the 3 m line in the middle to approach.", "OP": "Stay at the right sideline on the 3 m line, then attack in zone 2.", "L": "Run round behind OH1 to the left to cover, then defend zone 5.", "OH1": "Stay in the middle to cover, then defend zone 6."}}}, {"name": "R4", "setter": 4, "liberofor": "MB1", "server": "OP", "front": ["S", "MB2", "OH2"], "back": ["OH1", "L", "OP"], "rec": [["S", 0.08, 0.09], ["MB2", 0.15, 0.24], ["OH2", 0.25, 0.73], ["OH1", 0.5, 0.73], ["L", 0.76, 0.73], ["OP", 0.92, 0.92]], "ar": [["OH2", 0.07, 0.44, "front"], ["MB2", 0.48, 0.44, "front"], ["OP", 0.93, 0.7, "back"], ["L", 0.13, 0.77, null], ["OH1", 0.5, 0.73, null], ["S", 0.69, 0.1, "set"]], "serve": [["OH2", "MB2", "S"], ["L", "OH1", "OP"]], "note": "Setter runs along the net from zone 4. Opposite goes straight to zone 1 for the back-row attack.", "move": {"serve": {"OH2": "Cross to zone 4: outside hitters block and attack on the left.", "MB2": "Stay in zone 3, in the middle of the net, ready to block.", "S": "Cross to zone 2: the setter blocks on the right and sets from there.", "L": "Move to zone 5 and defend deep on the left.", "OH1": "Move to zone 6 and defend deep in the middle.", "OP": "Serve from behind the end line, then defend zone 1."}, "rec": {"S": "Stand at the net in the left corner, out of the receivers' way.", "MB2": "Stand left, just behind the setter, out of the receivers' way.", "OH2": "Receive on the left of the passing line.", "OH1": "Receive in the middle of the passing line.", "L": "Receive on the right of the passing line.", "OP": "Stand deep in the right corner, out of the passing lanes."}, "ar": {"S": "Run along the net from zone 4 to the setting spot.", "OH2": "Move up to the 3 m line at the left and attack in zone 4.", "MB2": "Come off the net to the 3 m line to approach in the middle.", "OP": "Go straight to zone 1 for the back-row attack, behind the 3 m line.", "L": "Run round behind OH1 to the left to cover, then defend zone 5.", "OH1": "Stay in the middle to cover, then defend zone 6."}}}, {"name": "R5", "setter": 3, "liberofor": "MB1", "server": "OH2", "front": ["OH1", "S", "MB2"], "back": ["L", "OP", "OH2"], "rec": [["S", 0.58, 0.1], ["MB2", 0.81, 0.28], ["OH1", 0.18, 0.71], ["L", 0.5, 0.76], ["OH2", 0.81, 0.69], ["OP", 0.66, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB2", 0.5, 0.44, "front"], ["OP", 0.93, 0.69, "back"], ["L", 0.2, 0.72, null], ["OH2", 0.5, 0.87, null], ["S", 0.58, 0.1, "set"]], "serve": [["OH1", "MB2", "S"], ["L", "OH2", "OP"]], "note": "The libero stands slightly behind front-row outside hitter 1.", "move": {"serve": {"OH1": "Stay in zone 4, ready to block and attack on the left.", "MB2": "Move to zone 3, in the middle of the net, ready to block.", "S": "Move to zone 2: the setter blocks on the right and sets from there.", "L": "Stay in zone 5 and defend deep on the left.", "OH2": "Serve from behind the end line, then run to zone 6 and defend deep.", "OP": "Move to zone 1 and defend deep on the right."}, "rec": {"S": "Stand at the net, just right of the middle, ready to set.", "MB2": "Stand on the right, off the net, out of the receivers' way.", "OH1": "Receive on the left, slightly ahead of the libero.", "L": "Receive in the middle, slightly behind OH1.", "OH2": "Receive on the right of the passing line.", "OP": "Stand deep behind the receivers, out of the passing lanes."}, "ar": {"S": "Stay at the net: you are already at the setting spot.", "OH1": "Move up to the 3 m line at the left and attack in zone 4.", "MB2": "Cut in to the 3 m line in the middle to approach.", "OP": "Go to zone 1 for the back-row attack, behind the 3 m line.", "L": "Move left to cover the attack, then defend zone 5.", "OH2": "Drop back to cover in the middle, then defend zone 6."}}}, {"name": "R6", "setter": 2, "liberofor": "MB2", "server": "MB2", "front": ["MB1", "OH1", "S"], "back": ["OP", "OH2", "L"], "rec": [["MB1", 0.07, 0.1], ["S", 0.75, 0.12], ["OH1", 0.23, 0.7], ["OH2", 0.52, 0.76], ["L", 0.83, 0.74], ["OP", 0.4, 0.92]], "ar": [["OH1", 0.07, 0.44, "front"], ["MB1", 0.48, 0.44, "front"], ["OP", 0.93, 0.78, "back"], ["L", 0.16, 0.74, null], ["OH2", 0.52, 0.76, null], ["S", 0.75, 0.12, "set"]], "serve": [["OH1", "MB1", "S"], ["OH2", "MB2", "OP"]], "note": "Front-row outside hitter 1 stands slightly ahead of back-row outside hitter 2.", "move": {"serve": {"OH1": "Move to zone 4, ready to block and attack on the left.", "MB1": "Move to zone 3, in the middle of the net, ready to block.", "S": "Stay in zone 2: the setter blocks on the right and sets from there.", "OH2": "Move to zone 5 and defend deep on the left.", "MB2": "Serve from behind the end line, then run to zone 6 and defend deep.", "OP": "Move to zone 1 and defend deep on the right."}, "rec": {"MB1": "Stand at the net in the left corner, out of the receivers' way.", "S": "Stand at the net on the right, ready to set.", "OH1": "Receive on the left, slightly ahead of OH2.", "OH2": "Receive in the middle, slightly behind OH1.", "L": "Receive on the right of the passing line.", "OP": "Stand deep behind the receivers, out of the passing lanes."}, "ar": {"S": "Stay at the net: you are already at the setting spot.", "OH1": "Move up to the 3 m line at the left and attack in zone 4.", "MB1": "Come off the net to the 3 m line to approach in the middle.", "OP": "Go to zone 1 for the back-row attack, behind the 3 m line.", "L": "Run round behind OH2 to the left to cover, then defend zone 5.", "OH2": "Stay in the middle to cover, then defend zone 6."}}}]}, "attackLine": 0.42, "baseDef": {"4": [0.15, 0.21, "zone"], "3": [0.5, 0.21, "zone"], "2": [0.85, 0.21, "zone"], "5": [0.12, 0.66, null], "6": [0.5, 0.86, null], "1": [0.88, 0.66, null]}, "sets": [["1", 0.02, 1.0, "left", "High ball to the left antenna (zone 4). Most time for the attacker."], ["0", 0.02, 0.52, "left", "Lower, faster ball to the left antenna."], ["2", 0.18, 0.46, "left", "Medium-fast ball landing about 1.5 m inside the left antenna."], ["Shoot", 0.36, 0.3, "mid", "Flat, fast ball between zone 4 and the middle."], ["4", 0.56, 0.72, "mid", "Higher ball just in front of the setter. More time for the middle."], ["Po", 0.56, 0.3, "mid", "Low quick just in front of the setter."], ["Til", 0.75, 0.22, "right", "Short quick just behind the setter."], ["7", 0.97, 0.5, "right", "Lower, faster back set to the right antenna."], ["6", 0.97, 0.92, "right", "High back set to the right antenna (zone 2)."]], "setterX": 0.64, "unconfirmedSets": ["Po", "4"]};
       const RULE_ROWS = Object.fromEntries(
         Object.entries(DATA.rows).map(([mode, rows]) => [
           mode,
@@ -2610,7 +2684,7 @@
       // ---------- Feature flags ----------
       const FEATURES = {
         "learn-tab": true,
-        "learn-animation": false,
+        "learn-animation": true,
         "rules-official": false,
         "learn-guides": true,
         "rotations-table": true,
@@ -2644,6 +2718,7 @@
       };
       const FEATURE_ELEMENTS = {
         "learn-tab": ["tabLearn", "learn"],
+        "learn-animation": ["lCap", "lAnim", "lDots"],
         "rules-official": ["rmOfficial"],
         "learn-guides": ["howTo", "checks", "thumbsBox"],
         "rotations-table": ["allRots"],
@@ -2777,7 +2852,19 @@
         flags = featureValues(flagsBase, ffOverride);
         applyFeatures();
       }
-      window.ksvLearn = { describe: (ri, phase, r) => describe(ri, phase, r) };
+      window.ksvLearn = {
+        describe: (ri, phase, r) => describe(ri, phase, r),
+        captions: (ri, phase, r) =>
+          transition(ri, phase).stages.map((st) => stageCaption(st, r).replace(/<[^>]+>/g, "")),
+        anim: () =>
+          anim && {
+            t: anim.t,
+            total: anim.total,
+            stage: anim.stage,
+            playing: anim.playing,
+            ends: anim.tr.stages.map((st) => st.start + st.dur),
+          },
+      };
       window.ksvFeatures = { feature, ffParse, featureValues, values: () => ({ ...flags }) };
       const themeBtn = $("themeBtn");
       const darkQuery = matchMedia("(prefers-color-scheme: dark)");
@@ -2881,6 +2968,7 @@
       setSetupOpen(firstVisit, false);
       function setTab(t, quiet) {
         if (!quiet) track("tab_viewed", { tab: t });
+        if (t !== "learn" && anim) renderLearn();
         ["Learn", "Drill", "Game", "Sets"].forEach((n) => {
           const k = n.toLowerCase();
           $(`tab${n}`).setAttribute("aria-selected", t === k);
@@ -2899,6 +2987,7 @@
 
       // ---------- Learn ----------
       function renderLearn() {
+        animCancel();
         $("rots").innerHTML = ROWS.map(
           (r, i) =>
             `<button class="rot" aria-pressed="${i === ri}" data-i="${i}" aria-label="${r.name}">${r.short}</button>`,
@@ -2919,8 +3008,11 @@
           .querySelectorAll(".ph")
           .forEach((b) => {
             b.onclick = () => {
+              const at = PHASES.findIndex(([k]) => k === phase);
+              const next = at < PHASES.length - 1 && PHASES[at + 1][0] === b.dataset.k;
               phase = b.dataset.k;
               renderLearn();
+              if (next) animPlay();
             };
           });
         const pl = players(ri, phase);
@@ -2962,6 +3054,9 @@
         $("lNext").textContent = `Next: ${
           at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1]
         } ▸`;
+        learnTr = transition(ri, phase);
+        $("lCap").innerHTML = captionHtml(learnTr);
+        renderAnimControls();
         renderSheet();
       }
       $("lNext").onclick = () => {
@@ -2969,7 +3064,351 @@
         if (at === PHASES.length - 1) ri = (ri + 1) % 6;
         phase = PHASES[(at + 1) % PHASES.length][0];
         renderLearn();
+        animPlay();
       };
+
+      // ---------- Learn animation ----------
+      const ANIM_OFF = new URLSearchParams(location.search).get("anim") === "0";
+      const motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
+      // Libero and substitute exchanges happen here, at the sideline by the 3 m line.
+      const EXIT = { x: 0.97, y: AL };
+      const SERVE_BALL = { x: 0.3, y: -0.08 };
+      const HOLD_MS = 900,
+        BALL_MS = 450,
+        FADE_MS = 150;
+      const ROTATE_TEXT = "The rally goes on. We win the point and rotate.";
+      const SWAP_NOTES = {
+        serve: [
+          () => "Go off at the sideline: the libero may not serve.",
+          () => "Come on for the libero and serve from behind the end line.",
+        ],
+        rec: [
+          () => "Go off at the sideline: we lost the serve, so the libero comes back.",
+          (off) => `Come back on for ${off} and take your reception spot.`,
+        ],
+        start: [() => "Go off at the sideline.", () => "Come on at the sideline."],
+      };
+      let animSpeed = store.get("animSpeed", 1) === 0.5 ? 0.5 : 1;
+      let anim = null,
+        learnTr = null;
+      function animated() {
+        return feature("learn-animation") && !ANIM_OFF && !motionQuery.matches;
+      }
+      const spots = (list) => Object.fromEntries(list.map((o) => [o.p, { x: o.x, y: o.y }]));
+      const pick = (ps, f) => Object.fromEntries(ps.map((p) => [p, f(p)]));
+      // The move into (ri, phase) from the step before it, in stages; positions come from players().
+      function transition(ri, phase) {
+        const k = PHASES.findIndex(([x]) => x === phase);
+        const fromRi = k === 0 ? (ri + 5) % 6 : ri;
+        const from = spots(players(fromRi, PHASES[(k + 3) % 4][0]));
+        const list = players(ri, phase);
+        const to = spots(list);
+        const order = list.map((o) => o.p);
+        const notes = ROWS[ri].move?.[phase] || {};
+        const leave = Object.keys(from).filter((p) => !to[p]);
+        const enter = order.filter((p) => !from[p]);
+        const stay = order.filter((p) => from[p]);
+        const sv = server(ri);
+        const serveSpot = { x: SERVE_SPOT[0], y: SERVE_SPOT[1] };
+        const first = (p) => (phase === "serve" && p === sv ? serveSpot : to[p]);
+        const stages = [];
+        const stage = (moves, text, extra = {}) => ({ moves, notes: text, ...extra });
+        const own = (ps, f = (p) => to[p]) =>
+          stage(
+            pick(ps, f),
+            pick(ps, (p) => notes[p]),
+          );
+        let swap = null;
+        if (leave.length || enter.length) {
+          const [off, on] = SWAP_NOTES[phase] || SWAP_NOTES.start;
+          swap = stage(
+            { ...pick(leave, () => EXIT), ...pick(enter, first) },
+            { ...pick(leave, () => off()), ...pick(enter, () => on(leave.join(" and "))) },
+            { enter, leave, src: pick(enter, () => EXIT) },
+          );
+        }
+        if (phase === "serve") {
+          stages.push(own(stay, first));
+          if (to[sv])
+            stages.push({
+              ...own([sv]),
+              ball: { from: serveSpot, to: SERVE_BALL, early: true },
+            });
+        } else if (phase === "rec") stages.push(own(stay));
+        else if (phase === "ar") {
+          const kind = Object.fromEntries(list.map((o) => [o.p, o.kind]));
+          const setter = stay.filter((p) => kind[p] === "set");
+          const setSpot = to[setter[0]];
+          const hitter = stay
+            .filter((p) => kind[p] === "front")
+            .sort((a, b) => to[a].x - to[b].x)[0];
+          const cover = stay.filter((p) => !kind[p]);
+          const passer = from.L ? "L" : cover[0];
+          stages.push({ ...own(setter), ball: setSpot && { from: from[passer], to: setSpot } });
+          stages.push({
+            ...own(stay.filter((p) => kind[p] === "front" || kind[p] === "back")),
+            ball: setSpot && hitter && { from: setSpot, to: { x: to[hitter].x, y: 0.08 } },
+          });
+          stages.push(own(cover));
+        } else {
+          const home = spots(players(fromRi, "start"));
+          const nextZone = (z) => (z === 1 ? 6 : z - 1);
+          const reset = stay.filter((p) => {
+            const z = zoneOf(fromRi, p);
+            return z && zoneOf(ri, p) && zoneOf(ri, p) !== nextZone(z);
+          });
+          stages.push({
+            ...stage(
+              pick(stay, (p) => (reset.includes(p) ? home[p] : to[p])),
+              {},
+            ),
+            fixed: ROTATE_TEXT,
+          });
+          if (swap) stages.push(swap);
+          swap = null;
+          if (reset.length)
+            stages.push(
+              stage(
+                pick(reset, (p) => to[p]),
+                pick(reset, (p) => {
+                  const way = isFront(ri, p) ? "along the net" : "across the back";
+                  const why = rulesMode === "simple" ? ": the middle pair resets" : "";
+                  return `Walk ${way} from zone ${zoneOf(fromRi, p)} to zone ${zoneOf(ri, p)}${why}.`;
+                }),
+              ),
+            );
+        }
+        if (swap) stages.unshift(swap);
+        const tr = {
+          from,
+          to,
+          stages: stages.filter((st) => st.fixed || Object.keys(st.moves).length),
+        };
+        tr.players = [...new Set([...Object.keys(from), ...order])];
+        let t = 0;
+        const at = { ...from };
+        tr.stages.forEach((st, i) => {
+          st.start = t;
+          st.src = { ...st.src };
+          st.glide = {};
+          Object.entries(st.moves).forEach(([p, end]) => {
+            const src = st.src[p] || at[p];
+            st.src[p] = src;
+            st.glide[p] = Math.min(
+              900,
+              Math.max(600, Math.hypot(end.x - src.x, end.y - src.y) * 1000),
+            );
+            at[p] = end;
+          });
+          st.dur = Math.max(600, ...Object.values(st.glide));
+          t += st.dur + (i < tr.stages.length - 1 ? HOLD_MS : 0);
+        });
+        tr.total = t;
+        return tr;
+      }
+      function stageCaption(st, r) {
+        if (st.fixed) return st.fixed;
+        const who = st.notes[r] ? r : Object.keys(st.moves).find((p) => st.notes[p]);
+        return who ? `<b>${who === r ? `You (${r})` : NAMES[who]}:</b> ${st.notes[who]}` : "";
+      }
+      // At rest the caption shows your own last move in this transition.
+      function captionHtml(tr) {
+        const list = tr.stages.map((st) => stageCaption(st, role));
+        if (!animated() && list.length > 1)
+          return `<ol>${list.map((c) => `<li>${c}</li>`).join("")}</ol>`;
+        const mine = tr.stages.filter((st) => st.notes[role]).pop();
+        return stageCaption(mine || tr.stages[tr.stages.length - 1], role);
+      }
+      function posAt(tr, p, t) {
+        let pos = tr.from[p] || null,
+          op = pos ? 1 : 0;
+        for (const st of tr.stages) {
+          if (!(p in st.moves)) continue;
+          const src = st.src[p],
+            end = st.moves[p];
+          if (t <= st.start) {
+            if (!pos) pos = src;
+            break;
+          }
+          const ms = t - st.start,
+            u = Math.min(1, ms / st.glide[p]),
+            e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+          pos = { x: src.x + (end.x - src.x) * e, y: src.y + (end.y - src.y) * e };
+          op = st.enter?.includes(p)
+            ? Math.min(1, ms / FADE_MS)
+            : st.leave?.includes(p)
+              ? Math.max(0, Math.min(1, (st.glide[p] - ms) / FADE_MS))
+              : 1;
+          if (u < 1) break;
+        }
+        return { ...pos, op };
+      }
+      function stageAt(tr, t) {
+        let i = 0;
+        tr.stages.forEach((st, k) => {
+          if (st.start <= t) i = k;
+        });
+        return i;
+      }
+      function paintAnim() {
+        const a = anim,
+          tr = a.tr;
+        tr.players.forEach((p) => {
+          const s = posAt(tr, p, a.t),
+            g = a.els[p];
+          if (!g) return;
+          g.setAttribute("transform", `translate(${s.x * W} ${s.y * H})`);
+          g.setAttribute("opacity", s.op);
+        });
+        const i = stageAt(tr, a.t),
+          st = tr.stages[i];
+        let ball = null;
+        tr.stages.forEach((b, k) => {
+          if (!b.ball) return;
+          const start = b.ball.early ? b.start : b.start + b.dur - BALL_MS;
+          const until = k + 1 < tr.stages.length ? tr.stages[k + 1].start : tr.total + 1;
+          if (a.t >= start && a.t < until)
+            ball = { ...b.ball, u: Math.min(1, (a.t - start) / BALL_MS) };
+        });
+        a.ball.setAttribute("opacity", ball ? 1 : 0);
+        if (ball) {
+          a.ball.setAttribute("cx", (ball.from.x + (ball.to.x - ball.from.x) * ball.u) * W);
+          a.ball.setAttribute("cy", (ball.from.y + (ball.to.y - ball.from.y) * ball.u) * H);
+          a.ball.setAttribute("r", 1.8 + Math.sin(Math.PI * ball.u) * 1.2);
+        }
+        if (i !== a.stage) {
+          a.stage = i;
+          $("lCap").innerHTML = stageCaption(st, role);
+          renderDots();
+        }
+        $("lCap").style.opacity = Math.min(1, (a.t - st.start) / FADE_MS);
+      }
+      function animFrame(now) {
+        const a = anim;
+        if (!a) return;
+        const dt = a.last == null ? 0 : now - a.last;
+        a.last = now;
+        const stop = a.stopAt ?? a.total;
+        a.t = Math.min(stop, a.t + dt * animSpeed);
+        paintAnim();
+        if (a.t >= a.tr.total) {
+          anim = null;
+          renderLearn();
+          return;
+        }
+        if (a.t >= stop) {
+          animPause();
+          return;
+        }
+        a.raf = requestAnimationFrame(animFrame);
+      }
+      function animResume(stopAt = null) {
+        anim.playing = true;
+        anim.stopAt = stopAt;
+        anim.last = null;
+        cancelAnimationFrame(anim.raf);
+        anim.raf = requestAnimationFrame(animFrame);
+        renderAnimControls();
+      }
+      function animPause() {
+        if (!anim) return;
+        cancelAnimationFrame(anim.raf);
+        anim.playing = false;
+        anim.stopAt = null;
+        renderAnimControls();
+      }
+      function animCancel() {
+        if (!anim) return;
+        cancelAnimationFrame(anim.raf);
+        anim = null;
+        $("lCap").style.opacity = "";
+      }
+      // Plays the transition into the current step; with step, only its first stage.
+      function animPlay(step = false) {
+        if (!feature("learn-animation")) return;
+        if (!animated()) {
+          if (!ANIM_OFF && $("courtL").animate)
+            $("courtL").animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS });
+          return;
+        }
+        animCancel();
+        const tr = transition(ri, phase);
+        const off = !tr.to[role];
+        const mark = (p, me) =>
+          `<g class="am" data-p="${p}" opacity="0">${chip({ p, x: 0, y: 0 }, { me })}</g>`;
+        let s = DEFS + courtBase(off);
+        tr.players
+          .filter((p) => p !== role)
+          .forEach((p) => {
+            s += mark(p, false);
+          });
+        if (tr.players.includes(role)) s += mark(role, true);
+        s += `<circle class="ball" r="1.8" fill="#fff" stroke="var(--marker-edge)" stroke-width="0.6" opacity="0"/>`;
+        $("courtL").innerHTML = s;
+        const els = {};
+        $("courtL")
+          .querySelectorAll(".am")
+          .forEach((g) => {
+            els[g.dataset.p] = g;
+          });
+        anim = {
+          tr,
+          t: 0,
+          els,
+          ball: $("courtL").querySelector(".ball"),
+          stage: -1,
+          total: tr.total,
+        };
+        paintAnim();
+        animResume(step ? tr.stages[0].dur : null);
+      }
+      function animStep() {
+        if (!anim) return animPlay(true);
+        const tr = anim.tr,
+          i = stageAt(tr, anim.t),
+          st = tr.stages[i];
+        const next = anim.t < st.start + st.dur ? st : tr.stages[i + 1];
+        animResume(next ? next.start + next.dur : tr.total);
+      }
+      function renderDots() {
+        const tr = anim ? anim.tr : learnTr;
+        if (!tr) return;
+        const at = anim ? anim.stage : tr.stages.length - 1;
+        $("lDots").innerHTML = tr.stages
+          .map((_, i) => `<i${i <= at ? ' class="on"' : ""}></i>`)
+          .join("");
+      }
+      function renderAnimControls() {
+        const on = animated();
+        $("lAnim").hidden = !on;
+        $("lDots").hidden = !on;
+        if (!on) return;
+        const playing = !!anim?.playing;
+        $("lPlay").textContent = playing ? "❚❚" : "▶";
+        $("lPlay").setAttribute("aria-label", playing ? "Pause" : "Play");
+        $("lStep").disabled = playing;
+        $("lSpeed").textContent = animSpeed === 1 ? "1×" : "0.5×";
+        $("lSpeed").setAttribute("aria-label", `Speed ${animSpeed === 1 ? "normal" : "half"}`);
+        renderDots();
+      }
+      $("lReplay").onclick = () => animPlay();
+      $("lPlay").onclick = () => {
+        if (anim?.playing) animPause();
+        else if (anim) animResume();
+        else animPlay();
+      };
+      $("lStep").onclick = () => {
+        if (!anim?.playing) animStep();
+      };
+      $("lSpeed").onclick = () => {
+        animSpeed = animSpeed === 1 ? 0.5 : 1;
+        store.set("animSpeed", animSpeed);
+        renderAnimControls();
+      };
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden && anim) renderLearn();
+      });
+      motionQuery.addEventListener("change", () => renderLearn());
       document.addEventListener("keydown", (e) => {
         if ($("learn").hidden || !$("setup").hidden || e.target.tagName === "INPUT") return;
         if (e.key === "ArrowRight") {

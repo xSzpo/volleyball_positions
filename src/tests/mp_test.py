@@ -65,7 +65,7 @@ with sync_playwright() as p:
     pg.add_init_script(SEED_ROLE)
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
-    pg.goto((ROOT / "index.html").as_uri() + "?ff=all")
+    pg.goto((ROOT / "index.html").as_uri() + "?ff=all&anim=0")
     pg.wait_for_timeout(300)
     pg.click("#tabGame")
     pg.check('input[name="gPlayers"][value="mp"]')

@@ -44,7 +44,7 @@ PRIVACY = {
     "mask_all_element_attributes": True,
     "respect_dnt": True,
 }
-DEFAULT_OFF = {"learn-animation", "rules-official", "after-dig", "match-online"}
+DEFAULT_OFF = {"rules-official", "after-dig", "match-online"}
 FAKE_POSTHOG = """
 window.posthog = {
   calls: { register: [] },
@@ -139,7 +139,7 @@ def check_override_storage(page: Page) -> None:
     open_app(page, "?ff=reset")
     if page.evaluate("localStorage.getItem('ksv51:ffOverride')") is not None:
         fail("?ff=reset left the override stored")
-    if not present(page, "sets") or values(page)["learn-animation"]:
+    if not present(page, "sets") or values(page)["rules-official"]:
         fail("?ff=reset did not restore the defaults")
     parsed = page.evaluate("window.ksvFeatures.ffParse(' drill-tab , -nope,-learn-tab,bogus', {'sets-tab': false})")
     if parsed != {"sets-tab": False, "drill-tab": True, "learn-tab": False}:

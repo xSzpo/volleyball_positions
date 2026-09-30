@@ -522,7 +522,8 @@
       border-radius: var(--radius-lg);
       background: linear-gradient(var(--court-g0), var(--court-g1) 50%, var(--court-g2));
     }
-    svg.court .faded {
+    svg.court .faded,
+    svg.court .am {
       pointer-events: none;
     }
     .ttag {
@@ -553,11 +554,70 @@
       position: sticky;
       bottom: 0;
       z-index: 2;
-      display: flex;
       margin-top: 12px;
       padding: 8px 0;
       border-top: 1px solid var(--line);
       background: var(--panel);
+    }
+    .lrow {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .lanim {
+      display: flex;
+      gap: 6px;
+    }
+    .lanim[hidden],
+    .ldots[hidden] {
+      display: none;
+    }
+    .ictl {
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--ink);
+      font:
+        700 18px Barlow,
+        sans-serif;
+      cursor: pointer;
+    }
+    .ictl.speed {
+      width: 52px;
+      font-size: 16px;
+    }
+    .ictl:disabled {
+      color: var(--muted);
+      opacity: 0.5;
+      cursor: default;
+    }
+    .ldots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      padding-top: 6px;
+    }
+    .ldots i {
+      width: 8px;
+      height: 8px;
+      border: 1.5px solid var(--accent);
+      border-radius: 50%;
+    }
+    .ldots i.on {
+      background: var(--accent);
+    }
+    .lcap {
+      margin-top: 10px;
+      min-height: calc(2 * 1.45em);
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    .lcap ol {
+      margin: 0;
+      padding-left: 20px;
     }
     .lctl .btn.primary {
       flex: 1;
@@ -1641,8 +1701,22 @@
           <div class="phases" id="phases"></div>
           <p class="ttag" id="learnTag" aria-live="polite"></p>
           <svg class="court" id="courtL" viewBox="-4 -14 108 127" aria-label="Court diagram"></svg>
+          <div class="lcap" id="lCap" aria-live="polite"></div>
           <div class="cue" id="cue"></div>
-          <div class="lctl"><button type="button" class="btn primary" id="lNext"></button></div>
+          <div class="lctl">
+            <div class="lrow">
+              <span class="lanim" id="lAnim">
+                <button type="button" class="ictl" id="lReplay" aria-label="Replay">⟲</button>
+                <button type="button" class="ictl" id="lPlay" aria-label="Play">▶</button>
+                <button type="button" class="ictl" id="lStep" aria-label="Step one stage">
+                  ▸|
+                </button>
+                <button type="button" class="ictl speed" id="lSpeed">1×</button>
+              </span>
+              <button type="button" class="btn primary" id="lNext"></button>
+            </div>
+            <div class="ldots" id="lDots" aria-hidden="true"></div>
+          </div>
         </div>
         <details class="card fold" id="howTo">
           <summary>How to learn with this app</summary>
@@ -2610,7 +2684,7 @@
       // ---------- Feature flags ----------
       const FEATURES = {
         "learn-tab": true,
-        "learn-animation": false,
+        "learn-animation": true,
         "rules-official": false,
         "learn-guides": true,
         "rotations-table": true,
@@ -2644,6 +2718,7 @@
       };
       const FEATURE_ELEMENTS = {
         "learn-tab": ["tabLearn", "learn"],
+        "learn-animation": ["lCap", "lAnim", "lDots"],
         "rules-official": ["rmOfficial"],
         "learn-guides": ["howTo", "checks", "thumbsBox"],
         "rotations-table": ["allRots"],
@@ -2777,7 +2852,19 @@
         flags = featureValues(flagsBase, ffOverride);
         applyFeatures();
       }
-      window.ksvLearn = { describe: (ri, phase, r) => describe(ri, phase, r) };
+      window.ksvLearn = {
+        describe: (ri, phase, r) => describe(ri, phase, r),
+        captions: (ri, phase, r) =>
+          transition(ri, phase).stages.map((st) => stageCaption(st, r).replace(/<[^>]+>/g, "")),
+        anim: () =>
+          anim && {
+            t: anim.t,
+            total: anim.total,
+            stage: anim.stage,
+            playing: anim.playing,
+            ends: anim.tr.stages.map((st) => st.start + st.dur),
+          },
+      };
       window.ksvFeatures = { feature, ffParse, featureValues, values: () => ({ ...flags }) };
       const themeBtn = $("themeBtn");
       const darkQuery = matchMedia("(prefers-color-scheme: dark)");
@@ -2881,6 +2968,7 @@
       setSetupOpen(firstVisit, false);
       function setTab(t, quiet) {
         if (!quiet) track("tab_viewed", { tab: t });
+        if (t !== "learn" && anim) renderLearn();
         ["Learn", "Drill", "Game", "Sets"].forEach((n) => {
           const k = n.toLowerCase();
           $(`tab${n}`).setAttribute("aria-selected", t === k);
@@ -2899,6 +2987,7 @@
 
       // ---------- Learn ----------
       function renderLearn() {
+        animCancel();
         $("rots").innerHTML = ROWS.map(
           (r, i) =>
             `<button class="rot" aria-pressed="${i === ri}" data-i="${i}" aria-label="${r.name}">${r.short}</button>`,
@@ -2919,8 +3008,11 @@
           .querySelectorAll(".ph")
           .forEach((b) => {
             b.onclick = () => {
+              const at = PHASES.findIndex(([k]) => k === phase);
+              const next = at < PHASES.length - 1 && PHASES[at + 1][0] === b.dataset.k;
               phase = b.dataset.k;
               renderLearn();
+              if (next) animPlay();
             };
           });
         const pl = players(ri, phase);
@@ -2962,6 +3054,9 @@
         $("lNext").textContent = `Next: ${
           at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1]
         } ▸`;
+        learnTr = transition(ri, phase);
+        $("lCap").innerHTML = captionHtml(learnTr);
+        renderAnimControls();
         renderSheet();
       }
       $("lNext").onclick = () => {
@@ -2969,7 +3064,351 @@
         if (at === PHASES.length - 1) ri = (ri + 1) % 6;
         phase = PHASES[(at + 1) % PHASES.length][0];
         renderLearn();
+        animPlay();
       };
+
+      // ---------- Learn animation ----------
+      const ANIM_OFF = new URLSearchParams(location.search).get("anim") === "0";
+      const motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
+      // Libero and substitute exchanges happen here, at the sideline by the 3 m line.
+      const EXIT = { x: 0.97, y: AL };
+      const SERVE_BALL = { x: 0.3, y: -0.08 };
+      const HOLD_MS = 900,
+        BALL_MS = 450,
+        FADE_MS = 150;
+      const ROTATE_TEXT = "The rally goes on. We win the point and rotate.";
+      const SWAP_NOTES = {
+        serve: [
+          () => "Go off at the sideline: the libero may not serve.",
+          () => "Come on for the libero and serve from behind the end line.",
+        ],
+        rec: [
+          () => "Go off at the sideline: we lost the serve, so the libero comes back.",
+          (off) => `Come back on for ${off} and take your reception spot.`,
+        ],
+        start: [() => "Go off at the sideline.", () => "Come on at the sideline."],
+      };
+      let animSpeed = store.get("animSpeed", 1) === 0.5 ? 0.5 : 1;
+      let anim = null,
+        learnTr = null;
+      function animated() {
+        return feature("learn-animation") && !ANIM_OFF && !motionQuery.matches;
+      }
+      const spots = (list) => Object.fromEntries(list.map((o) => [o.p, { x: o.x, y: o.y }]));
+      const pick = (ps, f) => Object.fromEntries(ps.map((p) => [p, f(p)]));
+      // The move into (ri, phase) from the step before it, in stages; positions come from players().
+      function transition(ri, phase) {
+        const k = PHASES.findIndex(([x]) => x === phase);
+        const fromRi = k === 0 ? (ri + 5) % 6 : ri;
+        const from = spots(players(fromRi, PHASES[(k + 3) % 4][0]));
+        const list = players(ri, phase);
+        const to = spots(list);
+        const order = list.map((o) => o.p);
+        const notes = ROWS[ri].move?.[phase] || {};
+        const leave = Object.keys(from).filter((p) => !to[p]);
+        const enter = order.filter((p) => !from[p]);
+        const stay = order.filter((p) => from[p]);
+        const sv = server(ri);
+        const serveSpot = { x: SERVE_SPOT[0], y: SERVE_SPOT[1] };
+        const first = (p) => (phase === "serve" && p === sv ? serveSpot : to[p]);
+        const stages = [];
+        const stage = (moves, text, extra = {}) => ({ moves, notes: text, ...extra });
+        const own = (ps, f = (p) => to[p]) =>
+          stage(
+            pick(ps, f),
+            pick(ps, (p) => notes[p]),
+          );
+        let swap = null;
+        if (leave.length || enter.length) {
+          const [off, on] = SWAP_NOTES[phase] || SWAP_NOTES.start;
+          swap = stage(
+            { ...pick(leave, () => EXIT), ...pick(enter, first) },
+            { ...pick(leave, () => off()), ...pick(enter, () => on(leave.join(" and "))) },
+            { enter, leave, src: pick(enter, () => EXIT) },
+          );
+        }
+        if (phase === "serve") {
+          stages.push(own(stay, first));
+          if (to[sv])
+            stages.push({
+              ...own([sv]),
+              ball: { from: serveSpot, to: SERVE_BALL, early: true },
+            });
+        } else if (phase === "rec") stages.push(own(stay));
+        else if (phase === "ar") {
+          const kind = Object.fromEntries(list.map((o) => [o.p, o.kind]));
+          const setter = stay.filter((p) => kind[p] === "set");
+          const setSpot = to[setter[0]];
+          const hitter = stay
+            .filter((p) => kind[p] === "front")
+            .sort((a, b) => to[a].x - to[b].x)[0];
+          const cover = stay.filter((p) => !kind[p]);
+          const passer = from.L ? "L" : cover[0];
+          stages.push({ ...own(setter), ball: setSpot && { from: from[passer], to: setSpot } });
+          stages.push({
+            ...own(stay.filter((p) => kind[p] === "front" || kind[p] === "back")),
+            ball: setSpot && hitter && { from: setSpot, to: { x: to[hitter].x, y: 0.08 } },
+          });
+          stages.push(own(cover));
+        } else {
+          const home = spots(players(fromRi, "start"));
+          const nextZone = (z) => (z === 1 ? 6 : z - 1);
+          const reset = stay.filter((p) => {
+            const z = zoneOf(fromRi, p);
+            return z && zoneOf(ri, p) && zoneOf(ri, p) !== nextZone(z);
+          });
+          stages.push({
+            ...stage(
+              pick(stay, (p) => (reset.includes(p) ? home[p] : to[p])),
+              {},
+            ),
+            fixed: ROTATE_TEXT,
+          });
+          if (swap) stages.push(swap);
+          swap = null;
+          if (reset.length)
+            stages.push(
+              stage(
+                pick(reset, (p) => to[p]),
+                pick(reset, (p) => {
+                  const way = isFront(ri, p) ? "along the net" : "across the back";
+                  const why = rulesMode === "simple" ? ": the middle pair resets" : "";
+                  return `Walk ${way} from zone ${zoneOf(fromRi, p)} to zone ${zoneOf(ri, p)}${why}.`;
+                }),
+              ),
+            );
+        }
+        if (swap) stages.unshift(swap);
+        const tr = {
+          from,
+          to,
+          stages: stages.filter((st) => st.fixed || Object.keys(st.moves).length),
+        };
+        tr.players = [...new Set([...Object.keys(from), ...order])];
+        let t = 0;
+        const at = { ...from };
+        tr.stages.forEach((st, i) => {
+          st.start = t;
+          st.src = { ...st.src };
+          st.glide = {};
+          Object.entries(st.moves).forEach(([p, end]) => {
+            const src = st.src[p] || at[p];
+            st.src[p] = src;
+            st.glide[p] = Math.min(
+              900,
+              Math.max(600, Math.hypot(end.x - src.x, end.y - src.y) * 1000),
+            );
+            at[p] = end;
+          });
+          st.dur = Math.max(600, ...Object.values(st.glide));
+          t += st.dur + (i < tr.stages.length - 1 ? HOLD_MS : 0);
+        });
+        tr.total = t;
+        return tr;
+      }
+      function stageCaption(st, r) {
+        if (st.fixed) return st.fixed;
+        const who = st.notes[r] ? r : Object.keys(st.moves).find((p) => st.notes[p]);
+        return who ? `<b>${who === r ? `You (${r})` : NAMES[who]}:</b> ${st.notes[who]}` : "";
+      }
+      // At rest the caption shows your own last move in this transition.
+      function captionHtml(tr) {
+        const list = tr.stages.map((st) => stageCaption(st, role));
+        if (!animated() && list.length > 1)
+          return `<ol>${list.map((c) => `<li>${c}</li>`).join("")}</ol>`;
+        const mine = tr.stages.filter((st) => st.notes[role]).pop();
+        return stageCaption(mine || tr.stages[tr.stages.length - 1], role);
+      }
+      function posAt(tr, p, t) {
+        let pos = tr.from[p] || null,
+          op = pos ? 1 : 0;
+        for (const st of tr.stages) {
+          if (!(p in st.moves)) continue;
+          const src = st.src[p],
+            end = st.moves[p];
+          if (t <= st.start) {
+            if (!pos) pos = src;
+            break;
+          }
+          const ms = t - st.start,
+            u = Math.min(1, ms / st.glide[p]),
+            e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+          pos = { x: src.x + (end.x - src.x) * e, y: src.y + (end.y - src.y) * e };
+          op = st.enter?.includes(p)
+            ? Math.min(1, ms / FADE_MS)
+            : st.leave?.includes(p)
+              ? Math.max(0, Math.min(1, (st.glide[p] - ms) / FADE_MS))
+              : 1;
+          if (u < 1) break;
+        }
+        return { ...pos, op };
+      }
+      function stageAt(tr, t) {
+        let i = 0;
+        tr.stages.forEach((st, k) => {
+          if (st.start <= t) i = k;
+        });
+        return i;
+      }
+      function paintAnim() {
+        const a = anim,
+          tr = a.tr;
+        tr.players.forEach((p) => {
+          const s = posAt(tr, p, a.t),
+            g = a.els[p];
+          if (!g) return;
+          g.setAttribute("transform", `translate(${s.x * W} ${s.y * H})`);
+          g.setAttribute("opacity", s.op);
+        });
+        const i = stageAt(tr, a.t),
+          st = tr.stages[i];
+        let ball = null;
+        tr.stages.forEach((b, k) => {
+          if (!b.ball) return;
+          const start = b.ball.early ? b.start : b.start + b.dur - BALL_MS;
+          const until = k + 1 < tr.stages.length ? tr.stages[k + 1].start : tr.total + 1;
+          if (a.t >= start && a.t < until)
+            ball = { ...b.ball, u: Math.min(1, (a.t - start) / BALL_MS) };
+        });
+        a.ball.setAttribute("opacity", ball ? 1 : 0);
+        if (ball) {
+          a.ball.setAttribute("cx", (ball.from.x + (ball.to.x - ball.from.x) * ball.u) * W);
+          a.ball.setAttribute("cy", (ball.from.y + (ball.to.y - ball.from.y) * ball.u) * H);
+          a.ball.setAttribute("r", 1.8 + Math.sin(Math.PI * ball.u) * 1.2);
+        }
+        if (i !== a.stage) {
+          a.stage = i;
+          $("lCap").innerHTML = stageCaption(st, role);
+          renderDots();
+        }
+        $("lCap").style.opacity = Math.min(1, (a.t - st.start) / FADE_MS);
+      }
+      function animFrame(now) {
+        const a = anim;
+        if (!a) return;
+        const dt = a.last == null ? 0 : now - a.last;
+        a.last = now;
+        const stop = a.stopAt ?? a.total;
+        a.t = Math.min(stop, a.t + dt * animSpeed);
+        paintAnim();
+        if (a.t >= a.tr.total) {
+          anim = null;
+          renderLearn();
+          return;
+        }
+        if (a.t >= stop) {
+          animPause();
+          return;
+        }
+        a.raf = requestAnimationFrame(animFrame);
+      }
+      function animResume(stopAt = null) {
+        anim.playing = true;
+        anim.stopAt = stopAt;
+        anim.last = null;
+        cancelAnimationFrame(anim.raf);
+        anim.raf = requestAnimationFrame(animFrame);
+        renderAnimControls();
+      }
+      function animPause() {
+        if (!anim) return;
+        cancelAnimationFrame(anim.raf);
+        anim.playing = false;
+        anim.stopAt = null;
+        renderAnimControls();
+      }
+      function animCancel() {
+        if (!anim) return;
+        cancelAnimationFrame(anim.raf);
+        anim = null;
+        $("lCap").style.opacity = "";
+      }
+      // Plays the transition into the current step; with step, only its first stage.
+      function animPlay(step = false) {
+        if (!feature("learn-animation")) return;
+        if (!animated()) {
+          if (!ANIM_OFF && $("courtL").animate)
+            $("courtL").animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS });
+          return;
+        }
+        animCancel();
+        const tr = transition(ri, phase);
+        const off = !tr.to[role];
+        const mark = (p, me) =>
+          `<g class="am" data-p="${p}" opacity="0">${chip({ p, x: 0, y: 0 }, { me })}</g>`;
+        let s = DEFS + courtBase(off);
+        tr.players
+          .filter((p) => p !== role)
+          .forEach((p) => {
+            s += mark(p, false);
+          });
+        if (tr.players.includes(role)) s += mark(role, true);
+        s += `<circle class="ball" r="1.8" fill="#fff" stroke="var(--marker-edge)" stroke-width="0.6" opacity="0"/>`;
+        $("courtL").innerHTML = s;
+        const els = {};
+        $("courtL")
+          .querySelectorAll(".am")
+          .forEach((g) => {
+            els[g.dataset.p] = g;
+          });
+        anim = {
+          tr,
+          t: 0,
+          els,
+          ball: $("courtL").querySelector(".ball"),
+          stage: -1,
+          total: tr.total,
+        };
+        paintAnim();
+        animResume(step ? tr.stages[0].dur : null);
+      }
+      function animStep() {
+        if (!anim) return animPlay(true);
+        const tr = anim.tr,
+          i = stageAt(tr, anim.t),
+          st = tr.stages[i];
+        const next = anim.t < st.start + st.dur ? st : tr.stages[i + 1];
+        animResume(next ? next.start + next.dur : tr.total);
+      }
+      function renderDots() {
+        const tr = anim ? anim.tr : learnTr;
+        if (!tr) return;
+        const at = anim ? anim.stage : tr.stages.length - 1;
+        $("lDots").innerHTML = tr.stages
+          .map((_, i) => `<i${i <= at ? ' class="on"' : ""}></i>`)
+          .join("");
+      }
+      function renderAnimControls() {
+        const on = animated();
+        $("lAnim").hidden = !on;
+        $("lDots").hidden = !on;
+        if (!on) return;
+        const playing = !!anim?.playing;
+        $("lPlay").textContent = playing ? "❚❚" : "▶";
+        $("lPlay").setAttribute("aria-label", playing ? "Pause" : "Play");
+        $("lStep").disabled = playing;
+        $("lSpeed").textContent = animSpeed === 1 ? "1×" : "0.5×";
+        $("lSpeed").setAttribute("aria-label", `Speed ${animSpeed === 1 ? "normal" : "half"}`);
+        renderDots();
+      }
+      $("lReplay").onclick = () => animPlay();
+      $("lPlay").onclick = () => {
+        if (anim?.playing) animPause();
+        else if (anim) animResume();
+        else animPlay();
+      };
+      $("lStep").onclick = () => {
+        if (!anim?.playing) animStep();
+      };
+      $("lSpeed").onclick = () => {
+        animSpeed = animSpeed === 1 ? 0.5 : 1;
+        store.set("animSpeed", animSpeed);
+        renderAnimControls();
+      };
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden && anim) renderLearn();
+      });
+      motionQuery.addEventListener("change", () => renderLearn());
       document.addEventListener("keydown", (e) => {
         if ($("learn").hidden || !$("setup").hidden || e.target.tagName === "INPUT") return;
         if (e.key === "ArrowRight") {

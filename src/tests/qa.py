@@ -35,7 +35,7 @@ def fail(m: str) -> None:
     print("FAIL:", m, flush=True)
 
 
-URL = (ROOT / "index.html").as_uri() + "?ff=all"
+URL = (ROOT / "index.html").as_uri() + "?ff=all&anim=0"
 MODE_ROLES = {
     "simple": ["MB", "OH1", "OH2", "OP", "S", "L"],
     "official": ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"],

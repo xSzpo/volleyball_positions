@@ -147,3 +147,43 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** At Our serve in R3 and R6: "You come on for the libero, who may not serve. Serve, then run to zone 6, deep." Off court in R3 and R6: "You come on only for our serve here, because the libero may not serve. When we lose the serve, the libero comes back on for you." In the other rotations: "You play only in R3 (S5) and R6 (S2), to serve when the libero is in zone 1."
 - **Alternatives:** leave SUB out of the role texts, since SUB is not in the role picker.
 - **Reversible by:** the SUB branches of `describe()` in `src/template.html`.
+
+### 19. Learn animation captions
+
+- **Issue:** #21
+- **Problem:** `docs/v2.md` §4.5 asks for one caption per stage that starts with your move, but in most stages you do not move, and the plan does not say what to show then or after the transition ends.
+- **Decision:** Each stage caption is "**You (ROLE):** your note" when you move in that stage, else "**Name:** note" for the stage's first mover. At rest the caption shows your last move in the transition, or the last stage when you did not move. The `move` notes in `data.py` are written to their player ("Leave zone 1 for …") and are at most 78 characters, so the prefix still fits in 90. The `describe()` text stays in `#cue` under the caption.
+- **Alternatives:** third-person sentences with no prefix ("The setter leaves zone 1 …"); drop `describe()` from Learn.
+- **Reversible by:** `stageCaption()` and `captionHtml()` in `src/template.html`, `move` in `src/data.py`.
+
+### 20. Animation stages, passer and hitter
+
+- **Issue:** #21
+- **Problem:** The guide shows arrows but not the order of moves, which passer takes the first ball, or who gets the set. The plan gives the order only for Reception → After reception.
+- **Decision:** Reception → After reception: setter, then attackers, then cover, with the ball from L to the setting spot and on to the zone 4 attacker at the net. Rotation → Our serve: everyone to base with the server behind the end line, then the serve (the ball crosses the net while the server runs to base). Our serve → Reception: one walk. An exchange (L off, SUB or a middle on) is its own first stage. After reception → next rotation: the rotate stage, then in Simplified R3 and R6 the middle pair reset ("Walk along the net from zone 2 to zone 4: the middle pair resets."). The three stage dots fill up to the stage that is playing. Asked the coach on #16.
+- **Alternatives:** a random passer and hitter per rotation; the setter's choice from the set calls.
+- **Reversible by:** `transition()` in `src/template.html`.
+
+### 21. Where players leave and come on
+
+- **Issue:** #21
+- **Problem:** §4.9 says replacements happen "at the sideline by the attack line" but not which sideline.
+- **Decision:** The right sideline at the 3 m line, next to zone 1 where the libero and SUB swap. Asked the coach on #16.
+- **Alternatives:** the left sideline by the bench.
+- **Reversible by:** `EXIT` in `src/template.html`.
+
+### 22. Reduced motion caption height
+
+- **Issue:** #21
+- **Problem:** §4.6 says the reduced-motion caption lists all stages "up to three lines", but a three-stage list of 90-character captions needs more at 390 px.
+- **Decision:** The caption keeps a two-line minimum height and grows for the list. Nothing moves under it, because the list shows only after Next and stays until the next tap.
+- **Alternatives:** show only your own stage.
+- **Reversible by:** `.lcap` and `captionHtml()` in `src/template.html`.
+
+### 23. learn-animation on by default, Official captions generic
+
+- **Issue:** #21
+- **Problem:** The plan ships the animation "for Simplified first" but `rules-official` is off by default, so only Simplified is reachable without `?ff=`.
+- **Decision:** The built-in default of `learn-animation` is on; the PostHog flag stays off. With `rules-official` on, the Official exchanges play with generic captions ("Go off at the sideline: the libero may not serve.") until #22 polishes them. The options fold of §4.4 (Show everyone / Zones) and the Drill and Match motion of §4.7 are not in this issue.
+- **Alternatives:** keep the default off until #22.
+- **Reversible by:** `FEATURES["learn-animation"]` in `src/template.html`.
