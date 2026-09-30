@@ -545,7 +545,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #79
 - **Problem:** The issue says Step back is disabled on the start picture. Reception's still is its start picture, but Base's still is where its play ends (base defence), so the issue does not say what Step back does there. Paused frames also showed their caption at the fade-in opacity of the moment they stopped, so a new line that starts at a stage end was invisible.
-- **Decision:** On Base's still Step back is enabled and goes to the end of the stage before the last; Base has one stage, so that is the lead-in start (the spike picture), where it is disabled. A paused frame (Pause, Step, Step back) shows its caption at full opacity. To fit the sixth button at 44 × 44 in the 324 px court panel of a 390 × 664 screen, the bar's gap is 4 px (was 6) and the dots' gap 6 px (was 8).
+- **Decision:** On Base's still Step back is enabled and goes to the end of the stage before the last; Base has one stage, so that is the lead-in start (the spike picture), where it is disabled. A paused frame (Pause, Step, Step back) shows its caption at full opacity, and it stays there when Step or Play goes on. To fit the sixth button at 44 × 44 in the 324 px court panel of a 390 × 664 screen, the bar's gap is 4 px (was 6) and the dots' gap 6 px (was 8).
 - **Alternatives:** disable Step back on Base's still too; smaller buttons; the dots on their own line.
 - **Reversible by:** `backTarget()` and `animPause()` in `src/template.html`, and the `.lanim` and `.ldots` gaps.
 

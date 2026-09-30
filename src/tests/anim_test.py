@@ -1152,6 +1152,79 @@ def check_step_back(page: Page) -> None:
                 fail(f"{tag}: the bar changes: {page.evaluate(BAR)}")
 
 
+PAUSE_WHEN = """([lo, hi]) => { const a = window.ksvLearn.anim();
+  if (!a || !a.playing || a.t <= lo) return false;
+  if (a.t >= hi) return 'late';
+  document.querySelector('#lPlay').click(); return true; }"""
+RESUME_OPACITY = """(button) => new Promise((done) => { const cap = document.querySelector('#lCap');
+  const html = cap.innerHTML, end = performance.now() + 300; let low = 1;
+  document.querySelector(button).click();
+  const look = () => {
+    if (cap.innerHTML === html) low = Math.min(low, cap.style.opacity === '' ? 1 : +cap.style.opacity);
+    if (performance.now() < end) requestAnimationFrame(look); else done(low); };
+  requestAnimationFrame(look); })"""
+
+
+def pause_between(page: Page, tag: str, lo: float, hi: float) -> bool:
+    """Plays Reception from its still and pauses once play time is between lo and hi."""
+    page.click("#lPlay")
+    if page.wait_for_function(PAUSE_WHEN, arg=[lo, hi], timeout=20000).json_value() == "late":
+        fail(f"{tag}: the play passed {hi} ms before it could pause")
+        return False
+    return True
+
+
+def check_step_back_paused(page: Page) -> None:
+    """Step back from a pause mid-stage and in the end hold, disabled in a Step run, no caption fade on resume."""
+    for mode in MODES:
+        for ri in (0, 3):
+            open_app(page, "?ff=all", {"role": "OH1", "rulesMode": mode})
+            learn(page, ri, "rec")
+            tag = f"{mode} R{ri + 1} Reception"
+            count = len(page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')"))
+            frames = []
+            for k in range(count):
+                if k:
+                    low = page.evaluate(RESUME_OPACITY, "#lStep")
+                    if low < 0.99:
+                        fail(f"{tag}: the caption fades to {low} when Step resumes after stage {k}")
+                else:
+                    page.click("#lStep")
+                state = anim(page)
+                if not state or not state["playing"] or not page.is_disabled("#lBack"):
+                    fail(f"{tag}: Step back is not disabled during a Step run: {state}")
+                wait_paused(page)
+                frames.append(page.evaluate(FRAME))
+            ends = page.evaluate("window.ksvLearn.anim().ends")
+            low = page.evaluate(RESUME_OPACITY, "#lPlay")
+            if low < 0.99:
+                fail(f"{tag}: the caption fades to {low} when Play resumes")
+            for k in (0, 2):
+                learn(page, ri, "rec")
+                lo = (ends[k - 1] if k else 0) + 100
+                if not pause_between(page, f"{tag} stage {k + 1}", lo, ends[k] - 50):
+                    continue
+                page.click("#lBack")
+                if k == 0:
+                    if anim(page):
+                        fail(f"{tag}: Step back mid stage 1 leaves a play: {anim(page)}")
+                    check_reception_rest(page, f"{tag} after Step back mid stage 1", ri, mode)
+                elif page.evaluate(FRAME) != frames[k - 1]:
+                    fail(f"{tag}: Step back mid stage {k + 1} does not show the end of stage {k}")
+            learn(page, ri, "rec")
+            if pause_between(page, f"{tag} hold", ends[-1] + 50, ends[-1] + 800):
+                page.click("#lBack")
+                if page.evaluate(FRAME) != frames[-2]:
+                    fail(f"{tag}: Step back in the end hold does not show the end of stage {count - 1}")
+            learn(page, ri, "ar")
+            for button in ("#lStep", "#lPlay"):
+                page.click("#lBack")
+                low = page.evaluate(RESUME_OPACITY, button)
+                if low < 0.99:
+                    fail(f"{mode} R{ri + 1} Base: the lead-in caption fades to {low} when {button} resumes")
+                wait_paused(page)
+
+
 def check_reduced(browser: Browser) -> None:
     """Reduced motion and ?anim=0: no glide, Reception lists its stages on the reception still, only Next in the row.
 
@@ -1477,6 +1550,7 @@ def main() -> None:
         check_never_blocks(page)
         check_speed(page)
         check_step_back(page)
+        check_step_back_paused(page)
         check_still_captions(page)
         check_captions(page)
         check_flag_off(page)

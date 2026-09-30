@@ -3846,7 +3846,9 @@
           a.cap = cap;
           $("lCap").innerHTML = cap.html;
         }
-        $("lCap").style.opacity = cap ? Math.min(1, (a.t - cap.t) / FADE_MS) : "";
+        const fade = cap && a.capShown !== cap ? Math.min(1, (a.t - cap.t) / FADE_MS) : 1;
+        if (fade >= 1) a.capShown = cap;
+        $("lCap").style.opacity = cap ? fade : "";
       }
       function animFrame(now) {
         const a = anim;
@@ -3911,6 +3913,7 @@
         cancelAnimationFrame(anim.raf);
         anim.playing = false;
         anim.stopAt = null;
+        anim.capShown = anim.cap;
         $("lCap").style.opacity = "";
         renderAnimControls();
       }
@@ -4003,9 +4006,11 @@
         const tr = anim ? anim.tr : learnTr;
         if (!animated() || !tr?.stages.length || anim?.playing) return null;
         const ends = tr.stages.map((st) => st.start + st.dur);
-        // Reception rests on its start picture, Base on the end of its last stage.
-        let t = tr.fadeBack ? 0 : ends[ends.length - 1];
-        if (anim) t = anim.fading ? tr.total : anim.t;
+        const last = ends[ends.length - 1];
+        if (anim?.fading) return last;
+        // Reception rests on its start picture, Base on the end of its last stage; the end hold counts as that end.
+        let t = tr.fadeBack ? 0 : last;
+        if (anim) t = Math.min(anim.t, last);
         if (t <= 0) return null;
         return ends.filter((e) => e < t - 1).pop() ?? 0;
       }
