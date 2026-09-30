@@ -1,10 +1,13 @@
 """Playwright test of the Learn animation (learn-animation).
 
-Our serve and Reception play once when the screen opens and end on their still
-picture; Rotation and After reception are static with no controls. Checks the
-stage end positions, the controls (Replay, Pause, Step, speed), that Next and
-the chips never animate or wait, the still captions for exchanges and the
-middle pair reset, the caption length and height, reduced motion and ?anim=0,
+Our serve and Reception open at rest on where their play ends and play only
+on Play, from the start of the play back to that picture; Play gives one nudge
+per screen open. Rotation and After reception are static with no controls.
+Checks the stage end positions, the controls (Replay, Pause, Step, speed), that
+no route plays on open, that Next and the chips never animate or wait, the
+still and lead-in captions for exchanges and the middle pair reset, the
+Reception whistle limits in the lead-in, the caption length and height,
+reduced motion and ?anim=0,
 Reception through the set and spike to the after-reception spots, the movement
 trails (one stage at a time), the passer, the setter's cover, the deep outside
 hitter, the top speed, no marker passing through another, the controls in the
@@ -83,15 +86,19 @@ def check_positions(tag: str, got: dict[str, list[float]], want: dict[str, tuple
 
 
 SERVE_SPOT = (0.88, 1.1)
+NUDGES = """() => { if (window.__nudges) return; window.__nudges = 0;
+  new MutationObserver((ms) => ms.forEach((m) => {
+    if (!(m.oldValue || '').includes('nudge') && m.target.classList.contains('nudge')) window.__nudges++;
+  })).observe(document.querySelector('#lPlay'),
+    { attributes: true, attributeFilter: ['class'], attributeOldValue: true }); }"""
 
 
 def spots(ri: int, phase: str, mode: str = "simple") -> dict[str, tuple[float, float]]:
-    """The Learn still picture from the data; at Our serve the server stands on the serve spot."""
+    """The data spots of a phase; at Our serve the server stands at their base spot."""
     row = lineup(ri, mode)  # type: ignore[arg-type]
     if phase == "serve":
         front, back = row["serve"]
-        base = {p: BASE_DEF[z][:2] for z, p in zip((4, 3, 2, 5, 6, 1), front + back, strict=True)}
-        return {**base, server(ri, mode): SERVE_SPOT}  # type: ignore[arg-type]
+        return {p: BASE_DEF[z][:2] for z, p in zip((4, 3, 2, 5, 6, 1), front + back, strict=True)}
     if phase == "rec":
         return {p: (x, y) for p, x, y in row["rec"]}
     return {p: (x, y) for p, x, y, _ in row["ar"]}
@@ -101,49 +108,139 @@ def wait_done(page: Page) -> None:
     page.wait_for_function("!window.ksvLearn.anim()", timeout=15000)
 
 
-def check_opens_and_returns(page: Page) -> None:
-    """Next into Our serve and Reception plays once and ends on the still picture; Replay plays again."""
+def rest(ri: int, phase: str, mode: str = "simple") -> dict[str, tuple[float, float]]:
+    """The Learn rest picture with the animation on: where the play ends (Reception ends on base defence)."""
+    if phase == "rec":
+        return reception_plan(ri, mode)[1]
+    return spots(ri, phase, mode)
+
+
+def check_opens_at_rest(page: Page) -> None:
+    """Next into Our serve and Reception opens on where the play ends; Play runs from the start back to it."""
     open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
     learn(page, 0, "start")
-    wait_done(page)
     for phase, label in (("serve", "Our serve"), ("rec", "Reception")):
         page.click("#lNext")
         if page.inner_text("#learnTag") != f"R1 (S1) · {label}":
             fail(f"the tag does not move with Next: {page.inner_text('#learnTag')!r}")
+        page.wait_for_timeout(300)
+        if anim(page) or page.locator("#courtL .am").count():
+            fail(f"{label} plays when it opens: {anim(page)}")
+        if not page.is_visible("#lAnim") or not page.is_visible("#lDots") or not page.is_enabled("#lPlay"):
+            fail(f"{label}: the controls do not show at rest")
+        end = rest(0, phase)
+        got = page.evaluate(MARKERS, "#courtL .mk")
+        if sorted(got) != sorted(end):
+            fail(f"{label}: the rest picture shows {sorted(got)}, expected {sorted(end)}")
+        check_positions(f"{label} at rest", got, end)
+        if phase == "rec" and page.locator("#courtL .bnd").count():
+            fail("Reception at rest draws the whistle limits on the base defence picture")
+        page.click("#lPlay")
         state = anim(page)
         if not state or not state["playing"] or state["t"] > 400:
-            fail(f"{label} does not play when it opens: {state}")
+            fail(f"{label}: Play does not start the play: {state}")
             continue
-        if not page.is_visible("#lAnim") or not page.is_visible("#lDots"):
-            fail(f"{label}: the controls do not show")
         if not page.is_disabled("#lStep"):
             fail(f"{label}: Step is enabled while playing")
-        still = spots(0, phase)
-        if sorted(page.evaluate(MARKERS, "#courtL .am")) != sorted(still):
-            fail(f"{label}: the animation has other players than the still picture")
+        start = page.evaluate(MARKERS, "#courtL .am")
+        first = spots(0, phase)
+        if phase == "serve":
+            first[server(0, "simple")] = SERVE_SPOT
+        check_positions(f"{label} play start", start, first)
+        if phase == "rec":
+            lines = page.locator("#courtL .whistle .bnd").count()
+            if not lines or page.get_attribute("#courtL .whistle", "visibility") != "visible":
+                fail(f"Reception: the play does not start on the whistle limits ({lines} lines)")
         wait_done(page)
         if page.locator("#courtL .am").count() or page.locator("#courtL .trail").count():
             fail(f"{label}: the animation markers or trails stay after the play")
-        end = page.evaluate(MARKERS, "#courtL .mk")
-        if sorted(end) != sorted(still):
-            fail(f"{label}: the end picture shows {sorted(end)}, expected {sorted(still)}")
-        check_positions(f"{label} end", end, still)
+        check_positions(f"{label} after the play", page.evaluate(MARKERS, "#courtL .mk"), end)
         if page.locator("#lDots i.on").count():
             fail(f"{label}: dots stay on at rest")
         page.click("#lReplay")
         if not (anim(page) or {}).get("playing"):
             fail(f"{label}: Replay does not play again")
         wait_done(page)
-        page.click("#lPlay")
-        if not (anim(page) or {}).get("playing"):
-            fail(f"{label}: Play at rest does not play")
-        wait_done(page)
     if "You (OH1):" not in page.inner_text("#lCap"):
         fail(f"the caption does not start with your move: {page.inner_text('#lCap')!r}")
 
 
+def check_rest_pictures(page: Page) -> None:
+    """Every rotation and rule set: Our serve and Reception open on the play's end, and nothing plays."""
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            for phase in ("serve", "rec"):
+                learn(page, ri, phase)
+                tag = f"{mode} R{ri + 1} {phase}"
+                if anim(page):
+                    fail(f"{tag}: plays on open")
+                got = page.evaluate(MARKERS, "#courtL .mk")
+                want = rest(ri, phase, mode)
+                if sorted(got) != sorted(want):
+                    fail(f"{tag}: rest picture {sorted(got)}, expected {sorted(want)}")
+                check_positions(f"{tag} at rest", got, want)
+                ends: dict[str, dict[str, float]] = page.evaluate(
+                    f"window.ksvLearn.track({ri}, '{phase}', 1).pop().pos"
+                )
+                check_positions(f"{tag} play end", {p: [v["x"] * 100, v["y"] * 100] for p, v in ends.items()}, want)
+
+
+def check_nudge(browser: Browser) -> None:
+    """Play gets the nudge class once per open of Our serve or Reception, never on a loop or while playing."""
+    for label, query, motion in (
+        ("motion", "?ff=all", None),
+        ("reduced motion", "?ff=all", "reduce"),
+        ("?anim=0", "?ff=all&anim=0", None),
+    ):
+        context = browser.new_context(viewport={"width": 390, "height": 844}, reduced_motion=motion)  # type: ignore[arg-type]
+        page = context.new_page()
+        open_app(page, query, {"role": "OH1", "rulesMode": "simple"})
+        learn(page, 0, "start")
+        page.evaluate(NUDGES)
+        on = label == "motion"
+
+        def expect(n: int, what: str, page: Page = page, label: str = label, on: bool = on) -> None:
+            got, want = int(page.evaluate("window.__nudges")), n if on else 0
+            if got != want:
+                fail(f"{label}: {what}: {got} nudges, expected {want}")
+
+        page.click("#lNext")
+        expect(1, "Next into Our serve")
+        page.wait_for_timeout(1200)
+        if page.evaluate("document.querySelector('#lPlay').classList.contains('nudge')"):
+            fail(f"{label}: the nudge class stays after it ran")
+        expect(1, "Our serve after 1.2 s (no loop)")
+        page.click('.ph[data-k="rec"]')
+        expect(2, "a chip to Reception")
+        page.click('.rot[data-i="3"]')
+        expect(3, "a rotation chip to another Reception")
+        page.keyboard.press("ArrowRight")
+        expect(4, "the arrow key to the next Reception")
+        page.click('.ph[data-k="ar"]')
+        page.click('.ph[data-k="start"]')
+        expect(4, "Rotation and After reception")
+        page.click('.ph[data-k="rec"]')
+        expect(5, "back to Reception")
+        if on:
+            page.click("#lPlay")
+        if page.evaluate("document.querySelector('#lPlay').classList.contains('nudge')"):
+            fail(f"{label}: the nudge runs while playing")
+        page.wait_for_timeout(300)
+        expect(5, "while playing")
+        page.click("#tabSets")
+        page.click("#tabLearn")
+        expect(6, "a tab change back to Reception")
+        page.click("#roleChip")
+        page.click('#roles .role[data-r="L"]')
+        if page.is_visible("#setupPanel"):
+            page.click("#setupDone")
+        expect(6, "a role change")
+        context.close()
+
+
 def check_no_autoplay(page: Page) -> None:
-    """Loading onto Reception, a reload, a role change and a rules change show the still picture only."""
+    """No route plays: load, reload, Next, the chips, the arrow keys, a role change and a rules change."""
     open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
     if page.inner_text("#learnTag") != "R1 (S1) · Reception" or anim(page):
         fail(f"a fresh load onto {page.inner_text('#learnTag')!r} plays: {anim(page)}")
@@ -152,7 +249,19 @@ def check_no_autoplay(page: Page) -> None:
     if anim(page):
         fail("a reload plays Reception")
     page.click('.ph[data-k="serve"]')
-    wait_done(page)
+    if anim(page):
+        fail("a phase chip plays Our serve")
+    page.click("#lNext")
+    if anim(page):
+        fail("Next plays Reception")
+    page.click('.rot[data-i="2"]')
+    if anim(page):
+        fail("a rotation chip plays Reception")
+    page.keyboard.press("ArrowLeft")
+    page.wait_for_timeout(200)
+    if anim(page) or page.inner_text("#learnTag") != "R2 (S6) · Reception":
+        fail(f"the arrow key plays or does not move: {page.inner_text('#learnTag')!r}")
+    page.click('.ph[data-k="serve"]')
     page.click("#roleChip")
     page.click('#roles .role[data-r="L"]')
     if page.is_visible("#setupPanel"):
@@ -166,7 +275,7 @@ def check_no_autoplay(page: Page) -> None:
     if page.get_attribute('.rulesmode [aria-checked="true"]', "data-rm") != "official" or anim(page):
         fail("a rules change plays Our serve or does not apply")
     check_positions(
-        "Our serve after the rules change", page.evaluate(MARKERS, "#courtL .mk"), spots(0, "serve", "official")
+        "Our serve after the rules change", page.evaluate(MARKERS, "#courtL .mk"), spots(1, "serve", "official")
     )
 
 
@@ -250,7 +359,6 @@ def check_reception_stages(page: Page) -> None:
     learn(page, 0, "start")
     page.click('.ph[data-k="rec"]')
     wait_done(page)
-    rec = spots(0, "rec")
     ar = spots(0, "ar")
     release, end, hitter = reception_plan(0, "simple")
     stages: list[dict[str, Any]] = page.evaluate("window.ksvLearn.stages(0, 'rec')")
@@ -302,7 +410,7 @@ def check_reception_stages(page: Page) -> None:
     wait_done(page)
     if page.locator("#courtL .trail").count():
         fail("the trails stay on the still picture")
-    check_positions("back on the still picture", page.evaluate(MARKERS, "#courtL .mk"), rec)
+    check_positions("back on the rest picture", page.evaluate(MARKERS, "#courtL .mk"), end)
     captions: list[str] = page.evaluate("window.ksvLearn.captions(0, 'rec', 'L')")
     if captions[1] != "You (L): Pass the serve high to the setter at the net." or captions[-1] != (
         "You (L): Go to zone 5 and defend while they play the ball."
@@ -479,6 +587,7 @@ def check_never_blocks(page: Page) -> None:
     """Next, the chips and the court answer at once while a phase plays; markers ignore taps."""
     open_app(page, "?ff=all", {"role": "S", "rulesMode": "simple"})
     learn(page, 1, "serve")
+    page.click("#lPlay")
     page.wait_for_timeout(300)
     hit = page.evaluate(
         "(() => { const g = document.querySelector('#courtL .am[data-p=\"S\"]').getBoundingClientRect();"
@@ -488,21 +597,17 @@ def check_never_blocks(page: Page) -> None:
     if hit:
         fail("a marker takes taps while a phase plays")
     page.click("#lNext")
-    if page.inner_text("#learnTag") != "R2 (S6) · Reception":
-        fail(f"Next waits for the animation: tag {page.inner_text('#learnTag')!r}")
-    state = anim(page)
-    if not state or not state["playing"] or state["t"] > 400:
-        fail(f"Next mid-play does not start Reception at once: {state}")
+    if page.inner_text("#learnTag") != "R2 (S6) · Reception" or anim(page):
+        fail(f"Next mid-play waits or plays: tag {page.inner_text('#learnTag')!r}, {anim(page)}")
+    page.click("#lPlay")
     page.click('.rot[data-i="4"]')
-    state = anim(page)
-    if page.inner_text("#learnTag") != "R5 (S3) · Reception" or not state or state["t"] > 400:
-        fail(f"a rotation chip does not open that Reception: {state}")
+    if page.inner_text("#learnTag") != "R5 (S3) · Reception" or anim(page):
+        fail(f"a rotation chip mid-play does not open that Reception at rest: {anim(page)}")
     page.click('.ph[data-k="ar"]')
     if anim(page):
         fail("a chip to After reception plays")
     page.click('.ph[data-k="serve"]')
-    if not anim(page):
-        fail("a chip back to Our serve does not play it")
+    page.click("#lPlay")
     page.click("#tabSets")
     page.click("#tabLearn")
     if anim(page):
@@ -544,10 +649,14 @@ def check_still_captions(page: Page) -> None:
         learn(page, ri, "serve")
         wait_done(page)
         check_positions(f"{tag} Our serve still picture", page.evaluate(MARKERS, "#courtL .mk"), spots(ri, "serve"))
-        if page.evaluate(f"window.ksvLearn.still({ri}, 'rec', 'L')") != (
+        if page.evaluate(f"window.ksvLearn.lead({ri}, 'rec', 'L')") != (
             "You (L): Come back on for SUB and take your reception spot."
         ):
-            fail(f"{tag} Reception still caption for L")
+            fail(f"{tag} Reception lead-in caption for L")
+        if page.evaluate(f"window.ksvLearn.still({ri}, 'rec', 'L')") != (
+            "You (L): Go to zone 5 and defend while they play the ball."
+        ):
+            fail(f"{tag} Reception rest caption for L")
     learn(page, 1, "ar")
     page.click("#lNext")
     got = page.evaluate(MARKERS, "#courtL .mk")
@@ -568,6 +677,7 @@ def check_captions(page: Page) -> None:
             const line = parseFloat(getComputedStyle(cap).lineHeight);
             for (const r of roles) for (let ri = 0; ri < 6; ri++) for (const ph of ['start','serve','rec','ar'])
               for (const [still, c] of [[true, window.ksvLearn.still(ri, ph, r)],
+                  [true, window.ksvLearn.lead(ri, ph, r)],
                   ...window.ksvLearn.captions(ri, ph, r).map((c) => [false, c])]) {
                 cap.textContent = c;
                 out.push({ r, ri, ph, still, c, lines: cap.getBoundingClientRect().height / line });
@@ -651,6 +761,8 @@ def check_phone(browser: Browser) -> None:
             label = page.inner_text("#lNext")
             page.click("#lNext")
             tag = f"390 × {height}, Next {label!r}"
+            if page.is_visible("#lPlay"):
+                page.click("#lPlay")
             sels = CONTROLS if anim(page) else ["#lNext"]
             for sel in sels:
                 box = page.locator(sel).bounding_box()
@@ -708,7 +820,8 @@ def check_official(page: Page) -> None:
             ("serve", "L"): f"You (L): Wait at the sideline while {serves} serves: the libero may not serve.",
         }
         for (phase, r), want in checks.items():
-            still = page.evaluate(f"window.ksvLearn.still({ri}, '{phase}', '{r}')")
+            api = "lead" if phase == "rec" else "still"
+            still = page.evaluate(f"window.ksvLearn.{api}({ri}, '{phase}', '{r}')")
             if still != want:
                 fail(f"{tag} {phase} still caption for {r}: {still!r}")
 
@@ -750,6 +863,7 @@ def check_trails_in_play(page: Page) -> None:
     open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
     learn(page, 3, "start")
     page.click('.ph[data-k="rec"]')
+    page.click("#lPlay")
     seen = set()
     for _ in range(80):
         state, shown = page.evaluate(
@@ -786,7 +900,8 @@ def main() -> None:
         page = context.new_page()
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        check_opens_and_returns(page)
+        check_opens_at_rest(page)
+        check_rest_pictures(page)
         check_no_autoplay(page)
         check_static(page)
         check_reception_stages(page)
@@ -803,6 +918,7 @@ def main() -> None:
         check_captions(page)
         check_flag_off(page)
         check_reduced(browser)
+        check_nudge(browser)
         check_phone(browser)
         check_official(page)
         for error in errors:

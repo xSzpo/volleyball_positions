@@ -234,7 +234,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #47
 - **Problem:** The owner asked for Our serve and Reception to play once "when the screen opens". The page also re-renders Learn on load, on a tab switch and on a role or rules change, and the page opens on Reception.
-- **Decision:** A phase plays once when you move to a new screen in Learn: Next, a phase chip, a rotation chip or an arrow key. Loading the page, switching back to the Learn tab, and a role or rules change show the still picture only; Replay or Play plays it. After the last stage and a 900 ms hold the still picture comes back with a 150 ms fade.
+- **Decision:** A phase plays once when you move to a new screen in Learn: Next, a phase chip, a rotation chip or an arrow key. Loading the page, switching back to the Learn tab, and a role or rules change show the still picture only; Replay or Play plays it. After the last stage and a 900 ms hold the still picture comes back with a 150 ms fade. **Replaced by entry 50 (#60):** nothing plays on open.
 - **Alternatives:** also play on load and on the Learn tab (motion before any tap, and behind the first-visit role sheet); play only on Next and chips.
 - **Reversible by:** `learnGo()` in `src/template.html`.
 
@@ -253,6 +253,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The at-rest caption keeps them: when a screen follows an exchange or a reset, the player involved reads the old walk caption ("Go off at the sideline: the libero may not serve.", "Walk across the back from zone 5 to zone 1: the middle pair resets."), and everyone else reads it with that player's name. Otherwise it is your `move` note for the phase; Rotation has no caption. The rotate step and its caption are gone. This replaces the other stages of #20 and the `EXIT` walk of #21.
 - **Alternatives:** put the exchange text in the explanation below the court.
 - **Reversible by:** `stillStage()` and `phaseStages()` in `src/template.html`.
+- **Changed by entry 50 (#60):** at Reception with the animation on, this caption shows in the play's lead-in; at rest the caption is the base defence line.
 
 ### 32. The server stands behind the end line in the Our serve picture
 
@@ -261,12 +262,13 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** In Learn the Our serve still picture puts the server on the serve spot behind the end line, with the route to the base spot. The animation is the serve (ball over the net), then the run to base. SUB in Simplified R3 and R6 reads "Come on for the libero: you serve from the spot behind the end line." Drill and Match still grade the base spot, and `players()` is unchanged.
 - **Alternatives:** keep the server on the base spot and let the animation walk them out to the serve spot first (the picture then shows where they end, not where they start).
 - **Reversible by:** `learnSpots()`, `SERVE_HIT` and `SWAP_NOTES.serve` in `src/template.html`.
+- **Replaced by entry 50 (#60):** at rest the server stands at base; the play starts on the serve spot (`playStart()`).
 
 ### 33. Reception captions read as standing
 
 - **Issue:** #47
 - **Problem:** At rest and while their serve is in the air, players stand on their reception spot, but the R1 opposite's `rec` note said "Go to the left sideline …".
-- **Decision:** The R1 OP note now reads "Stand at the left sideline on the 3 m line: in R1 the opposite plays left." Every other `rec` note already says Stand, Receive, Hide or Start. The Our serve notes ("Cross to zone 4 …") are kept: the owner likes that content, and the audit ties them to the zone.
+- **Decision:** The R1 OP note now reads "Stand at the left sideline on the 3 m line: in R1 the opposite plays left." Every other `rec` note already says Stand, Receive, Hide or Start. Since #60 these notes show in the Reception lead-in, where players stand on their reception spot, and with reduced motion. The Our serve notes ("Cross to zone 4 …") are kept: the owner likes that content, and the audit ties them to the zone.
 - **Alternatives:** show a `rec` note only to a player who moves in that stage (most players would then see the setter's caption).
 - **Reversible by:** the R1 `move["rec"]["OP"]` note in `src/data.py`.
 
@@ -400,3 +402,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The Downloads card, the `downloads` flag, the `download` event, the embedded PDFs and their generators (`gen_schema.py`, `gen_sets.py`, `pdf.py`, `downloads/`, `cairosvg`) are gone. A stored `ksv51:ffOverride`, `ksv51:flags` or PostHog value for `downloads` is ignored. #56 is closed as superseded. Coach question 8 now asks only about the all-rotations table.
 - **Alternatives:** keep the downloads behind the flag, off; regenerate the sheets in the v2 colours (#56).
 - **Reversible by:** reverting the #57 PR.
+
+### 50. Play on demand, and the still picture is where the play ends
+
+- **Issue:** #60
+- **Problem:** The owner asked that nothing plays on its own, that Play "buzzes" once per open screen, and that every screen opens on "the screen you see when animation is over, not the beginning". Reception plays through the spike to base defence, so its end is not where you stand to receive, and the overlap limits belong to the reception spots at the whistle. After reception (the next screen) is earlier in the rally than that end.
+- **Decision:** Taken literally. Our serve opens with the server at base; Reception opens on base defence, with no overlap lines and the caption for base defence. Play starts with a 700 ms lead-in on the start picture: the server on the serve spot, or everyone on their reception spot with the overlap limits drawn and the exchange or `rec` caption. The explanation below the court still teaches the reception spot and says "Press Play to see each limit as a line." With reduced motion or `?anim=0` there is no play to end, so Reception keeps the reception spots and the lines. One 700 ms pulse on Play per open, never looping; a role or rules change is not an open. Drill and Match grading is unchanged.
+- **Alternatives:** keep the reception spots as the Reception rest picture (the "end" of getting ready to receive) and stop the play there or snap back; draw the reception spots as ghosts under base defence.
+- **Reversible by:** `renderLearn()` (`played`, `drawn`), `restCaption()`, `LEAD_MS`, `playStart()` and `nudgePlay()` in `src/template.html`.
