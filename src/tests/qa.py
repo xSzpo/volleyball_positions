@@ -47,15 +47,17 @@ QUICK_COMBOS = [("start", "rec"), ("serve", "ar")]
 
 # The next forward control in a match or drill, read in one call so a timer
 # (the 400 ms lock on #gNext after scoring) cannot change the state between checks.
+# Only that lock is worth waiting for; with no control and no lock the page is stuck.
 NEXT_ACTION_JS = """([nb, next, off, end]) => {
   const shown = (e) => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== "hidden";
   const usable = (e) => shown(e) && !e.disabled && !e.closest('[aria-disabled="true"]');
   if (end && shown(document.querySelector(end))) return "end";
   if ([...document.querySelectorAll(nb + " button")].some(usable)) return "nb";
-  if (usable(document.querySelector(next))) return "next";
+  const n = document.querySelector(next);
+  if (usable(n)) return "next";
   const o = document.querySelector(off);
   if (o && !o.disabled) return "answer";
-  return null;
+  return shown(n) && n.getAttribute("aria-disabled") === "true" ? null : "stuck";
 }"""
 
 
@@ -69,13 +71,13 @@ def vis_en(pg: Page, sel: str) -> bool:
 
 
 def next_action(pg: Page, nb: str, next_: str, off: str, end: str | None = None) -> str | None:
-    """Wait until a forward control is usable and name it; None if there is none."""
+    """Wait out the lock after scoring, then name the usable forward control; None if there is none."""
     try:
-        handle = pg.wait_for_function(NEXT_ACTION_JS, arg=[nb, next_, off, end], timeout=3000)
+        handle = pg.wait_for_function(NEXT_ACTION_JS, arg=[nb, next_, off, end], timeout=30000)
     except Error:
         return None
-    action = handle.json_value()
-    return str(action)
+    action = str(handle.json_value())
+    return None if action == "stuck" else action
 
 
 def wait_ready(pg: Page) -> None:
