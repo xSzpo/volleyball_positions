@@ -85,6 +85,7 @@ with sync_playwright() as p:
     doubled = False
     moment_board = None
     moment_seen = None
+    attack_turns = 0
     while n < 400:
         n += 1
         if pg.is_visible("#gEnd"):
@@ -151,6 +152,13 @@ with sync_playwright() as p:
             continue
         if pg.is_enabled("#gOff"):
             assert pg.is_hidden("#gVisPlay"), "Show on court can be changed during a multiplayer match"
+            if pg.inner_text("#gStepName").startswith("Attack"):
+                picture = pg.evaluate(
+                    "() => ['g.mk', '.me-ring', 'g.ball', 'g.pass', 'text.from']"
+                    ".map((s) => document.querySelectorAll('#courtG ' + s).length)"
+                )
+                assert picture == [6, 1, 1, 1, 1], f"Attack does not show the reception picture: {picture}"
+                attack_turns += 1
             chips_before = pg.locator(CHIPS).count()
             strip_before = pg.inner_text("#gStrip")
             assert not pg.is_enabled("#gNext") and pg.inner_text("#gNext") == "CONTINUE", (
@@ -184,6 +192,8 @@ with sync_playwright() as p:
         print("STUCK")
         break
     print("ended:", pg.is_visible("#gEnd"), "actions", n)
+    assert attack_turns, "no Attack turn was played"
+    print("Attack turns with the reception picture:", attack_turns)
     print("answers checked:", answered_by)
     assert all(answered_by.values()), f"not every answer path was checked: {answered_by}"
     assert doubled, "the double tap on Continue was not tried"

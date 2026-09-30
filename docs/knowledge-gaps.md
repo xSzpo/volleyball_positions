@@ -501,6 +501,14 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** keep the sheet and only make the chip bigger; list the rules first; keep the list open after a rules pick; shrink the title to keep one header line.
 - **Reversible by:** the `#setup` markup in the header, `.rolechip`, `.menu` and `.role` CSS, and `renderSetupSummary()`/`setSetupOpen()` in `src/template.html`.
 
+### 61. The Attack step shows the reception spots and the pass
+
+- **Issue:** #81
+- **Problem:** The owner: the Attack step ("Where do you go after the pass?") asks for a move from A to B, but the court did not show A. Teammates showed only as Show on court allowed, on their `ar` spots (the answers). Later addition: "also show where is the ball".
+- **Decision:** Before the answer, Drill and Match (solo, same device, online) draw everyone on their reception spot (place A) whatever Show on court is set to: teammates faded, you ringed with a "from" label, nobody on an `ar` spot. The picture is the moment of the pass: the ball is held by the passer, at `HELD` from their marker towards the set spot, with a dashed pass line to the setter's `ar` spot. The passer is the Learn Reception passer (`PASSER`, entry 42). The question names the passer ("OH1 passes to the setter. Where do you go?", or "You pass to the setter. Where do you go?"). A tap draws a thin line from A. Because A is part of the question, the Attack step scores ×1 for Show on court in every mode, a solo peek at it does not count as a peek, and the breakdown shows no multiplier. Show on court still applies to the other steps. The in-play picker stays visible at the Attack step. The help ring still hints at B.
+- **Alternatives:** keep Show on court for the teammates and show only your own A; hide the in-play picker at the Attack step; show the ball at the setter (the moment of the set).
+- **Reversible by:** `fromLayer()`, `arQuestion()`, the `ar` branch in `gVisMult()` and the peek count in `gAnswer()` in `src/template.html`.
+
 ### 62. "4" is the middle's low quick; "Po" and "Til" removed
 
 - **Issue:** #82
