@@ -313,6 +313,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The court panel (`#lPanel`) grows by one bar under the court drawing: the stage dots on the left, the four buttons on the right, on the same gradient. The bar keeps its height on Rotation and After reception (buttons hidden), so the caption does not jump between screens; with reduced motion or `?anim=0` it is gone. The sticky row holds only Next.
 - **Alternatives:** overlay the buttons on the strip below the end line (covers the server at Our serve); smaller buttons (under 44 px).
 - **Reversible by:** `#lPanel` and `#lAnim` in `src/template.html`.
+- **Updated in #55:** Base plays, so the buttons are hidden only on Rotation.
 
 ### 39. The Next button on Reception
 
@@ -321,6 +322,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Only the Reception button changes: it reads "After ▸" (aria-label "Next: After reception"). The others keep "Next: … ▸", now always in full because the animation controls left the row. The phase chip reads "After" and the title tag "After reception", as before. Reception now plays on to the spike and base defence, but the After reception screen still shows the earlier moment at the pass (the attackers on their approach spots); Next goes back in time by one contact there.
 - **Alternatives:** "Next: After ▸"; drop "Next:" on every button.
 - **Reversible by:** the `lNext` label in `renderLearn()` in `src/template.html`.
+- **Updated in #55:** the fourth screen is Base, so the button on Reception reads "Base ▸" (aria-label "Next: Base") and Next no longer goes back in time (entry 51).
 
 ### 40. The ball and the movement trails
 
@@ -410,3 +412,36 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Taken literally. Our serve opens with the server at base; Reception opens on base defence, with no overlap lines and the caption for base defence. Play starts with a 700 ms lead-in on the start picture: the server on the serve spot, or everyone on their reception spot with the overlap limits drawn and the exchange or `rec` caption. At rest the explanation below the court has no overlap text; the overlap text shows with the lines in the lead-in, also when paused there. With reduced motion or `?anim=0` there is no play to end, so Reception keeps the reception spots and the lines. One 700 ms pulse on Play per open, never looping; a role or rules change is not an open. Drill and Match grading is unchanged.
 - **Alternatives:** keep the reception spots as the Reception rest picture (the "end" of getting ready to receive) and stop the play there or snap back; draw the reception spots as ghosts under base defence.
 - **Reversible by:** `renderLearn()` (`played`, `drawn`), `restCaption()`, `LEAD_MS`, `playStart()` and `nudgePlay()` in `src/template.html`.
+- **Updated in #55:** the play is split at the spike. Reception rests on our spike (attackers on their `ar` spots, the cover formed) with a cue for your job at the spike; the reception text and overlap limits stay in the lead-in. Base plays the spike to base defence and rests there, with the controls and the Play nudge (entry 51).
+
+### 51. Learn's fourth screen is Base; Drill and Match call the step Attack
+
+- **Issue:** #55
+- **Problem:** After reception showed the pass moment (attackers on their approach spots) after a Reception play that ended on base defence, so Next went back in time. The owner asked for a Base screen after our attack. Drill and Match grade the `ar` spots, which are the attack, not base.
+- **Decision:** In Learn the `ar` step is Base: the phase chip, the title tag ("R1 (S1) · Base") and Next on Reception ("Base ▸"). Reception plays serve, pass and set and rests on the spike frame; Base plays one stage, the spike to base defence by job (`baseSpots()` on `BASE_DEF`), and rests there. Base draws no routes and no overlap limits; its cue reads "Our attack is over the net: defend." and says when the spot is the same as after our serve. In Drill, Match and the all-rotations table the same step is "Attack" and still grades the `ar` spots. A Drill/Match Defend step is #62.
+- **Alternatives:** keep After reception and stop Reception at the pass; add Base as a fifth Learn step and keep After reception.
+- **Reversible by:** `PHASES`, `LEARN_NAME`, `FULL`, `STEP_SHORT`, `cutPlay()`, `learnPlayers()`, `baseCue()` in `src/template.html`.
+
+### 52. The front row at base after our attack
+
+- **Issue:** #55
+- **Problem:** The guide shows no base spots after our attack. Where the front row waits (at the net, ready to block, or off the net) and whether KSV defends perimeter or rotational is not known.
+- **Decision:** The same `BASE_DEF` spots as at Our serve: front row mid-zone at y 0.21, back row deep, by job (OH 4, MB 3, S/OP 2; S/OP 1, L 5, OH 6). The R1 OP/OH1 side switch at base stays (coach question 11). Coach question 12 on #16.
+- **Alternatives:** front row at the net (y 0.05 to 0.1) ready to block; a rotational defence with the setter's base elsewhere.
+- **Reversible by:** `BASE_DEF` in `src/data.py`, `baseSpots()` and `SWITCH_VIA` in `src/template.html`.
+
+### 53. What the Reception rest cue says
+
+- **Issue:** #55
+- **Problem:** With Reception resting on the spike, the reception text and overlap limits describe a picture that is not on the court.
+- **Decision:** At rest the cue gives your job at the spike (`SPIKE_CUE`: hit, approach to hold the block, close cover, setter cover, L cover, deep cover), with the hitter named; the reception text and overlap limits show in the lead-in, also when paused there. With reduced motion or `?anim=0` Reception keeps the reception spots, text and limits.
+- **Alternatives:** keep the reception text at rest under a spike picture.
+- **Reversible by:** `spikeCue()`, `SPIKE_CUE` and `learnCue` in `renderLearn()` in `src/template.html`.
+
+### 54. Where the ball shows on the still pictures
+
+- **Issue:** #55
+- **Problem:** The owner wants the ball on the stills, not on Rotation, and not covering a label. No spot is given.
+- **Decision:** The ball rests where the play leaves it: over the net on their side at Our serve (`SERVE_BALL`) and Base (`SPIKE_BALL`), at the hitter's hand at Reception (at the marker edge). With no animation Reception shows it at their serve (`THEIR_SERVE`). In a lead-in the ball waits where the first stage starts: with our server, at their serve, or at the hitter's hand. The tests check it stays a marker radius from every marker.
+- **Alternatives:** the ball only at Reception; the ball in the passer's hands at Reception.
+- **Reversible by:** `restBall()`, `ballSvg()` and `paintAnim()` in `src/template.html`.

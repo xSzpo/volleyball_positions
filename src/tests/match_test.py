@@ -321,14 +321,14 @@ def check_hints_without_guides(browser: Browser) -> None:
 
 
 def check_match_order(browser: Browser) -> None:
-    """In order, one rotation runs Rotate, Our serve, Receive, After reception, with a story for each."""
+    """In order, one rotation runs Rotate, Our serve, Receive, Attack, with a story for each."""
     page = new_page(browser)
     setup_match(page, "OH1", ("start", "serve", "rec", "ar"), sets=False)
     page.click("#gStart")
     page.wait_for_selector("#gOff:enabled")
     track = page.locator("#gTrack span").all_text_contents()
-    if track != ["Rotate", "Our serve", "Receive", "After reception"]:
-        fail(f"R1 steps run {track}, expected Rotate, Our serve, Receive, After reception")
+    if track != ["Rotate", "Our serve", "Receive", "Attack"]:
+        fail(f"R1 steps run {track}, expected Rotate, Our serve, Receive, Attack")
     stories = []
     for _ in range(4):
         page.wait_for_selector("#gOff:enabled")
@@ -472,9 +472,9 @@ def check_set_calls(browser: Browser) -> None:
         fail(f"options summary does not list set calls: {page.inner_text('#gOptSum')!r}")
     page.uncheck("#gs-ar")
     if page.is_enabled("#setGame") or not page.is_visible("#setGameHint"):
-        fail("set call option not disabled without the After reception step")
+        fail("set call option not disabled without the Attack step")
     if "set calls" in page.inner_text("#gOptSum"):
-        fail("options summary lists set calls without the After reception step")
+        fail("options summary lists set calls without the Attack step")
     page.click("#tabSets")
     for name in UNCONFIRMED_SETS:
         page.click(f'#setchips .setchip[data-s="{name}"]')

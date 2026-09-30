@@ -1878,7 +1878,7 @@
                 <label><input type="checkbox" id="gs-start" checked> Rotation</label>
                 <label><input type="checkbox" id="gs-serve" checked> Our serve</label>
                 <label><input type="checkbox" id="gs-rec" checked> Reception</label>
-                <label><input type="checkbox" id="gs-ar" checked> After reception</label>
+                <label><input type="checkbox" id="gs-ar" checked> Attack</label>
               </fieldset>
               <p class="hint" id="gStepsMsg"></p>
               <fieldset class="steps one">
@@ -1900,7 +1900,7 @@
                 ><input type="checkbox" id="setGame">
                 Set call check after the pass, +30 points</label
               >
-              <p class="hint" id="setGameHint" hidden>Needs the After reception step</p>
+              <p class="hint" id="setGameHint" hidden>Needs the Attack step</p>
             </div>
           </details>
           <div class="row">
@@ -2189,13 +2189,14 @@
         ["start", "Rotation"],
         ["serve", "Our serve"],
         ["rec", "Reception"],
-        ["ar", "After reception"],
+        ["ar", "Base"],
       ];
+      const LEARN_NAME = Object.fromEntries(PHASES);
       const FULL = {
         start: "Rotation",
         serve: "Our serve",
         rec: "Reception",
-        ar: "After reception",
+        ar: "Attack",
       };
       const ZONES = { 4: [0, 0], 3: [1, 0], 2: [2, 0], 5: [0, 1], 6: [1, 1], 1: [2, 1] };
       const ORDER = [4, 3, 2, 5, 6, 1];
@@ -2820,7 +2821,7 @@
           phaseStages(ri, phase).stages.map((st) => stageCaption(st, r).replace(/<[^>]+>/g, "")),
         still: (ri, phase, r) =>
           restCaption(ri, phase, phaseStages(ri, phase), r).replace(/<[^>]+>/g, ""),
-        lead: (ri, phase, r) => stageCaption(stillStage(ri, phase), r).replace(/<[^>]+>/g, ""),
+        lead: (ri, phase, r) => leadCaption(ri, phase, r).replace(/<[^>]+>/g, ""),
         stages: (ri, phase) =>
           phaseStages(ri, phase).stages.map((st) => ({
             moves: Object.keys(st.moves),
@@ -2989,27 +2990,27 @@
           });
         $("phases").innerHTML = PHASES.map(
           ([k, l]) =>
-            `<button class="ph" aria-pressed="${k === phase}" data-k="${k}"${k === "ar" ? ` aria-label="${l}"` : ""}>${k === "ar" ? "After" : l}</button>`,
+            `<button class="ph" aria-pressed="${k === phase}" data-k="${k}">${l}</button>`,
         ).join("");
         $("phases")
           .querySelectorAll(".ph")
           .forEach((b) => {
             b.onclick = () => learnGo(ri, b.dataset.k);
           });
-        const pl = players(ri, phase);
+        const pl = learnPlayers(ri, phase);
         learnTr = animPhase(phase) ? phaseStages(ri, phase) : { stages: [] };
         const played = animated() && learnTr.stages.length > 0;
         const shown = played ? pl.map((o) => ({ ...o, ...learnTr.end[o.p] })) : pl;
         const me = shown.find((o) => o.p === role);
         let s = DEFS + courtBase(!me);
         if (phase === "start") s += rotArrows();
-        if (phase === "ar") s += arLayer(ri, pl, role);
         if (phase === "serve") s += serveLayer(ri, pl, role);
         shown
           .filter((o) => o.p !== role)
           .forEach((o) => {
             s += chip(o);
           });
+        const ball = restBall(learnTr, played || phase !== "rec");
         const bounds =
           phase === "start" || phase === "rec"
             ? boundLines(ri, pl, role, phase)
@@ -3018,15 +3019,23 @@
         const drawn = !(played && phase === "rec");
         if (drawn) s += bounds.lines.join("");
         if (me) s += chip(me, { me: true });
+        if (ball) s += ballSvg(ball);
         $("courtL").innerHTML = s;
-        $("learnTag").textContent = `${ROWS[ri].name} · ${FULL[phase]}`;
-        const d = describe(ri, phase, role);
+        $("learnTag").textContent = `${ROWS[ri].name} · ${LEARN_NAME[phase]}`;
+        const d =
+          phase === "ar"
+            ? baseCue(ri, role)
+            : phase === "rec" && played
+              ? spikeCue(ri, role)
+              : describe(ri, phase, role);
         const guide =
-          phase === "rec" || phase === "ar"
+          phase === "rec"
             ? `<p class="guide">Guide: ${ROWS[ri].note}</p>`
             : phase === "serve"
               ? `<p class="guide">${SERVE_RULE} Our base spots are not in the guide.</p>`
-              : "";
+              : phase === "ar"
+                ? '<p class="guide">Our base spots are not in the guide.</p>'
+                : "";
         const libero =
           rulesMode === "official" && stillStage(ri, phase).swap
             ? `<p class="guide">${LIBERO_RULE}</p>`
@@ -3044,14 +3053,17 @@
                   : ""
               } ${OVERLAP_WHEN[phase]}`
             : "";
-        const cue = (limits) =>
-          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${limits}</p>${guide}${libero}`;
-        // The limits describe the whistle picture: at Reception with the play they show only in its lead-in.
-        learnCue = { rest: cue(drawn ? overlap : ""), whistle: cue(overlap) };
+        const cue = (text, limits) =>
+          `<b>${me ? text.t : `${NAMES[role]}: ${text.t.toLowerCase()}`}</b><p>${text.d}${limits}</p>${guide}${libero}`;
+        // The reception text and limits describe the whistle picture: with the play they show only in its lead-in.
+        learnCue = {
+          rest: cue(d, drawn ? overlap : ""),
+          whistle: cue(phase === "rec" ? describe(ri, phase, role) : d, overlap),
+        };
         $("cue").innerHTML = learnCue.rest;
         const at = PHASES.findIndex(([k]) => k === phase);
         const upNext = at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1];
-        $("lNext").textContent = `${phase === "rec" ? "After" : `Next: ${upNext}`} ▸`;
+        $("lNext").textContent = `${phase === "rec" ? upNext : `Next: ${upNext}`} ▸`;
         $("lNext").setAttribute("aria-label", `Next: ${upNext}`);
         $("lCap").innerHTML = captionHtml(ri, phase, learnTr);
         renderAnimControls();
@@ -3161,13 +3173,93 @@
       function animated() {
         return feature("learn-animation") && !ANIM_OFF && !motionQuery.matches;
       }
-      const animPhase = (ph) => ph === "serve" || ph === "rec";
+      const animPhase = (ph) => ph !== "start";
       // The play of Our serve starts with the server behind the end line.
       function playStart(ri, phase) {
         const list = players(ri, phase);
         if (phase !== "serve") return list;
         const sv = server(ri);
         return list.map((o) => (o.p === sv ? { ...o, x: SERVE_SPOT[0], y: SERVE_SPOT[1] } : o));
+      }
+      // Learn's Base screen: base defence by job for the players on court at Reception.
+      function learnPlayers(ri, phase) {
+        if (phase !== "ar") return players(ri, phase);
+        const pl = players(ri, "rec");
+        const base = baseSpots(
+          ri,
+          pl.map((o) => o.p),
+        );
+        return pl.map((o) => ({ p: o.p, ...base[o.p] }));
+      }
+      // The still picture's ball: where the play ends, or where it starts when the still is the start picture.
+      function restBall(tr, atEnd) {
+        const balls = tr.stages.map((st) => st.ball).filter(Boolean);
+        if (!balls.length) return null;
+        return atEnd ? balls[balls.length - 1].to : balls[0].from;
+      }
+      function ballSvg(at) {
+        return BALL_SVG.replace(
+          'opacity="0"',
+          `opacity="1" transform="translate(${at.x * W} ${at.y * H}) scale(${BALL_R})"`,
+        );
+      }
+      const SPIKE_CUE = {
+        hit: (h) => ({
+          t: "Spike in zone 4",
+          d: "The setter sets you in zone 4. Hit past the block: the team covers you for a ball that comes back.",
+        }),
+        front: () => ({
+          t: "Approach with the hitter",
+          d: "You finish your approach about 1.5 m off the net, so their block must watch you too.",
+        }),
+        back: () => ({
+          t: "Back-row approach",
+          d: "You approach behind the 3 m line, so their block must watch you too.",
+        }),
+        cupFront: (h) => ({
+          t: `Cover ${h} low`,
+          d: `You approached for the quick. Now drop in low, 2 to 3 m from ${h}, for a ball the block sends down.`,
+        }),
+        cupSet: (h) => ({
+          t: "Cover the tip",
+          d: `You set ${h} in zone 4 and follow a step or two: a blocked ball drops close to the hitter.`,
+        }),
+        cupBack: (h) => ({
+          t: "Cover from zone 5",
+          d: `You cover ${h} from zone 5: play a ball the block sends back.`,
+        }),
+        deep: () => ({
+          t: "Stay deep",
+          d: "Stay deep behind the cover: a ball off the block can fly far.",
+        }),
+      };
+      // Reception at rest: the moment of our spike, where the play ends.
+      function spikeCue(ri, role) {
+        const tr = phaseStages(ri, "rec");
+        const last = tr.stages[tr.stages.length - 1];
+        const job = last?.jobs?.[role];
+        return job ? SPIKE_CUE[job](last.hitter) : describe(ri, "rec", role);
+      }
+      // Base at rest: base defence by job once our attack is over the net.
+      function baseCue(ri, role) {
+        const me = learnPlayers(ri, "ar").find((o) => o.p === role);
+        if (!me) return describe(ri, "rec", role);
+        const z = me.zone,
+          front = isFront(ri, role);
+        const job = front
+          ? "Stand in the middle of your zone, ready to block their attack."
+          : role === "S"
+            ? "You are back row: defend zone 1, and go to the net only after we dig."
+            : `Deep, about ${z === 6 ? 8 : 6} m from the net. Read their hitter.`;
+        const served = players(ri, "serve").find((o) => o.p === role);
+        const same =
+          served && Math.hypot(served.x - me.x, served.y - me.y) < 1e-3
+            ? " The same spot as after our serve."
+            : "";
+        return {
+          t: front ? `Base: zone ${z}, front row` : `Base: defend zone ${z}`,
+          d: `Our attack is over the net: defend. ${job}${same} The overlap limits don't apply now.`,
+        };
       }
       const spots = (list) => Object.fromEntries(list.map((o) => [o.p, { x: o.x, y: o.y }]));
       const pick = (ps, f) => Object.fromEntries(ps.map((p) => [p, f(p)]));
@@ -3383,12 +3475,34 @@
           if (!movers.includes(p)) delete st.mv[p];
         });
       }
-      // What happens in (ri, phase) after its still picture, in stages that end back on that picture.
+      // What plays in (ri, phase), in stages that end on its still picture. One play runs from their serve to base
+      // defence: Reception is its part up to our spike, Base the rest.
       const stageCache = {};
       function phaseStages(ri, phase) {
         const key = `${rulesMode}|${ri}|${phase}`;
-        if (!stageCache[key]) stageCache[key] = buildStages(ri, phase);
+        if (stageCache[key]) return stageCache[key];
+        if (phase !== "rec" && phase !== "ar") {
+          stageCache[key] = buildStages(ri, phase);
+          return stageCache[key];
+        }
+        const play = buildStages(ri, "rec");
+        const n = play.stages.findIndex((st) => st.base);
+        const cut = n < 0 ? play.stages.length : n;
+        stageCache[`${rulesMode}|${ri}|rec`] = cutPlay(play, 0, cut);
+        stageCache[`${rulesMode}|${ri}|ar`] = cutPlay(play, cut, play.stages.length);
         return stageCache[key];
+      }
+      // Stages a to b of a play, as a play of their own with a lead-in on the picture where stage a starts.
+      function cutPlay(play, a, b) {
+        const from = { ...play.from };
+        for (const st of play.stages.slice(0, a)) Object.assign(from, st.moves);
+        const shift = a < b ? play.lead - play.stages[a].start : 0;
+        const stages = play.stages.slice(a, b).map((st) => ({ ...st, start: st.start + shift }));
+        const end = { ...from };
+        for (const st of stages) Object.assign(end, st.moves);
+        const last = stages[stages.length - 1];
+        const total = last ? last.start + last.dur + HOLD_MS : play.lead;
+        return { from, players: play.players, stages, lead: play.lead, total, end };
       }
       function buildStages(ri, phase) {
         const list = playStart(ri, phase);
@@ -3484,6 +3598,15 @@
               via,
               noDetour: setter,
               keepOrder: true,
+              hitter,
+              jobs: {
+                ...pick(approach, (p) => kind[p]),
+                ...pick(deep, () => "deep"),
+                ...pick(setter, () => "cupSet"),
+                ...(cupFront ? { [cupFront]: "cupFront" } : {}),
+                ...(from.L ? { L: "cupBack" } : {}),
+                [hitter]: "hit",
+              },
               notes: {
                 [hitter]: ATTACK_NOTES.hit[0](hitter.startsWith("OH")),
                 ...pick(approach, (p) => ATTACK_NOTES[kind[p]]),
@@ -3513,6 +3636,7 @@
                 y: base[p].y,
               })),
               via: switchVia,
+              base: true,
               notes: {
                 ...pick(order, (p) => ATTACK_NOTES.base(zone(p), isFront(ri, p))),
                 [hitter]: ATTACK_NOTES.hit[1](zone(hitter)),
@@ -3560,11 +3684,18 @@
         const who = st.notes[r] ? r : Object.keys(st.moves || st.notes).find((p) => st.notes[p]);
         return who ? `<b>${who === r ? `You (${r})` : NAMES[who]}:</b> ${st.notes[who]}` : "";
       }
-      // At rest the caption says why you stand where the play ends: at Reception that is base defence.
+      // At rest the caption says why you stand where the play ends: our spike at Reception, base defence at Base.
       function restCaption(ri, phase, tr, r) {
         const last = tr.stages[tr.stages.length - 1];
-        if (phase === "rec" && animated() && last) return stageCaption(last, r);
+        if (last && (phase === "ar" || (phase === "rec" && animated())))
+          return stageCaption(last, r);
         return stageCaption(stillStage(ri, phase), r);
+      }
+      // The caption of the picture a play starts on: Base starts where Reception ends.
+      function leadCaption(ri, phase, r) {
+        if (phase !== "ar") return stageCaption(stillStage(ri, phase), r);
+        const rec = phaseStages(ri, "rec").stages;
+        return rec.length ? stageCaption(rec[rec.length - 1], r) : "";
       }
       function captionHtml(ri, phase, tr) {
         const still = restCaption(ri, phase, tr, role);
@@ -3625,6 +3756,8 @@
           el.setAttribute("opacity", 0.6 * fade);
           el.setAttribute("visibility", "visible");
         });
+        const first = tr.stages[0];
+        if (!ball && first?.ball && a.t < first.start) ball = { ...first.ball, u: 0 };
         a.ball.setAttribute("opacity", ball ? 1 : 0);
         if (ball) {
           const x = (ball.from.x + (ball.to.x - ball.from.x) * ball.u) * W,
@@ -3639,9 +3772,7 @@
           if (phase === "rec" && learnCue)
             $("cue").innerHTML = i < 0 ? learnCue.whistle : learnCue.rest;
           a.stage = i;
-          $("lCap").innerHTML = st
-            ? stageCaption(st, role)
-            : stageCaption(stillStage(ri, phase), role);
+          $("lCap").innerHTML = st ? stageCaption(st, role) : leadCaption(ri, phase, role);
           renderDots();
         }
         $("lCap").style.opacity = Math.min(1, (a.t - (st ? st.start : 0)) / FADE_MS);
@@ -3960,7 +4091,7 @@
           .map((x) => `<li>${x}</li>`)
           .join("")}</ul>`;
         $("rotTable").innerHTML =
-          `<table><thead><tr><th></th><th>Rotation</th><th>Our serve</th><th>Reception</th><th>After reception</th></tr></thead><tbody>${rows}</tbody></table>`;
+          `<table><thead><tr><th></th><th>Rotation</th><th>Our serve</th><th>Reception</th><th>Attack</th></tr></thead><tbody>${rows}</tbody></table>`;
         $("thumbs").innerHTML = thumbs;
       }
 
@@ -4585,7 +4716,7 @@
         start: "Rotate",
         serve: "Our serve",
         rec: "Receive",
-        ar: "After reception",
+        ar: "Attack",
       };
       let G = null;
       const gSettings = store.get("gameSteps", { start: true, serve: true, rec: true, ar: true });
