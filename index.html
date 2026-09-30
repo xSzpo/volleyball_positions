@@ -1820,6 +1820,19 @@
                 ><input type="checkbox" id="nbDrill">
                 Neighbour check (who stands next to you) in reception</label
               >
+              <div
+                class="vis"
+                id="dName"
+                role="radiogroup"
+                aria-label="Name the rotation at Rotate as"
+              >
+                <span class="vislabel">Rotate names</span>
+                <button type="button" role="radio" aria-checked="false" data-n="h">H</button
+                ><button type="button" role="radio" aria-checked="false" data-n="r">R</button
+                ><button type="button" role="radio" aria-checked="false" data-n="mixed">
+                  Mixed
+                </button>
+              </div>
               <div class="row">
                 <button type="button" class="btn quiet" id="resetBtn">Reset my progress</button>
               </div>
@@ -2859,6 +2872,7 @@
         "drill-tab": true,
         "drill-review": true,
         "drill-steps": true,
+        "drill-rotate-name": true,
         "neighbour-check": true,
         "match-solo": true,
         "set-call-check": true,
@@ -2876,6 +2890,7 @@
         "drill-tab": ["learn-tab"],
         "drill-review": ["drill-tab"],
         "drill-steps": ["drill-tab"],
+        "drill-rotate-name": ["drill-tab"],
         "neighbour-check": ["drill-tab"],
         "match-solo": ["learn-tab"],
         "set-call-check": ["match-solo", "sets-tab"],
@@ -2893,6 +2908,7 @@
         "drill-tab": ["tabDrill", "drill"],
         "drill-review": ["reviewRow"],
         "drill-steps": ["dSteps"],
+        "drill-rotate-name": ["dName"],
         "neighbour-check": ["nbDrillCheck", "nbGameCheck"],
         "match-solo": ["tabGame", "game"],
         "set-call-check": ["setGameCheck", "setGameHint"],
@@ -4516,6 +4532,8 @@
       $("dSteps").addEventListener("click", (e) => {
         const b = e.target.closest("button[data-s]");
         if (!b) return;
+        // Some phone browsers keep a focus-visible ring after a tap, which reads as pressed.
+        if (e.detail) b.blur();
         const k = b.dataset.s,
           on = drillPick.includes(k);
         if (on && drillPick.length === 1) return;
@@ -4533,6 +4551,128 @@
         if (dropCurrent) newQuestion();
         else updateScore();
       });
+      const DRILL_NAMES = ["h", "r", "mixed"];
+      let drillName = DRILL_NAMES.includes(store.get("drillName", "mixed"))
+        ? store.get("drillName", "mixed")
+        : "mixed";
+      function renderDrillName() {
+        $("dName")
+          .querySelectorAll("button")
+          .forEach((b) => {
+            b.setAttribute("aria-checked", b.dataset.n === drillName);
+          });
+      }
+      renderDrillName();
+      $("dName").addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-n]");
+        if (!b) return;
+        drillName = b.dataset.n;
+        store.set("drillName", drillName);
+        renderDrillName();
+      });
+      // Rotate from the name alone: you place the setter, yourself, then each overlap partner.
+      let rot = null;
+      function rotStart(ri, role) {
+        const how = drillName === "mixed" ? (Math.random() < 0.5 ? "h" : "r") : drillName;
+        const order = role === "S" ? ["S"] : ["S", role];
+        if (players(ri, "start").some((o) => o.p === role))
+          partners(ri, role, "start").forEach(({ p }) => {
+            if (p && !order.includes(p)) order.push(p);
+          });
+        return {
+          name: how === "h" ? `H${ROWS[ri].setter}` : ROWS[ri].short,
+          order,
+          spots: {},
+          off: false,
+          pick: null,
+        };
+      }
+      function rotPlaced(p) {
+        return p in rot.spots || (p === cur.role && rot.off);
+      }
+      function rotNext() {
+        return rot.pick || rot.order.find((p) => !rotPlaced(p)) || null;
+      }
+      function rotPrompt() {
+        const p = rotNext();
+        if (!p) return "All placed. Tap a marker to move it, or press Continue.";
+        const who =
+          p === cur.role ? "you stand" : p === "S" ? "the setter (S) stands" : `${p} stands`;
+        return `Tap where ${who}.`;
+      }
+      // Once your partners are asked, your own marker stays put: moving it would move their limits.
+      function rotLocked(p) {
+        return p === cur.role && rotPlaced(p) && rot.order.at(-1) !== p;
+      }
+      function rotRefresh() {
+        $("dsub").textContent = rotPrompt();
+        $("nextBtn").disabled = !!rotNext();
+        drawDrill();
+      }
+      // Right is the right zone only: a tap in the next zone is a different rotation spot.
+      function rotGrade(ri, p, tap) {
+        const right = players(ri, "start").find((o) => o.p === p);
+        if (!right || !tap) return right || tap ? "wrong" : "right";
+        const zone = (o) => `${Math.min(2, Math.max(0, Math.floor(o.x * 3)))}${o.y < AL ? 0 : 1}`;
+        return zone(tap) === zone(right) ? "right" : "wrong";
+      }
+      function rotScore() {
+        const grades = rot.order.map((p) => ({
+          p,
+          g: rotGrade(cur.ri, p, p === cur.role && rot.off ? null : rot.spots[p]),
+        }));
+        const ok = grades.every((o) => o.g === "right");
+        record(ok);
+        $("dsub").textContent = "Dots are your taps; the markers stand where they should.";
+        $("nextBtn").textContent = "Next";
+        $("nextBtn").disabled = false;
+        drawDrill();
+        feedback(ok ? "good" : "bad", ok ? "Spot on" : "Not there");
+        $("fb").insertAdjacentHTML(
+          "beforeend",
+          `<p class="rotgrades" style="margin:4px 0 0">${grades.map(({ p, g }) => `${p === cur.role ? "You" : p}: ${g}`).join(" · ")}</p>`,
+        );
+        const pl = players(cur.ri, "start");
+        const limits =
+          pl.some((o) => o.p === cur.role) &&
+          limitsSentence(cur.ri, cur.role, "start", boundLines(cur.ri, pl, cur.role, "start"));
+        if (limits)
+          $("fb").insertAdjacentHTML(
+            "beforeend",
+            `<p class="lim" style="margin:4px 0 0">${limits}</p>`,
+          );
+      }
+      function drawRotate() {
+        const pl = players(cur.ri, "start"),
+          me = cur.role;
+        let s = DEFS + courtBase(answered ? !pl.some((o) => o.p === me) : rot.off);
+        if (!answered) {
+          rot.order.forEach((p) => {
+            const tap = rot.spots[p];
+            if (tap) s += chip({ p, ...tap }, { me: p === me, dim: p === rot.pick });
+          });
+          return s;
+        }
+        s += rotArrows();
+        pl.forEach((o) => {
+          if (!rot.order.includes(o.p)) s += chip(o, { dim: true });
+        });
+        s += boundLines(cur.ri, pl, me, "start").lines.join("");
+        rot.order.forEach((p) => {
+          const tap = rot.spots[p],
+            right = pl.find((o) => o.p === p);
+          if (tap && right)
+            s += `<line class="rotmiss" x1="${tap.x * W}" y1="${tap.y * H}" x2="${right.x * W}" y2="${right.y * H}" stroke="var(--net-label)" stroke-width="0.5" stroke-dasharray="1 1" opacity=".7"/>`;
+          if (tap) s += tapMark(tap);
+        });
+        rot.order.forEach((p) => {
+          const right = pl.find((o) => o.p === p);
+          if (right) s += chip(right, { me: p === me });
+        });
+        return s;
+      }
+      const ROT_HINT =
+        '<p class="hint">Place each marker in turn; tap a placed one to move it. If the libero is in for you, press “I\'m off court”.</p>';
       const HINT =
         '<p class="hint">Tap the court where you stand. If the libero is in for you, press “I\'m off court”.</p>';
       function weakKeys() {
@@ -4562,6 +4702,7 @@
         newQuestion();
       }
       function newQuestion() {
+        rot = null;
         lastTap = null;
         dLimits = false;
         dNb = null;
@@ -4609,19 +4750,25 @@
             }) || pool[0];
         }
         answered = false;
-        $("nextBtn").hidden = true;
-        $("nextBtn").textContent = "Next";
+        if (cur.phase === "start" && feature("drill-rotate-name")) rot = rotStart(cur.ri, cur.role);
+        $("nextBtn").hidden = !rot;
+        $("nextBtn").textContent = rot ? "Continue" : "Next";
+        $("nextBtn").disabled = !!rot;
         $("offBtn").disabled = false;
         $("dq").textContent =
-          `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${ROWS[cur.ri].name} · ${FULL[cur.phase]}`;
+          `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${rot ? rot.name : ROWS[cur.ri].name} · ${FULL[cur.phase]}`;
         $("dsub").textContent =
-          `${cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? arQuestion(cur.ri, cur.role) : cur.phase === "serve" ? serveQuestion(cur.ri, cur.role) : "Where do you stand?"}`;
+          `${rot ? rotPrompt() : cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? arQuestion(cur.ri, cur.role) : cur.phase === "serve" ? serveQuestion(cur.ri, cur.role) : "Where do you stand?"}`;
         $("fb").className = "fb";
-        $("fb").innerHTML = HINT;
+        $("fb").innerHTML = rot ? ROT_HINT : HINT;
         drawDrill();
         updateScore();
       }
       function drawDrill(tap) {
+        if (rot) {
+          $("courtD").innerHTML = drawRotate();
+          return;
+        }
         const pl = answerSpots(cur.ri, cur.phase);
         let s = DEFS + courtBase(answered && !pl.some((o) => o.p === cur.role));
         if (answered && cur.phase === "start") s += rotArrows();
@@ -4726,6 +4873,24 @@
         const p = svgPoint($("courtD"), e);
         if (onPill(p)) return $("offBtn").click();
         const tap = { x: p.x / W, y: p.y / H };
+        if (rot) {
+          const hit = rot.order.find(
+            (q) =>
+              rot.spots[q] &&
+              Math.hypot(rot.spots[q].x - tap.x, rot.spots[q].y - tap.y) * W <= MARKER_R + 1,
+          );
+          if (hit && rotLocked(hit)) return;
+          if (hit && hit !== rot.pick) rot.pick = hit;
+          else {
+            const q = rotNext();
+            if (q) {
+              rot.spots[q] = tap;
+              if (q === cur.role) rot.off = false;
+              rot.pick = null;
+            }
+          }
+          return rotRefresh();
+        }
         lastTap = tap;
         const me = answerSpots(cur.ri, cur.phase).find((o) => o.p === cur.role);
         if (!me) {
@@ -4757,6 +4922,15 @@
       });
       $("offBtn").onclick = () => {
         if (answered) return;
+        if (rot) {
+          if (rotLocked(cur.role)) return;
+          rot.off = !rot.off;
+          if (rot.off) {
+            delete rot.spots[cur.role];
+            if (rot.pick === cur.role) rot.pick = null;
+          }
+          return rotRefresh();
+        }
         const me = answerSpots(cur.ri, cur.phase).find((o) => o.p === cur.role);
         if (!me) {
           record(true);
@@ -4768,7 +4942,7 @@
           feedback("bad", "No, you are on court");
         }
       };
-      $("nextBtn").onclick = newQuestion;
+      $("nextBtn").onclick = () => (rot && !answered ? rotScore() : newQuestion());
       $("reviewBtn").onclick = startReview;
       $("resetBtn").onclick = () => {
         stats = {};
@@ -4783,7 +4957,10 @@
         $("dstreak").textContent = streak;
         const weak = weakKeys().map((k) => {
           const [, i, ph] = k.split("|");
-          return `${ROWS[i].name} ${FULL[ph].toLowerCase()}`;
+          // The Rotate question names the rotation one way, so this list must not pair R with H.
+          const name =
+            ph === "start" && feature("drill-rotate-name") ? ROWS[i].short : ROWS[i].name;
+          return `${name} ${FULL[ph].toLowerCase()}`;
         });
         const tried = Object.keys(stats).some((k) => k.split("|")[0] === role);
         const last = store.get("lastPractice", 0),
