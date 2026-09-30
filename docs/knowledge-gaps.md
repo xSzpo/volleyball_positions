@@ -254,6 +254,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** put the exchange text in the explanation below the court.
 - **Reversible by:** `stillStage()` and `phaseStages()` in `src/template.html`.
 - **Changed by entry 50 (#60):** at Reception with the animation on, this caption shows in the play's lead-in; at rest the caption is the base defence line.
+- **Changed back by entry 55 (#65):** Reception rests on the reception spots again, with this caption.
 
 ### 32. The server stands behind the end line in the Our serve picture
 
@@ -268,7 +269,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #47
 - **Problem:** At rest and while their serve is in the air, players stand on their reception spot, but the R1 opposite's `rec` note said "Go to the left sideline …".
-- **Decision:** The R1 OP note now reads "Stand at the left sideline on the 3 m line: in R1 the opposite plays left." Every other `rec` note already says Stand, Receive, Hide or Start. Since #60 these notes show in the Reception lead-in, where players stand on their reception spot, and with reduced motion. The Our serve notes ("Cross to zone 4 …") are kept: the owner likes that content, and the audit ties them to the zone.
+- **Decision:** The R1 OP note now reads "Stand at the left sideline on the 3 m line: in R1 the opposite plays left." Every other `rec` note already says Stand, Receive, Hide or Start. These notes show on the Reception still picture, where players stand on their reception spot (since #65; in #60 and #55 only in the play's lead-in), and with reduced motion. The Our serve notes ("Cross to zone 4 …") are kept: the owner likes that content, and the audit ties them to the zone.
 - **Alternatives:** show a `rec` note only to a player who moves in that stage (most players would then see the setter's caption).
 - **Reversible by:** the R1 `move["rec"]["OP"]` note in `src/data.py`.
 
@@ -385,7 +386,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #53
 - **Problem:** Moves were straight lines of 600 to 900 ms whatever the distance, so long runs went at 10 m/s and markers passed through each other (R1 OP and OH1 at the spike).
-- **Decision:** Each move takes 2.5 s per court width (at least 400 ms), eased in and out over a quarter each, so the top speed is about 4.8 m/s (1 unit = 9 m). A planner places the movers one by one, shortest move first, each with the cheapest start delay (0 to 1.3 s) and path that keeps a marker width plus its ring (`GAP`, 0.14) from everyone at every 15 ms. A path is straight or goes round one player met through one waypoint, 1.3 or 1.7 `GAP` to the side; it never turns back and is at most 1.3 times the straight line. Going round in front costs more than any wait (`NET_SIDE_COST`), so players pass behind each other. After the spike, front-row players who switch sides (R1 OP and OH1) pass behind the middle through fixed waypoints (`SWITCH_VIA`), the one going left deeper, so they cross once. Moves under 0.04 left by a `clearOf()` stop are dropped, except in the last stage, which ends exactly on base defence. A stage lasts as long as its longest move. Reception takes 6.5 to 8 s at 1× and Base 2 to 4.5 s (since #55; before, Reception ran 6.5 to 10 s including the spike). The only waits: the setter at the contact in R2 (1 s, entry 43), L after the pass in R1 (0.3 s), OH1 at the spike in R1 (0.15 s), and the setter at the set (0.45 to 0.6 s), so it follows the ball.
+- **Decision:** Each move takes 2.5 s per court width (at least 400 ms), eased in and out over a quarter each, so the top speed is about 4.8 m/s (1 unit = 9 m). A planner places the movers one by one, shortest move first, each with the cheapest start delay (0 to 1.3 s) and path that keeps a marker width plus its ring (`GAP`, 0.14) from everyone at every 15 ms. A path is straight or goes round one player met through one waypoint, 1.3 or 1.7 `GAP` to the side; it never turns back and is at most 1.3 times the straight line. Going round in front costs more than any wait (`NET_SIDE_COST`), so players pass behind each other. After the spike, front-row players who switch sides (R1 OP and OH1) pass behind the middle through fixed waypoints (`SWITCH_VIA`), the one going left deeper, so they cross once. Moves under 0.04 left by a `clearOf()` stop are dropped, except in the last stage, which ends exactly on base defence. A stage lasts as long as its longest move. Reception takes 7.5 to 11 s at 1× including the spike and base defence (since #65; in #55 it stopped at the spike, 6.5 to 8 s), and Base 2 to 4.5 s. The only waits: the setter at the contact in R2 (1 s, entry 43), L after the pass in R1 (0.3 s), OH1 at the spike in R1 (0.15 s), and the setter at the set (0.45 to 0.6 s), so it follows the ball.
 - **Alternatives:** faster runs (5 to 7 m/s, closer to a real sprint but hard to follow); straight lines with waits only; fixed choreographed routes per rotation.
 - **Reversible by:** `MS_PER_UNIT`, `EASE_PART`, `GAP`, `MIN_MOVE`, `DELAYS`, `NET_SIDE_COST`, `SWITCH_VIA`, `detours()` and `planStage()` in `src/template.html`.
 
@@ -413,6 +414,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** keep the reception spots as the Reception rest picture (the "end" of getting ready to receive) and stop the play there or snap back; draw the reception spots as ghosts under base defence.
 - **Reversible by:** `renderLearn()` (`played`, `drawn`), `restCaption()`, `LEAD_MS`, `playStart()` and `nudgePlay()` in `src/template.html`.
 - **Updated in #55:** the play is split at the spike. Reception rests on our spike (attackers on their `ar` spots, the cover formed) with a cue for your job at the spike; the reception text and overlap limits stay in the lead-in. Base plays the spike to base defence and rests there, with the controls and the Play nudge (entry 51).
+- **Reversed for Reception in #65:** the owner: "It should show how players are positioned to receive the ball, not how they are positioned after the ball has been received. On serve it makes sense to show positions after the serve, because there are no position faults there. On reception I want to learn how to prepare to receive the serve, and the animation shows what to do after. When the animation is done, it should fade out and show the serve-receive positions again." Reception rests on the reception spots with the overlap limits and the reception cue (entry 55). Our serve and Base still rest where their play ends.
 - **Updated in #64:** the owner saw the pulse move the whole layout. The nudge is now colour only (fill and border to `--accent`, icon `--on-accent`); the layout moved because the setup sheet's `.nudge` rule (margin, padding, border) also matched Play, which is now scoped to `#setupNudge`.
 
 ### 51. Learn's fourth screen is Base; Drill and Match call the step Attack
@@ -422,6 +424,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** In Learn the `ar` step is Base: the phase chip, the title tag ("R1 (S1) · Base") and Next on Reception ("Base ▸"). Reception plays serve, pass and set and rests on the spike frame; Base plays one stage, the spike to base defence by job (`baseSpots()` on `BASE_DEF`), and rests there. Base draws no routes and no overlap limits; its cue reads "Our attack is over the net: defend." and says when the spot is the same as after our serve. In Drill, Match and the all-rotations table the same step is "Attack" and still grades the `ar` spots. A Drill/Match Defend step is #62.
 - **Alternatives:** keep After reception and stop Reception at the pass; add Base as a fifth Learn step and keep After reception.
 - **Reversible by:** `PHASES`, `LEARN_NAME`, `FULL`, `STEP_SHORT`, `cutPlay()`, `learnPlayers()`, `baseCue()` in `src/template.html`.
+- **Changed in #65:** Reception plays on through the spike to base defence again and rests on the reception spots; Base keeps its screen and replays that last stage (entry 56).
 
 ### 52. The front row at base after our attack
 
@@ -438,6 +441,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** At rest the cue gives your job at the spike (`SPIKE_CUE`: hit, approach to hold the block, close cover, setter cover, L cover, deep cover), with the hitter named; the reception text and overlap limits show in the lead-in, also when paused there. With reduced motion or `?anim=0` Reception keeps the reception spots, text and limits.
 - **Alternatives:** keep the reception text at rest under a spike picture.
 - **Reversible by:** `spikeCue()`, `SPIKE_CUE` and `learnCue` in `renderLearn()` in `src/template.html`.
+- **Reversed in #65:** Reception rests on the reception spots, so the cue is the reception text with the overlap limits again; `spikeCue()`, `SPIKE_CUE` and `learnCue` are gone. The owner: "On reception I want to learn how to prepare to receive the serve, and the animation shows what to do after." The spike jobs stay in the stage captions.
 
 ### 54. Where the ball shows on the still pictures
 
@@ -446,3 +450,20 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The ball rests where the play leaves it: over the net on their side at Our serve (`SERVE_BALL`) and Base (`SPIKE_BALL`), at the hitter's hand at Reception (at the marker edge). With no animation Reception shows it at their serve (`THEIR_SERVE`). In a lead-in the ball waits where the first stage starts: with our server, at their serve, or at the hitter's hand. The tests check it stays a marker radius from every marker.
 - **Alternatives:** the ball only at Reception; the ball in the passer's hands at Reception.
 - **Reversible by:** `restBall()`, `ballSvg()` and `paintAnim()` in `src/template.html`.
+- **Changed in #65:** Reception shows no ball at rest, with or without the animation: the still is the whistle picture. In its play the ball starts at their serve and ends over the net on their side (`SPIKE_BALL`).
+
+### 55. Reception rests on the reception spots and fades back after the play
+
+- **Issue:** #65
+- **Problem:** The owner wants Reception to show how to stand to receive, play what happens after, and come back to the reception picture. #60 and #55 rested it on the spike and put the reception spots in a 700 ms lead-in.
+- **Decision:** At rest Reception shows the `rec` spots with your overlap limit lines, the reception cue with the overlap text and no ball, in every rotation, both rule sets and with or without the animation. Play has no lead-in: the still is already the whistle picture, so the serve starts at once and the lines go. It plays four stages: serve, pass, set, then the spike over the net with everyone to base defence. When Play runs to the end, the markers, trails and ball fade out over 400 ms and the markers and lines fade back in. Pause keeps its frame. Step stops at the end of each stage and stays on the last one; Play or Replay runs on from there. During the fade-back, Play and Step start the play again.
+- **Alternatives:** keep the 700 ms lead-in on the reception spots; snap back without a fade; let Step on the last stage fade back.
+- **Reversible by:** `phaseStages()` (`fadeBack`, the `0` lead), `fadeBack()`, `animStep()` and the `played` check in `renderLearn()` in `src/template.html`.
+
+### 56. Base replays the last Reception stage
+
+- **Issue:** #65
+- **Problem:** Reception now plays on to base defence, so Base's play (the spike to base defence) repeats Reception's last stage.
+- **Decision:** Keep Base as it is: its own screen after Reception, resting on base defence with the ball over the net and the "Our attack is over the net: defend." cue. Its play starts on the spike picture after a 700 ms lead-in and plays the same last stage. The repeat is short (2 to 4.5 s) and lets you look at base defence on its own; Drill and Match still grade the `ar` spots as Attack.
+- **Alternatives:** drop Base's play and keep only its still picture; remove the Base screen from Learn.
+- **Reversible by:** `cutPlay()` and `learnPlayers()` in `src/template.html`.

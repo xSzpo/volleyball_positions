@@ -76,14 +76,14 @@ def fail(message: str) -> None:
     print("FAIL:", message, flush=True)
 
 
-def open_app(page: Page, stored: dict[str, str]) -> None:
-    page.goto(URL)
+def open_app(page: Page, stored: dict[str, str], url: str = URL) -> None:
+    page.goto(url)
     page.evaluate(
         "(s) => { localStorage.clear();"
         " for (const [k, v] of Object.entries(s)) localStorage.setItem('ksv51:' + k, JSON.stringify(v)); }",
         stored,
     )
-    page.goto(URL)
+    page.goto(url)
     page.wait_for_function("document.readyState === 'complete' && !!document.querySelector('#lNext')")
     page.click("#tabLearn")
 
@@ -174,6 +174,29 @@ def check_walk(page: Page, mode: str, role: str) -> None:
             page.click("#lNext")
     if page.inner_text("#learnTag") != f"{ROTATION_NAMES[0]} · {PHASE_NAMES['start']}":
         fail(f"{mode} {role}: Next after R6 Base shows {page.inner_text('#learnTag')!r}")
+
+
+def check_reception_animated(page: Page) -> None:
+    """With the animation on, Reception rests on the reception spots with the overlap lines and no ball."""
+    for mode, roles in MODES.items():
+        for role in roles:
+            open_app(page, {"role": role, "rulesMode": mode}, URL.replace("&anim=0", ""))
+            for rotation in range(6):
+                learn(page, rotation, "rec")
+                check_step(page, mode, role, rotation, "rec")
+                tag = f"{mode} {role} {ROTATION_NAMES[rotation]} animated Reception"
+                got: dict[str, list[float]] = page.evaluate(
+                    """() => Object.fromEntries([...document.querySelectorAll('#courtL .mk')].map((g) => {
+                    const c = [...g.querySelectorAll('circle')].filter((e) => !e.classList.contains('hit')).pop();
+                    return [g.dataset.p, [+c.getAttribute('cx') / 100, +c.getAttribute('cy') / 100]]; }))"""
+                )
+                want = {o["p"]: [o["x"], o["y"]] for o in page.evaluate(f"window.ksvLearn.players({rotation}, 'rec')")}
+                if sorted(got) != sorted(want) or any(
+                    abs(got[p][0] - want[p][0]) > 1e-3 or abs(got[p][1] - want[p][1]) > 1e-3 for p in want
+                ):
+                    fail(f"{tag}: markers {got}, expected {want}")
+                if page.locator("#courtL .ball").count():
+                    fail(f"{tag}: a ball on the still")
 
 
 def check_next_in_view(page: Page) -> None:
@@ -396,6 +419,7 @@ def main() -> None:
         for mode, roles in MODES.items():
             for role in roles:
                 check_walk(page, mode, role)
+        check_reception_animated(page)
         check_next_in_view(page)
         check_texts(page)
         check_rules_of_thumb(page)
