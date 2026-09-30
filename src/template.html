@@ -2820,9 +2820,12 @@
             from: st.src,
             to: st.moves,
             notes: st.notes,
-            ball: st.ball ? { from: st.ball.from, to: st.ball.to } : null,
+            ball: st.ball ? { from: st.ball.from, to: st.ball.to, ms: st.ball.ms } : null,
             paths: Object.fromEntries(Object.entries(st.mv).map(([p, m]) => [p, m.path])),
             delays: Object.fromEntries(Object.entries(st.mv).map(([p, m]) => [p, m.delay])),
+            arrive: Object.fromEntries(
+              Object.entries(st.mv).map(([p, m]) => [p, m.delay + m.glide]),
+            ),
             start: st.start,
             dur: st.dur,
           })),
@@ -3114,7 +3117,7 @@
       const RECEIVERS = ["OH1", "OH2", "L"];
       const PASSER = ["L", "OH2", "OH1", "L", "OH1", "OH2"];
       // The middle's cover spot beside the hitter, and the setter's step after the set.
-      const CUP_FRONT = { dx: 0.24, y: 0.15 };
+      const CUP_FRONT = { dx: 0.24, y: 0.2 };
       const SETTER_STEP = { dx: -0.1, dy: 0.1 };
       const ATTACK_NOTES = {
         hit: [
@@ -3126,7 +3129,8 @@
         ],
         front: "Run your approach too: the block must watch you.",
         back: "Approach behind the 3 m line too: the block must watch you.",
-        cupFront: (hitter) => `Approach for the quick, then drop in low to cover ${hitter}.`,
+        quick: "Run in for the quick in front of the setter as the pass comes.",
+        cupFront: (hitter) => `Fake the quick, then drop in low to cover ${hitter}.`,
         cupSet: (hitter) => `Set ${hitter} in zone 4, then follow a step or two to cover the tip.`,
         cupBack: (hitter) => `Cover ${hitter} from zone 5: play a ball the block sends back.`,
         deep: "Stay deep behind the cover: a ball off the block can fly far.",
@@ -3459,6 +3463,21 @@
         const front = attackers.filter((p) => kind[p] === "front");
         const hitter = front.reduce((a, p) => (a == null || to[p].x < to[a].x ? p : a), null);
         const hit = hitter && { x: to[hitter].x, y: HIT_Y };
+        const cupFront =
+          hit && setSpot
+            ? order
+                .filter((p) => isFront(ri, p) && p !== hitter && kind[p] !== "set")
+                .reduce(
+                  (a, p) =>
+                    a == null || Math.abs(to[p].x - hit.x) < Math.abs(to[a].x - hit.x) ? p : a,
+                  null,
+                )
+            : null;
+        // The middle takes off for the quick as the pass reaches the setter.
+        const takeOff = cupFront && {
+          x: Math.min(to[cupFront].x, setSpot.x - 0.15),
+          y: APPROACH_Y,
+        };
         // Movement is free from the server's first movement: everyone who does not receive leaves at once.
         const released = [...setter, ...attackers.filter((p) => !receivers.includes(p))];
         stages.push({
@@ -3477,7 +3496,7 @@
         });
         const second = passer ? [passer, ...order.filter((p) => p !== passer)] : order;
         stages.push({
-          moves: pick(second, (p) => to[p]),
+          moves: pick(second, (p) => (p === cupFront ? takeOff : to[p])),
           notes: {
             ...pick(
               receivers.filter((p) => p !== passer),
@@ -3485,28 +3504,22 @@
             ),
             ...(passer ? { [passer]: kind[passer] === "front" ? PASS_ATTACK : PASS_TEXT } : {}),
             ...pick(setter, () => SET_TEXT(passer)),
+            ...(cupFront ? { [cupFront]: ATTACK_NOTES.quick } : {}),
           },
           team: passer ? `${passer} passes to the setter.` : "",
           ball: passer &&
-            setSpot && { from: touch(from[passer], setSpot), to: touch(setSpot, hit) },
+            setSpot && {
+              from: touch(from[passer], setSpot),
+              to: touch(setSpot, hit),
+              sync: cupFront,
+            },
         });
         if (hitter && setSpot) {
-          const near = (ps) =>
-            ps.reduce(
-              (a, p) =>
-                a == null || Math.abs(to[p].x - hit.x) < Math.abs(to[a].x - hit.x) ? p : a,
-              null,
-            );
-          const cupFront = near(
-            order.filter((p) => isFront(ri, p) && p !== hitter && kind[p] !== "set"),
-          );
           const approach = attackers.filter((p) => p !== hitter && p !== cupFront);
           const deep = order.filter((p) => !kind[p] && p !== "L" && !isFront(ri, p));
           const moves = { [hitter]: hit };
-          const via = {};
           if (cupFront) {
             moves[cupFront] = { x: Math.min(0.9, hit.x + CUP_FRONT.dx), y: CUP_FRONT.y };
-            via[cupFront] = [{ x: Math.min(to[cupFront].x, setSpot.x - 0.15), y: APPROACH_Y }];
           }
           setter.forEach((p) => {
             moves[p] = { x: setSpot.x + SETTER_STEP.dx, y: setSpot.y + SETTER_STEP.dy };
@@ -3520,7 +3533,6 @@
           const spike = touch(hit, SPIKE_BALL, HELD);
           stages.push({
             moves,
-            via,
             noDetour: setter,
             keepOrder: true,
             notes: {
