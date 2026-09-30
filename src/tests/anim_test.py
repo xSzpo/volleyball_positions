@@ -29,7 +29,7 @@ from playwright.sync_api import Browser, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from data import BASE_DEF, lineup  # noqa: E402
+from data import ATTACK_LINE, BASE_DEF, lineup  # noqa: E402
 
 BASE = (ROOT / "index.html").as_uri()
 FAIL: list[str] = []
@@ -730,6 +730,25 @@ def check_reception_ends(page: Page) -> None:
                 fail(f"{tag}: the last stage is not {hitter}'s spike: {final['notes'].get(hitter)!r}")
             if not final["ball"] or not final["ball"]["to"]["y"] < 0:
                 fail(f"{tag}: the last stage does not play the ball over the net: {final['ball']}")
+
+
+def check_quick_in_front(page: Page) -> None:
+    """Every rotation, both rule sets: from the pass to the set the front middle stays in front of the 3 m line.
+
+    The quick opens in the middle of the front zone, so the back-row hitter's lane on the 3 m line stays clear.
+    """
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            row = lineup(ri, mode)  # type: ignore[arg-type]
+            middle = next(p for p in row["front"] if p.startswith("MB"))
+            stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")
+            track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, 'rec', 600)")
+            pass_at, set_at = stages[1]["start"], stages[2]["start"]
+            deepest = max(s["pos"][middle]["y"] for s in track if pass_at <= s["t"] <= set_at)
+            if deepest >= ATTACK_LINE - 0.05:
+                fail(f"{mode} R{ri + 1}: {middle} goes back to y {deepest:.2f} between the pass and the set")
+    print("quick: the front middle stays in front of the 3 m line from the pass to the set", flush=True)
 
 
 def check_ball_moving(page: Page) -> None:
@@ -1515,6 +1534,7 @@ def main() -> None:
         check_static(page)
         check_reception_stages(page)
         check_reception_ends(page)
+        check_quick_in_front(page)
         check_ball_moving(page)
         check_caption_timing(page)
         check_rest_list(page)
