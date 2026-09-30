@@ -33,12 +33,12 @@ def fail(message: str) -> None:
     print("FAIL:", message, flush=True)
 
 
-def new_page(browser: Browser, rules: str = "simple") -> Page:
+def new_page(browser: Browser, rules: str = "simple", query: str = "?ff=all&anim=0") -> Page:
     page = browser.new_page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
     page.add_init_script(SEED_ROLE)
     page.add_init_script(f"localStorage.setItem('ksv51:rulesMode', JSON.stringify('{rules}'))")
     page.on("pageerror", lambda error: FAIL.append(f"page error: {error}"))
-    page.goto(URL)
+    page.goto(URL.split("?")[0] + query)
     page.wait_for_timeout(300)
     return page
 
@@ -292,10 +292,32 @@ def check_hint_rule_numbers(browser: Browser) -> None:
             hint = page.inner_text("#gFb")
             cited = re.search(r"rule (\d+) of the Rules of thumb", hint)
             titles: list[str] = page.eval_on_selector_all("#thumbs li > b", "els => els.map(e => e.textContent)")
-            if not cited or title not in titles[int(cited[1]) - 1]:
+            number = int(cited[1]) if cited else 0
+            if not 1 <= number <= len(titles) or title not in titles[number - 1]:
                 fail(f"{rules} {role} R{rotation + 1} hint {hint!r} does not cite {title!r} in {titles}")
             page.close()
     print("hint rule numbers: each cited rule of thumb is the right one", flush=True)
+
+
+def check_hints_without_guides(browser: Browser) -> None:
+    """With Rules of thumb off, the hints give the advice without citing a rule."""
+    cases = (("OH1", 0, "The front-row outside starts left"), ("L", 0, "The libero finishes"), ("OP", 3, "Go straight"))
+    for role, rotation, advice in cases:
+        page = new_page(browser, query="?ff=all,-learn-guides&anim=0")
+        setup_match(page, role, ("ar",), sets=False)
+        page.click("#gStart")
+        for _ in range(rotation):
+            page.wait_for_selector("#gOff:enabled")
+            tap_at(page, 0.5, 0.5)
+            press_next(page)
+            press_next(page)
+        page.wait_for_selector("#gOff:enabled")
+        page.click("#gHelp")
+        hint = " ".join(page.inner_text("#gFb").split())
+        if "rule" in hint.lower() or "Remember" in hint or f". {advice}" not in hint or not hint.endswith("."):
+            fail(f"{role} R{rotation + 1} hint without Rules of thumb reads {hint!r}")
+        page.close()
+    print("hints without Rules of thumb: advice only, no rule cited", flush=True)
 
 
 def check_match_order(browser: Browser) -> None:
@@ -658,6 +680,7 @@ def main() -> None:
         check_match_order(browser)
         check_libero_hint(browser)
         check_hint_rule_numbers(browser)
+        check_hints_without_guides(browser)
         check_set_calls(browser)
         check_tap_then_continue(browser)
         check_breakdown(browser)

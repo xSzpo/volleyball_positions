@@ -3692,9 +3692,12 @@
         t.d = lab(t.d);
       });
       // Hints cite a rule of thumb by key, so its number follows the list order.
-      function thumbRef(key) {
+      function thumbRef(key, advice) {
         const n = THUMB.findIndex((t) => t.k === key) + 1;
-        return feature("learn-guides") ? `Remember rule ${n} of the Rules of thumb` : "Remember";
+        if (!n) throw new Error(`No rule of thumb "${key}"`);
+        return feature("learn-guides")
+          ? `Remember rule ${n} of the Rules of thumb: ${advice}.`
+          : `${advice[0].toUpperCase()}${advice.slice(1)}.`;
       }
       function ruleText(x) {
         const off = rulesMode === "official";
@@ -4692,13 +4695,13 @@
         if (st.phase === "ar") {
           if (me.kind === "set") return "You are the setter: where do you set from?";
           if (me.kind === "back")
-            return `You are the back-row opposite. ${thumbRef("opposite")}: go straight to zone 1 and take off behind the 3 m line.`;
+            return `You are the back-row opposite. ${thumbRef("opposite", "go straight to zone 1 and take off behind the 3 m line")}`;
           if (me.kind === "front")
             return G.role.startsWith("MB")
               ? "You are front-row middle: you attack. Which lane?"
-              : `You attack. ${thumbRef("outside-left")}: the front-row outside starts left, except when the setter is in 1.`;
+              : `You attack. ${thumbRef("outside-left", "the front-row outside starts left, except when the setter is in 1")}`;
           return G.role === "L"
-            ? `You don't attack: cover the hitter, then take your defensive spot. ${thumbRef("back-cover")}.`
+            ? `You don't attack: cover the hitter, then take your defensive spot. ${thumbRef("back-cover", "the libero finishes in zone 5 after the attack")}`
             : "You are back row and don't attack now: cover the attack. The libero takes left back.";
         }
         return `When we serve there is no overlap rule, so everyone except the server stands in base defence before the serve: the front row in the middle of its zones, the back row deep. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;

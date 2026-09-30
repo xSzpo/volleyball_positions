@@ -212,7 +212,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** The Volleyball Danmark rule from 1 October 2026 moves the overlap check to the referee's whistle, and lets players move from the server's first movement. The plan does not give the on-screen words, and the Rotation step shows our lineup before our own serve, when no overlap rule applies.
 - **Decision:** One sentence, "From the server's first movement you may move.", after every overlap text. Rotation: "These limits count at the referee's whistle when they serve." Reception: "These limits count at the whistle, not during the pass." The neighbour check asks "… at the whistle?". The first rule of thumb covers both teams in one entry, so the numbers the Match hints cite ("rule 2", "rule 4") do not shift.
 - **Alternatives:** a new rule of thumb for the receiving team; say "service motion" instead of "first movement".
-- **Reversible by:** `WHISTLE_MOVE`, `OVERLAP_WHEN`, `THUMB`, `neighbourQ()` and the `#checks` fold in `src/template.html`.
+- **Reversible by:** `WHISTLE_MOVE`, `OVERLAP_WHEN`, `THUMB` and `neighbourQ()` in `src/template.html`. The `#checks` fold was deleted in #23.
 
 ### 27. Setter release after the serve kept
 
@@ -331,6 +331,6 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #23
 - **Problem:** The issue asks for Rules of thumb worded for both rule sets (MB, SUB, libero). The five v1 rules read the same in both; none says who plays the middle, and the Match hints cited rules by a fixed number that was one too low.
-- **Decision:** A new third rule on the middles, with one wording per rule set: Simplified "MB plays the front middle, L the back middle" (the pair reset into R3 and R6, SUB serves there), Official "The libero replaces the back-row middle" (which middle per rotation, the libero may never serve, the middle serves in R3 and R6 until the side-out, FIVB 19.3). It is marked "your rule" for the middles and the libero. The other five keep their v1 text. Each rule has a key; the hints cite "rule N of the Rules of thumb" from the key, and just "Remember" when `learn-guides` is off. The fold stays closed by default, as in v1.
+- **Decision:** A new third rule on the middles, with one wording per rule set: Simplified "MB plays the front middle, L the back middle" (the pair reset into R3 and R6, SUB serves there), Official "The libero replaces the back-row middle" (which middle per rotation, the libero may never serve, the middle serves in R3 and R6 until the side-out, FIVB 19.3). It is marked "your rule" for the middles and the libero. The other five keep their v1 text. Each rule has a key; the hints cite "rule N of the Rules of thumb" from the key; when `learn-guides` is off they give the advice without a rule number. The fold stays closed by default, as in v1.
 - **Alternatives:** keep five rules and add the middle text to rule 2; cite rules by title only.
 - **Reversible by:** `THUMB`, `thumbRef()` and `@THUMB_MIDDLES_*` in `ruleText()` in `src/template.html`.
