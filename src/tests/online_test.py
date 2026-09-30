@@ -43,6 +43,8 @@ PROJECT = "ksv-volleyball-xszpo"
 NAMESPACE = f"{PROJECT}-default-rtdb"
 PORTS = (9000, 9099)
 NB_GRACE_MS = 5000
+# Longer than set_calls takes under load, so only a player's answer can open its reveal.
+SET_CALLS_GRACE_MS = 120000
 LIVE, STALE, FRESH = "111111", "000042", "000043"
 EVIL_UID = "EvilEvilEvilEvilEvilEvil0000"
 OLD_UID = "OldOldOldOldOldOldOldOld0000"
@@ -946,13 +948,14 @@ def main() -> None:
     emulator_db = os.environ["FIREBASE_DATABASE_EMULATOR_HOST"]
     emulator_auth = os.environ["FIREBASE_AUTH_EMULATOR_HOST"]
     check_rules(emulator_db)
-    url = f"{serve()}/index.html?emu={emulator_db},{emulator_auth}&nbgrace={NB_GRACE_MS}&ff=all&anim=0"
+    base = f"{serve()}/index.html?emu={emulator_db},{emulator_auth}&ff=all&anim=0"
+    url = f"{base}&nbgrace={NB_GRACE_MS}"
     errors: list[str] = []
     with sync_playwright() as p:
         browser = p.chromium.launch()
         host, guest = main_match(browser, url, emulator_db, errors)
         takeover(host, guest, browser, url, emulator_db, errors)
-        set_calls(browser, url, emulator_db, errors)
+        set_calls(browser, f"{base}&nbgrace={SET_CALLS_GRACE_MS}", emulator_db, errors)
         failed_join(browser, url, emulator_db, errors)
         browser.close()
     assert not errors, errors
