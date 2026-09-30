@@ -2544,15 +2544,14 @@
         return out;
       }
       const SERVE_SPOT = [0.88, 1.1];
-      // With atSpot the server's marker stands on the serve spot, so the label and route clear it.
-      function serveLayer(ri, pl, role, atSpot = false) {
+      function serveLayer(ri, pl, role) {
         const o = pl.find((x) => x.p === server(ri));
         if (!o) return "";
         const [fx, fy] = SERVE_SPOT;
-        const gap = atSpot ? MARKER_R + 0.5 : 1.8;
+        const gap = 1.8;
         const [a, b, c, d] = shorten(fx * W, fy * H, o.x * W, o.y * H, gap);
         return (
-          `<text x="${fx * W - (atSpot ? gap + 1 : 3)}" y="${fy * H + 1.3}" text-anchor="end" font-size="3.8" fill="var(--net-label)" font-family="Barlow,sans-serif">serve</text>` +
+          `<text x="${fx * W - 3}" y="${fy * H + 1.3}" text-anchor="end" font-size="3.8" fill="var(--net-label)" font-family="Barlow,sans-serif">serve</text>` +
           route(a, b, c, d, o.p, { mine: role == null || o.p === role, dot: true })
         );
       }
@@ -3038,19 +3037,18 @@
           ? " You serve now, so you have no overlap limits. When they serve, the libero is in for you."
           : me && (phase === "start" || phase === "rec")
             ? ` ${overlapText(ri, role, phase)}${
-                bounds.lines.length
-                  ? drawn
-                    ? " Each line ends at a limit you may not cross."
-                    : " Press Play to see each limit as a line."
-                  : ""
+                bounds.lines.length ? " Each line ends at a limit you may not cross." : ""
               }${
                 tight.length
                   ? ` You stand right at the ${tight.join(" and ")} limit${tight.length > 1 ? "s" : ""}.`
                   : ""
               } ${OVERLAP_WHEN[phase]}`
             : "";
-        $("cue").innerHTML =
-          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${guide}${libero}`;
+        const cue = (limits) =>
+          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${limits}</p>${guide}${libero}`;
+        // The limits describe the whistle picture: at Reception with the play they show only in its lead-in.
+        learnCue = { rest: cue(drawn ? overlap : ""), whistle: cue(overlap) };
+        $("cue").innerHTML = learnCue.rest;
         const at = PHASES.findIndex(([k]) => k === phase);
         const upNext = at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1];
         $("lNext").textContent = `${phase === "rec" ? "After" : `Next: ${upNext}`} ▸`;
@@ -3158,7 +3156,8 @@
       };
       let animSpeed = store.get("animSpeed", 1) === 0.5 ? 0.5 : 1;
       let anim = null,
-        learnTr = null;
+        learnTr = null,
+        learnCue = null;
       function animated() {
         return feature("learn-animation") && !ANIM_OFF && !motionQuery.matches;
       }
@@ -3637,6 +3636,8 @@
           );
         }
         if (i !== a.stage) {
+          if (phase === "rec" && learnCue)
+            $("cue").innerHTML = i < 0 ? learnCue.whistle : learnCue.rest;
           a.stage = i;
           $("lCap").innerHTML = st
             ? stageCaption(st, role)

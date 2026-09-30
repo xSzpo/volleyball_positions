@@ -135,22 +135,36 @@ def check_opens_at_rest(page: Page) -> None:
         check_positions(f"{label} at rest", got, end)
         if phase == "rec" and page.locator("#courtL .bnd").count():
             fail("Reception at rest draws the whistle limits on the base defence picture")
+        if phase == "rec" and re.search(r"Overlap:|limit", page.inner_text("#cue")):
+            fail(f"Reception at rest: the cue describes the whistle limits: {page.inner_text('#cue')!r}")
         page.click("#lPlay")
         state = anim(page)
-        if not state or not state["playing"] or state["t"] > 400:
+        if not state or not state["playing"]:
             fail(f"{label}: Play does not start the play: {state}")
             continue
         if not page.is_disabled("#lStep"):
             fail(f"{label}: Step is enabled while playing")
-        start = page.evaluate(MARKERS, "#courtL .am")
+        start: dict[str, Any] = page.evaluate(
+            """(markers) => { document.querySelector('#lReplay').click();
+            document.querySelector('#lPlay').click();
+            const w = document.querySelector('#courtL .whistle');
+            return { t: window.ksvLearn.anim().t, pos: eval(markers)('#courtL .am'),
+              lines: w ? w.querySelectorAll('.bnd').length : 0, shown: w && w.getAttribute('visibility'),
+              cue: document.querySelector('#cue').innerText }; }""",
+            MARKERS,
+        )
         first = spots(0, phase)
         if phase == "serve":
             first[server(0, "simple")] = SERVE_SPOT
-        check_positions(f"{label} play start", start, first)
-        if phase == "rec":
-            lines = page.locator("#courtL .whistle .bnd").count()
-            if not lines or page.get_attribute("#courtL .whistle", "visibility") != "visible":
-                fail(f"Reception: the play does not start on the whistle limits ({lines} lines)")
+        if start["t"] >= 700:
+            fail(f"{label}: paused after the lead-in at {start['t']}")
+        check_positions(f"{label} play start", start["pos"], first)
+        if phase == "rec" and (not start["lines"] or start["shown"] != "visible" or "Overlap:" not in start["cue"]):
+            fail(f"Reception: the paused lead-in lacks the whistle limits or their cue text: {start}")
+        page.click("#lPlay")
+        page.wait_for_function("window.ksvLearn.anim() && window.ksvLearn.anim().stage >= 0", timeout=5000)
+        if phase == "rec" and "Overlap:" in page.inner_text("#cue"):
+            fail("Reception: the cue keeps the whistle limits after the lead-in")
         wait_done(page)
         if page.locator("#courtL .am").count() or page.locator("#courtL .trail").count():
             fail(f"{label}: the animation markers or trails stay after the play")
@@ -293,7 +307,6 @@ def check_static(page: Page) -> None:
         if page.locator("#courtL .am").count():
             fail(f"R{ri + 1} {phase}: animation markers on a static screen")
     learn(page, 0, "rec")
-    wait_done(page)
     page.click("#lNext")
     if anim(page) or page.inner_text("#learnTag") != "R1 (S1) · After reception":
         fail("Next into After reception animates or does not move the tag")
@@ -358,7 +371,6 @@ def check_reception_stages(page: Page) -> None:
     open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
     learn(page, 0, "start")
     page.click('.ph[data-k="rec"]')
-    wait_done(page)
     ar = spots(0, "ar")
     release, end, hitter = reception_plan(0, "simple")
     stages: list[dict[str, Any]] = page.evaluate("window.ksvLearn.stages(0, 'rec')")
@@ -647,7 +659,6 @@ def check_still_captions(page: Page) -> None:
         ):
             fail(f"{tag} Our serve still caption for SUB")
         learn(page, ri, "serve")
-        wait_done(page)
         check_positions(f"{tag} Our serve still picture", page.evaluate(MARKERS, "#courtL .mk"), spots(ri, "serve"))
         if page.evaluate(f"window.ksvLearn.lead({ri}, 'rec', 'L')") != (
             "You (L): Come back on for SUB and take your reception spot."
@@ -717,6 +728,8 @@ def check_reduced(browser: Browser) -> None:
             if page.is_visible("#lAnim") or page.is_visible("#lDots") or not page.is_visible("#lNext"):
                 fail(f"{label} {phase}: Replay/Pause/Step/speed and dots must be hidden, Next shown")
             count = 0 if phase == "serve" else 4
+            if phase == "rec" and "Overlap:" not in page.inner_text("#cue"):
+                fail(f"{label} Reception: the cue lacks the overlap limits")
             if page.locator("#lCap ol li").count() != count:
                 fail(f"{label} {phase}: the caption lists {page.inner_text('#lCap')!r}, expected {count} stages")
         page.click("#lNext")
