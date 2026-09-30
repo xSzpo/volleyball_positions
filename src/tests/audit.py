@@ -2,7 +2,8 @@
 
 Covers rotation order, the Simplified middle-pair reset into R3 and R6,
 overlap legality of every reception shape, the serve lineups, the base
-defence spots and the walk-through tables in docs/v2.md section 5. Prints
+defence spots, the Learn move captions and the walk-through tables in
+docs/v2.md section 5. Prints
 "DATA AUDIT: no issues" on success.
 """
 
@@ -153,6 +154,38 @@ def check_row(i: int, mode: RulesMode) -> None:
         issues.append(f"{tag} serve: setter in the wrong base zone")
 
 
+MOVE_MAX = 78
+AR_WORDS = {"set": ["setting spot"], "front": ["3 m line"], "back": ["zone 1", "back-row attack"], None: ["cover"]}
+
+
+def check_moves(i: int, mode: RulesMode) -> None:
+    """Every player has one short move caption per transition, and it matches their spot."""
+    r = lineup(i, mode)
+    front, back = r["serve"]
+    on_court = {
+        "serve": front + back,
+        "rec": [p for p, _, _ in r["rec"]],
+        "ar": [p for p, _, _, _ in r["ar"]],
+    }
+    if set(r["move"]) != set(on_court):
+        issues.append(f"{mode} {r['name']}: move phases {sorted(r['move'])}")
+    for phase, players in on_court.items():
+        notes = r["move"].get(phase, {})
+        if set(notes) != set(players):
+            issues.append(f"{mode} {r['name']} {phase}: move notes for {sorted(notes)}, on court {sorted(players)}")
+        for p, text in notes.items():
+            if len(text) > MOVE_MAX or not text.endswith("."):
+                issues.append(f"{mode} {r['name']} {phase} {p}: caption over {MOVE_MAX} characters or unfinished")
+    for zone, p in zip(ORDER, front + back, strict=True):
+        text = r["move"]["serve"].get(p, "")
+        if f"zone {zone}" not in text or text.startswith("Serve") != (p == server(i, mode)):
+            issues.append(f"{mode} {r['name']} serve {p}: caption does not send them to zone {zone}: {text!r}")
+    for p, _, _, kind in r["ar"]:
+        text = r["move"]["ar"].get(p, "")
+        if not all(word in text for word in AR_WORDS[kind]):
+            issues.append(f"{mode} {r['name']} ar {p} ({kind}): caption lacks {AR_WORDS[kind]}: {text!r}")
+
+
 def cell_lineup(cell: str) -> list[str] | None:
     """Reads the first 'A B C / D E F' lineup in a table cell; L(MB2) reads as L."""
     m = re.search(
@@ -202,6 +235,7 @@ for mode in RULES_MODES:
     check_rotation_order(mode)
     for i in range(6):
         check_row(i, mode)
+        check_moves(i, mode)
 check_middle_pair()
 check_walkthrough("official", "Official")
 check_walkthrough("simple", "Simplified KSV")

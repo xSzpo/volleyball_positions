@@ -16,7 +16,7 @@ from data import SETS, UNCONFIRMED_SETS, lineup  # noqa: E402
 # The app opens in Simplified KSV.
 ROWS = [lineup(ri, "simple") for ri in range(6)]
 
-URL = (ROOT / "index.html").as_uri() + "?ff=all"
+URL = (ROOT / "index.html").as_uri() + "?ff=all&anim=0"
 FAIL: list[str] = []
 # A stored role skips the first-visit role sheet, which covers the page.
 SEED_ROLE = "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"

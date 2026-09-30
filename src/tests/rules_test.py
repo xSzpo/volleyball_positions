@@ -95,7 +95,7 @@ def check_defaults(page: Page) -> None:
 
 def check_switch(page: Page) -> None:
     """With rules-official on: the picker, the middle carried across and the switch wording."""
-    open_app(page, "?ff=all", {"role": "MB2", "rulesMode": "drill"})
+    open_app(page, "?ff=all&anim=0", {"role": "MB2", "rulesMode": "drill"})
     if checked_rules(page) != "simple":
         fail(f"stored drill reads as {checked_rules(page)}, expected simple")
     open_setup(page)
@@ -123,7 +123,7 @@ def check_switch(page: Page) -> None:
 
 def check_learn(page: Page) -> None:
     """Simplified in Learn: MB always front, the pair resets into R3, SUB serves in R3 and R6."""
-    open_app(page, "?ff=all", {"role": "MB", "rulesMode": "simple"})
+    open_app(page, "?ff=all&anim=0", {"role": "MB", "rulesMode": "simple"})
     learn(page, 2, "start")
     if not page.inner_text("#cue").startswith("Zone 4, front row") or "resets" not in page.inner_text("#cue"):
         fail(f"MB in R3 Rotation: cue is not the zone 4 reset: {page.inner_text('#cue')!r}")
