@@ -2317,7 +2317,8 @@
 
       const WHISTLE_MOVE = "From the server's first movement you may move.";
       const OVERLAP_WHEN = {
-        start: `These limits count at the referee's whistle when they serve. ${WHISTLE_MOVE}`,
+        start:
+          "This is your rotation order. It counts at the whistle when the other team serves. We serve now, so you may stand anywhere.",
         rec: `These limits count at the whistle, not during the pass. ${WHISTLE_MOVE}`,
       };
       const SERVE_RULE =
@@ -2550,10 +2551,12 @@
       function partners(ri, role, phase) {
         const z = zoneOf(ri, role);
         if (!z) return [];
+        // The serving middle is off court when they serve (the libero is in), so it sets no limits.
+        const serving = phase === "start" && middleServes(ri);
+        if (serving && role === server(ri)) return [];
         const zp = {};
-        const swap = phase === "start" && middleServes(ri);
         [...ROWS[ri].front, ...ROWS[ri].back].forEach((p, i) => {
-          zp[ORDER[i]] = swap && p === "L" ? server(ri) : p;
+          zp[ORDER[i]] = p;
         });
         const front = [4, 3, 2].includes(z);
         const out = [{ p: zp[COLUMN[z]], side: front ? "behind" : "front" }];
@@ -2561,7 +2564,7 @@
           i = row.indexOf(z);
         if (i > 0) out.push({ p: zp[row[i - 1]], side: "left" });
         if (i < 2) out.push({ p: zp[row[i + 1]], side: "right" });
-        return out;
+        return serving ? out.filter((o) => o.p !== "L") : out;
       }
       function overlapText(ri, role, phase) {
         const words = {
@@ -3083,8 +3086,10 @@
               ? `<p class="guide">${SERVE_RULE} Our base spots are not in the guide.</p>`
               : "";
         const { tight } = bounds;
-        const overlap =
-          me && (phase === "start" || phase === "rec")
+        const serverNow = phase === "start" && middleServes(ri) && role === server(ri);
+        const overlap = serverNow
+          ? " You serve now, so you have no overlap limits. When they serve, the libero is in for you."
+          : me && (phase === "start" || phase === "rec")
             ? ` ${overlapText(ri, role, phase)}${bounds.lines.length ? " Each line ends at a limit you may not cross." : ""}${
                 tight.length
                   ? ` You stand right at the ${tight.join(" and ")} limit${tight.length > 1 ? "s" : ""}.`

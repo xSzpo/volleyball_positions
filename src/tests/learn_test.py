@@ -35,12 +35,19 @@ EXPECTED = {
     ("simple", "S", 0, "rec"): ("Overlap: stay behind OH1 and right of L.", []),
     ("official", "OH2", 1, "rec"): ("Overlap: stay in front of L and left of OP.", ["L"]),
     ("simple", "L", 1, "rec"): ("Overlap: stay behind OH2 and left of S.", ["OH2", "S"]),
+    # Official R3 and R6: the serving middle is off court when they serve, so it is nobody's limit.
+    ("official", "OP", 2, "start"): ("Overlap: stay right of OH2.", []),
+    ("official", "OH1", 2, "start"): ("Overlap: stay behind OH2 and right of S.", []),
+    ("official", "OH2", 5, "start"): ("Overlap: stay behind OH1 and right of OP.", []),
 }
+# (mode, role, rotation): the middle who serves from zone 1 at the Rotation step and has no overlap limits.
+SERVING_MIDDLE = {("official", "MB1", 2), ("official", "MB2", 5)}
 # The overlap limits count at the whistle for the serve; before 1 October 2026 they counted at the service hit.
 OLD_TIMING = re.compile(r"service hit|when the ball is served|at the serve\b|until the serve is made", re.IGNORECASE)
 WHISTLE_MOVE = "From the server's first movement you may move."
 OVERLAP_WHEN = {
-    "start": "These limits count at the referee's whistle when they serve. " + WHISTLE_MOVE,
+    "start": "This is your rotation order. It counts at the whistle when the other team serves."
+    " We serve now, so you may stand anywhere.",
     "rec": "These limits count at the whistle, not during the pass. " + WHISTLE_MOVE,
 }
 # Caption words -> the axis and direction your line must run from your marker.
@@ -109,7 +116,10 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
         or "front zone above the net" not in state["cue"]
     ):
         fail(f"{tag}: Our serve cue lacks the serving-team rule: {state['cue']!r}")
-    if phase in ("start", "rec") and here:
+    if phase == "start" and (mode, role, rotation) in SERVING_MIDDLE:
+        if not here or state["bounds"] or "Overlap:" in state["cue"] or "no overlap limits" not in state["cue"]:
+            fail(f"{tag}: the serving middle should be on court with no limits: {state['cue']!r}, {state['bounds']}")
+    elif phase in ("start", "rec") and here:
         if OVERLAP_WHEN[phase] not in state["cue"]:
             fail(f"{tag}: cue does not say when the overlap limits count: {state['cue']!r}")
         check_overlap(tag, state, EXPECTED.get((mode, role, rotation, phase)))

@@ -219,3 +219,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Keep the caption and all reception and after-reception spots. It is a tactic, not a rule text, and whether KSV wants the earlier release is the coach question on #16.
 - **Alternatives:** change the caption to "as soon as the server starts to move".
 - **Reversible by:** the R1 `move["ar"]["S"]` note in `src/data.py`.
+
+### 28. No overlap limits for the serving middle at the Rotation step
+
+- **Issue:** #44
+- **Problem:** In Official R3 and R6 the Rotation step draws the serving middle in zone 1 (entry #25). The overlap order counts only at the whistle when the other team serves, and by then the libero is in for that middle, so limits drawn against the middle are wrong.
+- **Decision:** At the Rotation step in Official R3 and R6 the serving middle gets no limits ("You serve now, so you have no overlap limits. When they serve, the libero is in for you."). Its neighbours get their other limits and none against the zone 1 slot. The libero is off court in that picture, so there is no marker to draw a limit to. This replaces the part of #25 that said the overlap partners follow the serving middle.
+- **Alternatives:** name the libero as the zone 1 partner without a line; draw a ghost libero in zone 1.
+- **Reversible by:** `partners()` and `serverNow` in `renderLearn()` in `src/template.html`.
