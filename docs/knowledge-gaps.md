@@ -524,3 +524,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `setQ()` keeps asking from each set's family and landing: zone 4 is asked 1, 0 or 2; the middle Shoot or 4; zone 2 7 or 6. A back-row attacker (`ar` kind `back`) is asked the back set of the third it attacks from (zone 1 → A, zone 6 → B, zone 5 → C), with the prompt "The setter sets this ball for you." In the current data only OP attacks from the back row (zone 1, R4-R6), so only A is asked there; B and C are in the setter's and the other players' questions and the quiz. There are always four options: the asked set, one from its family, and two others from the ten sets.
 - **Alternatives:** ask back-row attackers all three back sets; ask the middle 4 only.
 - **Reversible by:** `setLane()`, `third()` and `setQ()` in `src/template.html`.
+
+### 65. Light mode by default
+
+- **Issue:** #84
+- **Problem:** The owner: make day (light) mode the default. With nothing stored, the app followed the system scheme, so a phone in dark mode opened dark.
+- **Decision:** With no stored `ksv51:theme` the app opens light, whatever the system says. The `prefers-color-scheme: dark` CSS block is removed, so the first paint is light with no flash; the dark tokens stay under `[data-theme="dark"]`. The header button still switches, and a stored choice still wins. A change of the system scheme no longer repaints the button.
+- **Alternatives:** set `data-theme="light"` at start-up and keep the media block (the block would never apply and would duplicate the dark tokens).
+- **Reversible by:** the dark `@media (prefers-color-scheme: dark)` block in the `<style>` block and `paintThemeButton()` in `src/template.html`.

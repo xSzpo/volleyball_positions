@@ -72,42 +72,6 @@
       padding-top: env(safe-area-inset-top, 0px);
       padding-bottom: env(safe-area-inset-bottom, 0px);
     }
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) {
-        --bg: #0c1210;
-        --panel: #141c1a;
-        --ink: #eef1ec;
-        --muted: #a7b0aa;
-        --line: #eef1ec;
-        --court-g0: #0f2a47;
-        --court-g1: #173754;
-        --court-g2: #1b3d63;
-        --court-line: #8db8e6;
-        --net: #ffffff;
-        --net-label: #eaf2fb;
-        --marker-edge: #eaf2fb;
-        --ring: #ffffff;
-        --ring-gap: #0b1b2e;
-        --halo: rgba(15, 42, 71, 0.85);
-        --route-s: #ff8a3d;
-        --route-op: #5fb8cc;
-        --route-mb: #ff7a5c;
-        --route-oh: #7cc24a;
-        --route-l: #ffc600;
-        --route-sub: #c3cad3;
-        --accent: #6c9cf5;
-        --accent-ink: #6c9cf5;
-        --on-accent: #0c1210;
-        --check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5' fill='none' stroke='%230c1210' stroke-width='2.6'/%3E%3C/svg%3E");
-        --bad: #cc3a2b;
-        --move: #c9d3de;
-        --set-left: #6fa8e0;
-        --set-mid: #f28b4b;
-        --set-right: #e8eef5;
-        --set-back: #4fd1c5;
-        --netmesh: #a77bd1;
-      }
-    }
     :root[data-theme="dark"] {
       --bg: #0c1210;
       --panel: #141c1a;
@@ -2881,10 +2845,8 @@
       };
       window.ksvFeatures = { feature, ffParse, featureValues, values: () => ({ ...flags }) };
       const themeBtn = $("themeBtn");
-      const darkQuery = matchMedia("(prefers-color-scheme: dark)");
       function paintThemeButton() {
-        const shown =
-          document.documentElement.dataset.theme || (darkQuery.matches ? "dark" : "light");
+        const shown = document.documentElement.dataset.theme || "light";
         const next = shown === "dark" ? "light" : "dark";
         themeBtn.dataset.next = next;
         themeBtn.setAttribute("aria-label", `Switch to ${next} mode`);
@@ -2895,7 +2857,6 @@
         store.set("theme", themeBtn.dataset.next);
         paintThemeButton();
       });
-      darkQuery.addEventListener("change", paintThemeButton);
       paintThemeButton();
       const firstVisit = !ALL_ROLES.includes(store.get("role", null));
       let role = roleIn(rulesMode, firstVisit ? "MB" : store.get("role", "MB"));
