@@ -2868,6 +2868,7 @@
         "drill-rotate-name": true,
         "neighbour-check": true,
         "match-solo": true,
+        "match-rotate-name": true,
         "set-call-check": true,
         "match-same-device": true,
         "match-online": false,
@@ -2886,6 +2887,7 @@
         "drill-rotate-name": ["drill-tab"],
         "neighbour-check": ["drill-tab"],
         "match-solo": ["learn-tab"],
+        "match-rotate-name": ["match-solo"],
         "set-call-check": ["match-solo", "sets-tab"],
         "match-same-device": ["match-solo"],
         "match-online": ["match-same-device"],
@@ -4390,7 +4392,7 @@
       }
       // Solo scores each moment with the most revealing setting shown before the answer.
       function gVisMult() {
-        if (G?.queue[G.i]?.phase === "ar") return 1;
+        if (G?.queue[G.i]?.phase === "ar" || G?.rot) return 1;
         return VIS_MULT[G && !G.mp && !G.online ? G.visMax : gVis()] ?? 1;
       }
       function gVisText() {
@@ -4576,15 +4578,17 @@
         renderDrillName();
       });
       // Rotate from the name alone: you place the setter, yourself, then each overlap partner.
+      // Shared by Drill (`rot`) and Match (`G.rot`); `how` is "h" (setter's zone) or "r".
       let rot = null;
-      function rotStart(ri, role) {
-        const how = drillName === "mixed" ? (Math.random() < 0.5 ? "h" : "r") : drillName;
+      function rotStart(ri, role, how) {
         const order = role === "S" ? ["S"] : ["S", role];
         if (players(ri, "start").some((o) => o.p === role))
           partners(ri, role, "start").forEach(({ p }) => {
             if (p && !order.includes(p)) order.push(p);
           });
         return {
+          ri,
+          role,
           name: how === "h" ? `H${ROWS[ri].setter}` : ROWS[ri].short,
           order,
           spots: {},
@@ -4592,27 +4596,48 @@
           pick: null,
         };
       }
-      function rotPlaced(p) {
-        return p in rot.spots || (p === cur.role && rot.off);
+      function rotPlaced(r, p) {
+        return p in r.spots || (p === r.role && r.off);
       }
-      function rotNext() {
-        return rot.pick || rot.order.find((p) => !rotPlaced(p)) || null;
+      function rotNext(r) {
+        return r.pick || r.order.find((p) => !rotPlaced(r, p)) || null;
       }
-      function rotPrompt() {
-        const p = rotNext();
+      function rotPrompt(r) {
+        const p = rotNext(r);
         if (!p) return "All placed. Tap a marker to move it, or press Continue.";
         const who =
-          p === cur.role ? "you stand" : p === "S" ? "the setter (S) stands" : `${p} stands`;
+          p === r.role ? "you stand" : p === "S" ? "the setter (S) stands" : `${p} stands`;
         return `Tap where ${who}.`;
       }
       // Once your partners are asked, your own marker stays put: moving it would move their limits.
-      function rotLocked(p) {
-        return p === cur.role && rotPlaced(p) && rot.order.at(-1) !== p;
+      function rotLocked(r, p) {
+        return p === r.role && rotPlaced(r, p) && r.order.at(-1) !== p;
       }
-      function rotRefresh() {
-        $("dsub").textContent = rotPrompt();
-        $("nextBtn").disabled = !!rotNext();
-        drawDrill();
+      // A tap places the next marker, or picks a placed one up to move it.
+      function rotTap(r, tap) {
+        const hit = r.order.find(
+          (q) =>
+            r.spots[q] &&
+            Math.hypot(r.spots[q].x - tap.x, r.spots[q].y - tap.y) * W <= MARKER_R + 1,
+        );
+        if (hit && rotLocked(r, hit)) return;
+        if (hit && hit !== r.pick) r.pick = hit;
+        else {
+          const q = rotNext(r);
+          if (q) {
+            r.spots[q] = tap;
+            if (q === r.role) r.off = false;
+            r.pick = null;
+          }
+        }
+      }
+      function rotOff(r) {
+        if (rotLocked(r, r.role)) return;
+        r.off = !r.off;
+        if (r.off) {
+          delete r.spots[r.role];
+          if (r.pick === r.role) r.pick = null;
+        }
       }
       // Right is the right zone only: a tap in the next zone is a different rotation spot.
       function rotGrade(ri, p, tap) {
@@ -4621,11 +4646,24 @@
         const zone = (o) => `${Math.min(2, Math.max(0, Math.floor(o.x * 3)))}${o.y < AL ? 0 : 1}`;
         return zone(tap) === zone(right) ? "right" : "wrong";
       }
-      function rotScore() {
-        const grades = rot.order.map((p) => ({
+      function rotGrades(r) {
+        return r.order.map((p) => ({
           p,
-          g: rotGrade(cur.ri, p, p === cur.role && rot.off ? null : rot.spots[p]),
+          g: rotGrade(r.ri, p, p === r.role && r.off ? null : r.spots[p]),
         }));
+      }
+      function rotGradesHtml(grades, you) {
+        return `<p class="rotgrades" style="margin:4px 0 0">${grades.map(({ p, g }) => `${p === you ? "You" : p}: ${g}`).join(" · ")}</p>`;
+      }
+      function rotLimitsHtml(ri, role) {
+        const pl = players(ri, "start");
+        const limits =
+          pl.some((o) => o.p === role) &&
+          limitsSentence(ri, role, "start", boundLines(ri, pl, role, "start"));
+        return limits ? `<p class="lim" style="margin:4px 0 0">${limits}</p>` : "";
+      }
+      function rotScore() {
+        const grades = rotGrades(rot);
         const ok = grades.every((o) => o.g === "right");
         record(ok);
         $("dsub").textContent = "Dots are your taps; the markers stand where they should.";
@@ -4635,42 +4673,39 @@
         feedback(ok ? "good" : "bad", ok ? "Spot on" : "Not there");
         $("fb").insertAdjacentHTML(
           "beforeend",
-          `<p class="rotgrades" style="margin:4px 0 0">${grades.map(({ p, g }) => `${p === cur.role ? "You" : p}: ${g}`).join(" · ")}</p>`,
+          rotGradesHtml(grades, cur.role) + rotLimitsHtml(cur.ri, cur.role),
         );
-        const pl = players(cur.ri, "start");
-        const limits =
-          pl.some((o) => o.p === cur.role) &&
-          limitsSentence(cur.ri, cur.role, "start", boundLines(cur.ri, pl, cur.role, "start"));
-        if (limits)
-          $("fb").insertAdjacentHTML(
-            "beforeend",
-            `<p class="lim" style="margin:4px 0 0">${limits}</p>`,
-          );
       }
-      function drawRotate() {
-        const pl = players(cur.ri, "start"),
-          me = cur.role;
-        let s = DEFS + courtBase(answered ? !pl.some((o) => o.p === me) : rot.off);
-        if (!answered) {
-          rot.order.forEach((p) => {
-            const tap = rot.spots[p];
-            if (tap) s += chip({ p, ...tap }, { me: p === me, dim: p === rot.pick });
+      function rotRefresh() {
+        $("dsub").textContent = rotPrompt(rot);
+        $("nextBtn").disabled = !!rotNext(rot);
+        drawDrill();
+      }
+      // Before `shown`, only the placed markers; after it, the lineup with your taps and limits.
+      function drawRotate(r, shown, under = "") {
+        const pl = players(r.ri, "start"),
+          me = r.role;
+        let s = DEFS + courtBase(shown ? !pl.some((o) => o.p === me) : r.off) + under;
+        if (!shown) {
+          r.order.forEach((p) => {
+            const tap = r.spots[p];
+            if (tap) s += chip({ p, ...tap }, { me: p === me, dim: p === r.pick });
           });
           return s;
         }
         s += rotArrows();
         pl.forEach((o) => {
-          if (!rot.order.includes(o.p)) s += chip(o, { dim: true });
+          if (!r.order.includes(o.p)) s += chip(o, { dim: true });
         });
-        s += boundLines(cur.ri, pl, me, "start").lines.join("");
-        rot.order.forEach((p) => {
-          const tap = rot.spots[p],
+        s += boundLines(r.ri, pl, me, "start").lines.join("");
+        r.order.forEach((p) => {
+          const tap = r.spots[p],
             right = pl.find((o) => o.p === p);
           if (tap && right)
             s += `<line class="rotmiss" x1="${tap.x * W}" y1="${tap.y * H}" x2="${right.x * W}" y2="${right.y * H}" stroke="var(--net-label)" stroke-width="0.5" stroke-dasharray="1 1" opacity=".7"/>`;
           if (tap) s += tapMark(tap);
         });
-        rot.order.forEach((p) => {
+        r.order.forEach((p) => {
           const right = pl.find((o) => o.p === p);
           if (right) s += chip(right, { me: p === me });
         });
@@ -4755,7 +4790,12 @@
             }) || pool[0];
         }
         answered = false;
-        if (cur.phase === "start" && feature("drill-rotate-name")) rot = rotStart(cur.ri, cur.role);
+        if (cur.phase === "start" && feature("drill-rotate-name"))
+          rot = rotStart(
+            cur.ri,
+            cur.role,
+            drillName === "mixed" ? (Math.random() < 0.5 ? "h" : "r") : drillName,
+          );
         $("nextBtn").hidden = !rot;
         $("nextBtn").textContent = rot ? "Continue" : "Next";
         $("nextBtn").disabled = !!rot;
@@ -4763,7 +4803,7 @@
         $("dq").textContent =
           `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${rot ? rot.name : ROWS[cur.ri].name} · ${FULL[cur.phase]}`;
         $("dsub").textContent =
-          `${rot ? rotPrompt() : cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? arQuestion(cur.ri, cur.role) : cur.phase === "serve" ? serveQuestion(cur.ri, cur.role) : "Where do you stand?"}`;
+          `${rot ? rotPrompt(rot) : cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? arQuestion(cur.ri, cur.role) : cur.phase === "serve" ? serveQuestion(cur.ri, cur.role) : "Where do you stand?"}`;
         $("fb").className = "fb";
         $("fb").innerHTML = rot ? ROT_HINT : HINT;
         drawDrill();
@@ -4771,7 +4811,7 @@
       }
       function drawDrill(tap) {
         if (rot) {
-          $("courtD").innerHTML = drawRotate();
+          $("courtD").innerHTML = drawRotate(rot, answered);
           return;
         }
         const pl = answerSpots(cur.ri, cur.phase);
@@ -4879,21 +4919,7 @@
         if (onPill(p)) return $("offBtn").click();
         const tap = { x: p.x / W, y: p.y / H };
         if (rot) {
-          const hit = rot.order.find(
-            (q) =>
-              rot.spots[q] &&
-              Math.hypot(rot.spots[q].x - tap.x, rot.spots[q].y - tap.y) * W <= MARKER_R + 1,
-          );
-          if (hit && rotLocked(hit)) return;
-          if (hit && hit !== rot.pick) rot.pick = hit;
-          else {
-            const q = rotNext();
-            if (q) {
-              rot.spots[q] = tap;
-              if (q === cur.role) rot.off = false;
-              rot.pick = null;
-            }
-          }
+          rotTap(rot, tap);
           return rotRefresh();
         }
         lastTap = tap;
@@ -4928,12 +4954,7 @@
       $("offBtn").onclick = () => {
         if (answered) return;
         if (rot) {
-          if (rotLocked(cur.role)) return;
-          rot.off = !rot.off;
-          if (rot.off) {
-            delete rot.spots[cur.role];
-            if (rot.pick === cur.role) rot.pick = null;
-          }
+          rotOff(rot);
           return rotRefresh();
         }
         const me = answerSpots(cur.ri, cur.phase).find((o) => o.p === cur.role);
@@ -5326,6 +5347,8 @@
           setOk: 0,
           setN: 0,
           sc: null,
+          rot: null,
+          seed: Math.floor(Math.random() * 1e9),
           mp: null,
         };
         track("match_started", {
@@ -5387,7 +5410,20 @@
       function gNewMatch() {
         gStart(gQueue(), false, gPlayersMode() === "mp" ? mpPlayers : null);
       }
+      // Every player of a moment gets the same name: it comes from the match seed and the moment.
+      function gRotHow(i) {
+        const x = Math.imul((G.seed ^ Math.imul(i + 1, 0x9e3779b1)) >>> 0, 0x45d9f3b) >>> 0;
+        return (x ^ (x >>> 15)) & 1 ? "h" : "r";
+      }
+      function gRotStory(N) {
+        if (G.replay) return `We won the rally and rotate into ${N}.`;
+        if (G.mixed) return `Coach calls ${N}.`;
+        return G.i === 0
+          ? `First rally of the set. You line up in ${N}.`
+          : `We won the rally. Rotate one zone clockwise into ${N}.`;
+      }
       function gStory(st, prev) {
+        if (G.rot) return gRotStory(G.rot.name);
         const R = ROWS[st.ri].name,
           newRot = !prev || prev.ri !== st.ri;
         const call = `Coach calls ${R}: setter in ${ROWS[st.ri].setter}.`;
@@ -5429,13 +5465,16 @@
         G.off = false;
         G.nb = null;
         G.sc = null;
+        G.rot =
+          st.phase === "start" && feature("match-rotate-name")
+            ? rotStart(st.ri, G.role, gRotHow(G.i))
+            : null;
         G.visMax = gVis();
-        $("gVisPlay").hidden = !!(G.mp || G.online);
+        $("gVisPlay").hidden = !!(G.mp || G.online || G.rot);
         $("gWait").hidden = true;
         $("gNbBox").innerHTML = "";
         delete $("gNext").dataset.label;
-        const r = ROWS[st.ri];
-        $("gTitle").textContent = r.name;
+        $("gTitle").textContent = G.rot ? G.rot.name : ROWS[st.ri].name;
         const who = G.mp ? mpCur() : G.online ? G.online.me : null;
         if (who) {
           const p = who;
@@ -5453,6 +5492,7 @@
           })
           .join("");
         $("gStory").textContent = gStory(st, G.queue[G.i - 1]);
+        if (G.rot) $("gStory").insertAdjacentHTML("beforeend", ' <b id="gAsk"></b>');
         $("gScore").textContent = G.score;
         $("gStreak").textContent = G.streak;
         $("gOff").disabled = false;
@@ -5465,25 +5505,36 @@
         $("gNext").textContent = "Continue";
         gStrip();
         $("gFb").className = "fb";
-        $("gFb").innerHTML =
-          '<p class="hint">Tap the court where you stand, then press Continue. If the libero is in for you, press “I\'m off court”.</p>';
-        gDraw();
+        $("gFb").innerHTML = G.rot
+          ? '<p class="hint">Place each marker in turn; tap a placed one to move it. Then press Continue. If the libero is in for you, press “I\'m off court”.</p>'
+          : '<p class="hint">Tap the court where you stand, then press Continue. If the libero is in for you, press “I\'m off court”.</p>';
+        if (G.rot) gRotRefresh();
+        else gDraw();
         G.t0 = performance.now();
+      }
+      function gHelpArea(me) {
+        const jx = me.x + (G.jit ? G.jit[0] : 0),
+          jy = me.y + (G.jit ? G.jit[1] : 0);
+        return `<circle cx="${jx * W}" cy="${jy * H}" r="15.3" fill="var(--accent)" fill-opacity=".25" stroke="var(--net-label)" stroke-width="0.6" stroke-dasharray="1.6 1.3"/>`;
       }
       function gDraw() {
         const st = G.queue[G.i],
           pl = answerSpots(st.ri, st.phase),
           me = pl.find((o) => o.p === G.role),
           shown = G.answered && !G.mp && !G.online;
+        if (G.rot) {
+          $("courtG").innerHTML = drawRotate(
+            G.rot,
+            shown,
+            !G.answered && G.help >= 2 && me ? gHelpArea(me) : "",
+          );
+          return;
+        }
         let s = DEFS + courtBase(shown && !me);
         if (shown && st.phase === "start") s += rotArrows();
         if (shown && st.phase === "ar") s += arLayer(st.ri, pl, G.role);
         if (shown && st.phase === "serve") s += serveLayer(st.ri, pl, G.role);
-        if (!G.answered && G.help >= 2 && me) {
-          const jx = me.x + (G.jit ? G.jit[0] : 0),
-            jy = me.y + (G.jit ? G.jit[1] : 0);
-          s += `<circle cx="${jx * W}" cy="${jy * H}" r="15.3" fill="var(--accent)" fill-opacity=".25" stroke="var(--net-label)" stroke-width="0.6" stroke-dasharray="1.6 1.3"/>`;
-        }
+        if (!G.answered && G.help >= 2 && me) s += gHelpArea(me);
         const vis = gVis();
         if (!shown && st.phase === "ar") s += fromLayer(st.ri, G.role, G.tap, "g");
         (shown
@@ -5620,7 +5671,8 @@
         G.answered = true;
         // Sticky only after the answer: while answering it would cover the court and catch taps.
         $("gActs").classList.add("sticky");
-        const secs = (performance.now() - G.t0) / 1000;
+        // Rotate asks several markers: each one after the first adds 2 s before the speed bonus drops.
+        const secs = (performance.now() - G.t0) / 1000 - (G.rot ? 2 * (G.rot.order.length - 1) : 0);
         const base = { perfect: 100, close: 60, miss: 0 }[q];
         const mult = [1, 0.6, 0.3][G.help];
         const speed =
@@ -5635,6 +5687,7 @@
           !G.mp &&
           !G.online &&
           st.phase !== "ar" &&
+          !G.rot &&
           VIS_ORDER.indexOf(G.visMax) > VIS_ORDER.indexOf(G.vis0)
         )
           G.peeks++;
@@ -5663,7 +5716,15 @@
             `<span class="pts">+${pts}</span><b>${title}</b><p class="bd" id="gBd"></p><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
           $("gScore").textContent = G.score;
           $("gStreak").textContent = G.streak;
+          if (G.rot) {
+            $("gTitle").textContent = ROWS[st.ri].name;
+            $("gFb").insertAdjacentHTML(
+              "beforeend",
+              rotGradesHtml(G.rotGrades, G.role) + rotLimitsHtml(st.ri, G.role),
+            );
+          }
         }
+        if (G.rot) $("gAsk").textContent = "";
         $("gOff").disabled = true;
         $("gHelp").disabled = true;
         $("gNext").hidden = false;
@@ -5743,14 +5804,28 @@
         $("gNext").disabled = false;
         gDraw();
       }
+      function gRotRefresh() {
+        $("gAsk").textContent = rotPrompt(G.rot);
+        $("gOff").setAttribute("aria-pressed", String(G.rot.off));
+        $("gNext").disabled = !!rotNext(G.rot);
+        gDraw();
+      }
       $("courtG").addEventListener("pointerup", (e) => {
         if (!G || G.answered) return;
         const p = svgPoint($("courtG"), e);
         if (onPill(p)) return $("gOff").click();
+        if (G.rot) {
+          rotTap(G.rot, { x: p.x / W, y: p.y / H });
+          return gRotRefresh();
+        }
         gPick({ x: p.x / W, y: p.y / H });
       });
       $("gOff").onclick = () => {
         if (!G || G.answered) return;
+        if (G.rot) {
+          rotOff(G.rot);
+          return gRotRefresh();
+        }
         if (G.off) {
           G.off = false;
           $("gOff").setAttribute("aria-pressed", "false");
@@ -5759,7 +5834,15 @@
         }
         gPick(null);
       };
+      // Right only when every marker is right, as in Drill; the reveal and online keep your own tap.
+      function gRotCheck() {
+        G.rotGrades = rotGrades(G.rot);
+        G.tap = G.rot.off ? null : G.rot.spots[G.role] || null;
+        G.off = G.rot.off;
+        gAnswer(G.rotGrades.every((o) => o.g === "right") ? "perfect" : "miss");
+      }
       function gCheck() {
+        if (G.rot) return gRotCheck();
         const st = G.queue[G.i];
         const me = answerSpots(st.ri, st.phase).find((o) => o.p === G.role);
         if (!G.tap) return gAnswer(me ? "miss" : "perfect");
@@ -5776,7 +5859,7 @@
       $("gNext").onclick = () => {
         if (!G) return;
         if (!G.answered) {
-          if (G.tap || G.off) {
+          if (G.rot ? !rotNext(G.rot) : G.tap || G.off) {
             gCheck();
             // The same button scores and moves on; a double tap must not skip the feedback.
             const next = $("gNext");
@@ -6018,7 +6101,7 @@
         MP_KEYS.forEach((k) => {
           p[k] = G[k];
         });
-        p.taps[G.i] = { tap: G.tap, res: G.results[G.i] };
+        p.taps[G.i] = { tap: G.tap, res: G.results[G.i], grades: G.rot ? G.rotGrades : null };
       }
       function shuffle(a) {
         a = a.slice();
@@ -6081,7 +6164,7 @@
         swapIn(p);
         const st = G.queue[G.i];
         $("pMoment").textContent =
-          `Moment ${G.i + 1} of ${G.queue.length} · ${ROWS[st.ri].name} · ${FULL[st.phase]} · turn ${G.mp.turn + 1} of ${G.mp.players.length}`;
+          `Moment ${G.i + 1} of ${G.queue.length} · ${st.phase === "start" && feature("match-rotate-name") ? rotStart(st.ri, p.role, gRotHow(G.i)).name : ROWS[st.ri].name} · ${FULL[st.phase]} · turn ${G.mp.turn + 1} of ${G.mp.players.length}`;
         $("pName").textContent = p.name;
         $("pName").style.color = p.color;
         $("pRole").textContent = `plays ${NAMES[p.role]}`;
@@ -6143,7 +6226,10 @@
             const t = p.taps[G.i] || {},
               r = t.res || { q: "miss", pts: 0 };
             const bd = t.res ? `<small class="bd">${bdHtml(r, p.role, true)}</small>` : "";
-            return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${t.res ? lab[r.q] : "No answer"}${t.res && !t.tap ? " (said off court)" : ""}${bd}</div><span class="rp">+${r.pts}</span></li>`;
+            const grades = t.grades
+              ? `<small class="rotgrades">${t.grades.map(({ p: q, g }) => `${q}: ${g}`).join(" · ")}</small>`
+              : "";
+            return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${t.res ? lab[r.q] : "No answer"}${t.res && !t.tap ? " (said off court)" : ""}${grades}${bd}</div><span class="rp">+${r.pts}</span></li>`;
           })
           .join("");
         $("rWhy").innerHTML = roles
@@ -6834,6 +6920,8 @@
           setOk: me.setOk,
           setN: me.setN,
           sc: null,
+          rot: null,
+          seed: meta.createdAt,
           mp: null,
           online: ON,
         };
@@ -6843,6 +6931,7 @@
       function onSavedView(a) {
         G.answered = true;
         G.tap = a.tap;
+        if (G.rot) $("gAsk").textContent = "";
         $("gNext").hidden = true;
         $("gOff").disabled = true;
         $("gHelp").disabled = true;
