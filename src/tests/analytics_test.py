@@ -14,6 +14,8 @@ from pathlib import Path
 from playwright.sync_api import Browser, Page, Route, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
+# A stored role skips the first-visit role sheet, which covers the page.
+SEED_ROLE = "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"
 URL = (ROOT / "index.html").as_uri()
 PAGES_URL = "https://xszpo.github.io/volleyball_positions/"
 FAIL: list[str] = []
@@ -97,6 +99,7 @@ def check_pages(page: Page, html: str, tag: str, errors: list[str], requests: li
 
 def run_case(browser: Browser, tag: str, body: str | None) -> None:
     context = browser.new_context(viewport={"width": 360, "height": 740})
+    context.add_init_script(SEED_ROLE)
     page = context.new_page()
     errors: list[str] = []
     requests: list[str] = []

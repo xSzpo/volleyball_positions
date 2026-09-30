@@ -8,6 +8,8 @@ from pathlib import Path
 from playwright.sync_api import Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
+# A stored role skips the first-visit role sheet, which covers the page.
+SEED_ROLE = "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"
 sys.path.insert(0, str(ROOT / "src"))
 SHOTS = ROOT / "src" / "tests" / "_out"
 SHOTS.mkdir(exist_ok=True)
@@ -60,6 +62,7 @@ random.seed(3)
 with sync_playwright() as p:
     b = p.chromium.launch()
     pg = b.new_page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    pg.add_init_script(SEED_ROLE)
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto((ROOT / "index.html").as_uri() + "?ff=all")
@@ -159,9 +162,10 @@ with sync_playwright() as p:
             else:
                 box = pg.locator("#courtG").bounding_box()
                 assert box is not None
+                # The bottom tenth holds the off court pill, which toggles I'm off court instead of placing a spot.
                 for _ in range(2):
                     pg.mouse.click(
-                        box["x"] + box["width"] * random.random(), box["y"] + box["height"] * random.random()
+                        box["x"] + box["width"] * random.random(), box["y"] + box["height"] * 0.9 * random.random()
                     )
                     assert pg.locator("#courtG .myspot").count() == 1, "re-tap does not move the marker"
                     assert not VERDICT.search(pg.inner_text("#gFb")), "a tap before Continue leaks the verdict"
@@ -200,7 +204,7 @@ with sync_playwright() as p:
     # role change at top doesn't kill mp
     pg.click("#tabLearn")
     if pg.is_hidden("#setupPanel"):
-        pg.click("#setupBar")
+        pg.click("#roleChip")
     pg.click('.role[data-r="S"]')
     pg.click("#tabGame")
     assert pg.is_visible("#gPass"), "role change at the top ended the same-device match"

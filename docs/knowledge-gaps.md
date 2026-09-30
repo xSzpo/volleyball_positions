@@ -43,3 +43,43 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** A guest follows the host (`meta.nb`, `meta.sets`), as in v1, so the room never waits on a guest whose flag is off.
 - **Alternatives:** hide the check on the guest's phone and mark the answer done.
 - **Reversible by:** the online code in `src/template.html` (`G.online.meta.nb`, `G.online.meta.sets`).
+
+### 6. L route colour in light mode
+
+- **Issue:** #18
+- **Problem:** The plan draws light-mode routes in the role fills, but the L fill `#ffc600` is 1.58:1 on the white route halo, below the 3:1 needed for lines.
+- **Decision:** The light L route is `#9a7600`, a darker shade of the same yellow (3.7:1 or more on the halo over every court band). The L marker keeps `#ffc600`.
+- **Alternatives:** a darker halo under L only, or a dark outline on the L route.
+- **Reversible by:** changing `--route-l` in the light `:root` block of `src/template.html` (`theme_test.py` checks the ratio).
+
+### 7. What the header role chip shows
+
+- **Issue:** #18
+- **Problem:** The plan puts the role in a header chip but does not say whether the rules mode stays visible once the summary bar is gone.
+- **Decision:** The chip shows only the role code (`OH1 ▾`). The rules mode is in its aria-label and in the sheet. The chip stays visible on every tab, Sets included (v1 hid the bar on Sets).
+- **Alternatives:** `OH1 · Drill` on the chip, or hide the chip on Sets.
+- **Reversible by:** `renderSetupSummary()` in `src/template.html`.
+
+### 8. How the role sheet behaves
+
+- **Issue:** #18
+- **Problem:** The plan says the sheet opens on the first visit with one job and closes on a pick, but not how it closes later or whether the rules switch shows the first time.
+- **Decision:** A modal bottom sheet. On the first visit it shows only "Pick your role" (no rules switch) and closes on a pick. Later it closes on a pick, Done, Escape or a tap on the backdrop.
+- **Alternatives:** keep the sheet open after a pick until Done, or show the rules on the first visit too.
+- **Reversible by:** `setSetupOpen()` in `src/template.html`.
+
+### 9. Teammates in Learn, zone numbers and the setter glow
+
+- **Issue:** #18
+- **Problem:** v1 dimmed teammates in Learn, printed zone numbers on the court and pulsed a green ring on the setter's spot. The mock-up shows none of this.
+- **Decision:** Learn draws teammates at full strength and marks you with the double ring. Zone numbers and the setter ring are gone; a "Zones" toggle is left for a later issue. In Drill and Match feedback the other players are faded to 35%, and with Show on court "Setter" the markers are 90% size.
+- **Alternatives:** keep the dimming in Learn, or keep zone numbers until the toggle exists.
+- **Reversible by:** the `chip()` calls in the Learn drawing, and `courtBase()`, in `src/template.html`.
+
+### 10. Court size on short phones
+
+- **Issue:** #18
+- **Problem:** `docs/v2.md` §2.7 capped the court at `100svh - 330px`, which at 390 × 664 gives a 290 px wide court and markers about 32 px, below the 36 px the same section asks for.
+- **Decision:** The height cap has a 381 px floor, so markers stay at 36 px or more; at 390 × 664 the court is 324 × 381 and the page scrolls a little. `docs/v2.md` is updated.
+- **Alternatives:** keep the cap and accept smaller markers on short phones.
+- **Reversible by:** the `max-width` of `svg.court` in `src/template.html`.

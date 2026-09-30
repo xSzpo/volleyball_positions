@@ -82,13 +82,18 @@ def tap(pg: Page, svg: str, x: float | None = None, y: float | None = None) -> N
     box = pg.locator(svg).bounding_box()
     assert box is not None
     x = random.random() if x is None else x
-    y = random.random() if y is None else y
+    y = 0.9 * random.random() if y is None else y  # the bottom tenth is the off court pill
     pg.mouse.click(box["x"] + box["width"] * x, box["y"] + box["height"] * y)
 
 
 def open_setup(pg: Page) -> None:
     if pg.locator("#setupPanel").is_hidden():
-        pg.click("#setupBar")
+        pg.click("#roleChip")
+
+
+def close_setup(pg: Page) -> None:
+    if pg.locator("#setupPanel").is_visible():
+        pg.click("#setupDone")
 
 
 def pick_role(pg: Page, role: str) -> None:
@@ -99,6 +104,7 @@ def pick_role(pg: Page, role: str) -> None:
 def pick_rules(pg: Page, mode: str) -> None:
     open_setup(pg)
     pg.click(f'.rulesmode [data-rm="{mode}"]')
+    close_setup(pg)
 
 
 def open_fold(pg: Page, sel: str) -> None:
@@ -107,35 +113,57 @@ def open_fold(pg: Page, sel: str) -> None:
 
 
 def check_header(pg: Page, tag: str) -> None:
-    """First visit shows the role picker open; a choice collapses it; it is remembered."""
+    """First visit opens the role sheet; a pick closes it; the header chip reopens it with the rules."""
     if not pg.is_visible("#setupPanel") or not pg.is_visible("#setupNudge"):
-        fail(f"{tag} first visit: role picker not open with nudge")
+        fail(f"{tag} first visit: role sheet not open with nudge")
+    if pg.is_visible(".rulesmode"):
+        fail(f"{tag} first visit: the role sheet has more than one job")
+    if not pg.is_visible("#subtitle"):
+        fail(f"{tag} first visit: subtitle hidden")
     if pg.get_attribute("#howTo", "open") is None:
         fail(f"{tag} first visit: how-to not open")
     pg.click('.role[data-r="OH1"]')
     if pg.is_visible("#setupPanel"):
-        fail(f"{tag} role pick did not collapse the picker")
-    if "Outside 1" not in pg.inner_text("#setupSum"):
-        fail(f"{tag} summary does not show the role")
-    pg.click("#setupBar")
-    if not pg.is_visible("#setupPanel") or pg.get_attribute("#setupBar", "aria-expanded") != "true":
-        fail(f"{tag} summary tap did not expand the picker")
+        fail(f"{tag} role pick did not close the sheet")
+    if pg.inner_text("#roleChip").strip() != "OH1" or "Outside 1" not in (
+        pg.get_attribute("#roleChip", "aria-label") or ""
+    ):
+        fail(f"{tag} role chip does not show the role")
+    pg.click("#roleChip")
+    if not pg.is_visible("#setupPanel") or pg.get_attribute("#roleChip", "aria-expanded") != "true":
+        fail(f"{tag} role chip did not open the sheet")
     pg.click('.rulesmode [data-rm="drill"]')
-    if "Drill rules" not in pg.inner_text("#setupSum"):
-        fail(f"{tag} summary does not show the rules")
+    if "Drill rules" not in (pg.get_attribute("#roleChip", "aria-label") or ""):
+        fail(f"{tag} role chip label does not name the rules")
     pg.click('.rulesmode [data-rm="official"]')
-    pg.click("#setupBar")
+    if not pg.evaluate("document.querySelector('.wrap').inert"):
+        fail(f"{tag} the page behind the open sheet is not inert")
+    for _ in range(12):
+        pg.keyboard.press("Tab")
+    if not pg.evaluate("document.getElementById('setupPanel').contains(document.activeElement)"):
+        fail(f"{tag} Tab left the open sheet")
+    learn_tag = pg.inner_text("#learnTag")
+    pg.evaluate("document.body.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true}))")
+    if pg.inner_text("#learnTag") != learn_tag:
+        fail(f"{tag} an arrow key behind the open sheet changed the rotation")
+    pg.keyboard.press("Escape")
     if pg.is_visible("#setupPanel"):
-        fail(f"{tag} second tap did not collapse the picker")
+        fail(f"{tag} Escape did not close the sheet")
+    if pg.evaluate("document.querySelector('.wrap').inert") or pg.evaluate("document.activeElement.id") != "roleChip":
+        fail(f"{tag} closing the sheet did not restore the page and focus the role chip")
+    pg.click("#roleChip")
+    pg.mouse.click(5, 5)
+    if pg.is_visible("#setupPanel"):
+        fail(f"{tag} a tap outside did not close the sheet")
     pg.reload()
     wait_ready(pg)
-    if pg.is_visible("#setupPanel") or pg.is_visible("#setupNudge"):
-        fail(f"{tag} returning visit: role picker open")
+    if pg.is_visible("#setupPanel") or pg.is_visible("#setupNudge") or pg.is_visible("#subtitle"):
+        fail(f"{tag} returning visit: role sheet or subtitle shown")
     if pg.get_attribute("#howTo", "open") is not None:
         fail(f"{tag} returning visit: how-to open")
     pg.click("#tabSets")
-    if pg.is_visible("#setupBar"):
-        fail(f"{tag} setup bar shown on Sets")
+    if not pg.is_visible("#roleChip"):
+        fail(f"{tag} role chip hidden on Sets")
     pg.click("#tabLearn")
     for sel in ["#checks", "#thumbsBox", "#allRots"]:
         if pg.get_attribute(sel, "open") is not None:
@@ -148,6 +176,62 @@ def check_header(pg: Page, tag: str) -> None:
     top = pg.evaluate("document.getElementById('drill').getBoundingClientRect().top")
     if not 0 <= top < pg.evaluate("innerHeight") / 2:
         fail(f"{tag} tab switch left the tab content at {top}px")
+    pg.click("#tabLearn")
+
+
+def check_court_look(pg: Page, tag: str, phone: bool) -> None:
+    """Learn court: title tag, square viewBox, your player ringed, labelled markers, haloed routes, fits the phone."""
+    pick_role(pg, "OH1")
+    pg.click('.rot[data-i="0"]')
+    pg.click('.ph[data-k="rec"]')
+    if pg.inner_text("#learnTag").strip() != "R1 (S1) · Reception":
+        fail(f"{tag} title tag reads {pg.inner_text('#learnTag')!r}")
+    if pg.get_attribute("#courtL", "viewBox") != "-4 -14 108 127":
+        fail(f"{tag} court viewBox is {pg.get_attribute('#courtL', 'viewBox')!r}")
+    if pg.locator("#courtL .me-ring").count() != 1 or pg.locator('#courtL .mk[data-p="OH1"] .me-ring').count() != 1:
+        fail(f"{tag} your player is not the one ringed")
+    labels: list[str] = pg.eval_on_selector_all("#courtL .mk text", "els => els.map(e => e.textContent)")
+    if sorted(labels) != sorted(["S", "OH1", "MB1", "OP", "OH2", "L"]):
+        fail(f"{tag} marker labels read {labels}")
+    if pg.locator("#courtL .rt").count():
+        fail(f"{tag} routes drawn in Reception")
+    pg.click('.ph[data-k="ar"]')
+    if (
+        not pg.locator("#courtL .rt").count()
+        or pg.locator("#courtL .rt").count() != pg.locator("#courtL .rt .halo").count()
+    ):
+        fail(f"{tag} after reception routes missing or without a halo")
+    if phone:
+        pg.evaluate("window.scrollTo(0, 0)")
+        view = pg.evaluate("[innerWidth, innerHeight]")
+        box = pg.locator("#courtL").bounding_box()
+        marker = pg.locator('#courtL .mk[data-p="OH1"] circle:not(.hit)').last.bounding_box()
+        if box is None or box["x"] < 0 or box["x"] + box["width"] > view[0] or box["y"] + box["height"] > view[1]:
+            fail(f"{tag} court {box} does not fit the {view} screen")
+        if marker is None or marker["width"] < 36:
+            fail(f"{tag} marker {marker} is under 36 px")
+        if pg.locator(".tab small").first.is_visible():
+            fail(f"{tag} tab captions shown on a phone")
+    pg.click('.ph[data-k="rec"]')
+    check_drill_pill(pg, tag)
+
+
+def check_drill_pill(pg: Page, tag: str) -> None:
+    """In Drill a tap on the off court pill answers "I'm off court"; the feedback shows the solid pill when off."""
+    pg.click("#tabDrill")
+    wait_ready(pg)
+    pg.locator("#courtD").scroll_into_view_if_needed()
+    x, y = pg.evaluate(
+        "() => { const m = document.getElementById('courtD').getScreenCTM();"
+        " return [m.a * 12 + m.e, m.d * 107 + m.f]; }"
+    )
+    pg.mouse.click(x, y)
+    feedback = pg.inner_text("#fb")
+    if "you are off" not in feedback and "you are on court" not in feedback:
+        fail(f"{tag} a tap on the Drill off court pill scored as a spot: {feedback!r}")
+    texts: list[str] = pg.eval_on_selector_all("#courtD > text", "els => els.map(e => e.textContent)")
+    if ("you are off" in feedback) != ("you: off court" in texts):
+        fail(f"{tag} Drill feedback pill {texts} does not match {feedback!r}")
     pg.click("#tabLearn")
 
 
@@ -456,6 +540,7 @@ def main() -> None:
         tag = f"[{vp['width']} {scheme}]"
         check_page(pg, tag + " initial")
         check_header(pg, tag)
+        check_court_look(pg, tag, mobile)
         sweep_learn(pg, tag, args.quick)
         sweep_drill(pg, tag, args.quick)
         sweep_match(pg, tag, combos, args.quick)

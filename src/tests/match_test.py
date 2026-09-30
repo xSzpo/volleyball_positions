@@ -15,6 +15,8 @@ from data import ROWS, SETS, UNCONFIRMED_SETS  # noqa: E402
 
 URL = (ROOT / "index.html").as_uri() + "?ff=all"
 FAIL: list[str] = []
+# A stored role skips the first-visit role sheet, which covers the page.
+SEED_ROLE = "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"
 
 
 def press_next(page: Page) -> None:
@@ -30,6 +32,7 @@ def fail(message: str) -> None:
 
 def new_page(browser: Browser) -> Page:
     page = browser.new_page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page.add_init_script(SEED_ROLE)
     page.on("pageerror", lambda error: FAIL.append(f"page error: {error}"))
     page.goto(URL)
     page.wait_for_timeout(300)
@@ -38,7 +41,7 @@ def new_page(browser: Browser) -> Page:
 
 def pick_role(page: Page, role: str) -> None:
     if page.is_hidden("#setupPanel"):
-        page.click("#setupBar")
+        page.click("#roleChip")
     page.click(f'.role[data-r="{role}"]')
 
 
@@ -65,7 +68,7 @@ def tap_at(page: Page, x: float, y: float) -> None:
     cx, cy = page.evaluate(
         """([x, y]) => {
             const m = document.getElementById('courtG').getScreenCTM();
-            return [m.a * x * 300 + m.e, m.d * y * 200 + m.f];
+            return [m.a * x * 100 + m.e, m.d * y * 100 + m.f];
         }""",
         [x, y],
     )
@@ -204,14 +207,14 @@ def check_our_serve(browser: Browser) -> None:
     tap_at(page, 0.5, 0.5)
     press_next(page)
     page.wait_for_selector("#gFb .pts")
-    ring = page.locator('#courtG circle[r="26"]')
-    y = float(ring.get_attribute("cy") or "nan") / 200
+    ring = page.locator("#courtG .me-ring circle").first
+    y = float(ring.get_attribute("cy") or "nan") / 100
     if not 0.15 < y < 0.3:
         fail(f"R1 OH1 our serve spot at y {y:.2f}, expected mid-zone in the front row (y 0.21)")
-    arrows = page.locator('#courtG line[marker-end="url(#m-move)"]').count()
+    arrows = page.locator("#courtG line.route").count()
     if arrows != 1:
         fail(f"R1 our serve draws {arrows} arrows, expected 1 (the server)")
-    elif not float(page.locator('#courtG line[marker-end="url(#m-move)"]').get_attribute("y1") or "nan") > 200:
+    elif not float(page.locator("#courtG line.route").get_attribute("y1") or "nan") > 100:
         fail("the server's arrow does not start behind the end line")
     feedback = page.inner_text("#gFb")
     for want in ("middle of your zone", "not confirmed", "before the serve"):
@@ -221,6 +224,30 @@ def check_our_serve(browser: Browser) -> None:
         fail(f"our serve feedback reads {feedback!r}, the front row should not be at the net")
     page.close()
     print("our serve: front-row spot mid-zone, only the server's arrow", flush=True)
+
+
+def check_off_court_pill(browser: Browser) -> None:
+    """A tap on the off court pill toggles I'm off court; the feedback then shows the solid pill."""
+    page = new_page(browser)
+    setup_match(page, "MB2", ("rec",))
+    page.click("#gStart")
+    page.wait_for_selector("#gOff:enabled")
+    tap_at(page, 0.12, 1.07)
+    if page.get_attribute("#gOff", "aria-pressed") != "true" or page.locator("#courtG .myspot").count():
+        fail("a tap on the off court pill did not pick I'm off court")
+    tap_at(page, 0.12, 1.07)
+    if page.get_attribute("#gOff", "aria-pressed") != "false" or page.is_enabled("#gNext"):
+        fail("a second tap on the off court pill did not clear I'm off court")
+    tap_at(page, 0.12, 1.07)
+    press_next(page)
+    page.wait_for_selector("#gFb .pts")
+    if "Spot on" not in page.inner_text("#gFb"):
+        fail(f"off court via the pill scored {page.inner_text('#gFb')!r}, expected Spot on")
+    texts: list[str] = page.eval_on_selector_all("#courtG > text", "els => els.map(e => e.textContent)")
+    if "you: off court" not in texts:
+        fail(f"off court feedback court reads {texts}, expected the solid pill")
+    page.close()
+    print("off court pill: toggles I'm off court, feedback shows the solid pill", flush=True)
 
 
 def check_match_order(browser: Browser) -> None:
@@ -523,16 +550,15 @@ def check_court_not_covered(browser: Browser) -> None:
     """While answering, the buttons do not cover the court; after scoring they stay in view."""
     page = new_page(browser)
     setup_match(page, "OH1", ("rec",))
-    if page.is_hidden("#setupPanel"):
-        page.click("#setupBar")
+    page.set_viewport_size({"width": 390, "height": 640})
     page.click("#gStart")
     page.wait_for_selector("#gOff:enabled")
     page.evaluate("window.scrollTo(0, 0)")
     box = page.locator("#courtG").bounding_box()
-    if box is None or box["y"] + box["height"] <= 844:
+    if box is None or box["y"] + box["height"] <= 640:
         fail("court is not cut by the fold, the test proves nothing")
     else:
-        x, y = box["x"] + box["width"] / 2, 834
+        x, y = box["x"] + box["width"] / 2, 630
         inside = page.evaluate(
             "([x, y]) => document.getElementById('courtG').contains(document.elementFromPoint(x, y))", [x, y]
         )
@@ -571,6 +597,7 @@ def main() -> None:
         check_peek(browser)
         check_best_key(browser)
         check_our_serve(browser)
+        check_off_court_pill(browser)
         check_match_order(browser)
         check_set_calls(browser)
         check_tap_then_continue(browser)
