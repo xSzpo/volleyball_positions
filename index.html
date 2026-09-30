@@ -826,6 +826,7 @@
       margin-top: 10px;
     }
     .setchip {
+      color: var(--ink);
       border: 2px solid currentColor;
       background: transparent;
       border-radius: var(--radius);
@@ -4830,7 +4831,7 @@
           d: `M${sx},${SY} Q${(sx + ex) / 2},${SY - 2 * s[2] * PH} ${ex},${SY + 10}`,
         };
       }
-      function netSvg(visible, hi, { labels = true } = {}) {
+      function netSvg(visible, hi, { labels = true, plain = false } = {}) {
         let s = `<rect x="${NL - 24}" y="${NT}" width="${NR - NL + 48}" height="70" rx="2" fill="none" stroke="var(--netmesh)" stroke-width="6"/>`;
         for (let i = 1; i < 30; i++) {
           const x = NL - 24 + (i * (NR - NL + 48)) / 30;
@@ -4848,8 +4849,8 @@
           if (!visible.includes(st[0])) return;
           const p = setPath(st),
             on = !hi || hi === st[0],
-            col = FAMCOL[st[3]],
-            back = st[3] === "back";
+            col = plain ? "var(--ink)" : FAMCOL[st[3]],
+            back = !plain && st[3] === "back";
           s += `<path d="${p.d}" fill="none" stroke="${col}" stroke-width="${on && hi ? 10 : 5.5}"${back ? ' stroke-dasharray="18 10"' : ""} opacity="${on ? 1 : 0.18}"/>`;
           s += `<circle cx="${p.ex}" cy="${SY + 10}" r="${on && hi ? 12 : 8}" fill="${back ? "var(--panel)" : col}" stroke="${col}" stroke-width="${back ? 5 : 0}" opacity="${on ? 1 : 0.18}"/>`;
         });
@@ -4903,10 +4904,10 @@
         const opts = SETS.filter((s) => !sq || s[0] !== sq[0]);
         sq = opts[Math.floor(Math.random() * opts.length)];
         sAns = false;
-        $("netQ").innerHTML = netSvg([sq[0]], null, { labels: false });
+        $("netQ").innerHTML = netSvg([sq[0]], null, { labels: false, plain: true });
         $("setanswers").innerHTML = SETS.map(
           (s) =>
-            `<button class="setchip ${s[3]}${UNCONFIRMED.includes(s[0]) ? " unconf" : ""}" data-s="${s[0]}"><span>${s[0]}</span></button>`,
+            `<button class="setchip${UNCONFIRMED.includes(s[0]) ? " unconf" : ""}" data-s="${s[0]}"><span>${s[0]}</span></button>`,
         ).join("");
         $("setanswers")
           .querySelectorAll("button")
@@ -4934,6 +4935,7 @@
           .querySelectorAll("button")
           .forEach((b) => {
             if (b.dataset.s === sq[0]) b.setAttribute("aria-pressed", "true");
+            b.classList.add(SETS.find((s) => s[0] === b.dataset.s)[3]);
             b.disabled = true;
           });
         $("sfb").className = `fb ${ok ? "good" : "bad"}`;
@@ -4980,7 +4982,7 @@
         return { ask, opts: shuffle([ask, near, ...rest]), who, done: false };
       }
       function setHtml(q) {
-        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press Next</span><p style="margin:2px 0 0">${{ setter: "You set this ball. What is the call?", hitter: "The setter sets this ball for you. What is the call?", other: "The setter sets this ball. What is the call?" }[q.who]}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip ${s[3]}" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
+        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press Next</span><p style="margin:2px 0 0">${{ setter: "You set this ball. What is the call?", hitter: "The setter sets this ball for you. What is the call?", other: "The setter sets this ball. What is the call?" }[q.who]}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false, plain: true })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
       }
       function setMark(q, pick) {
         const ok = pick === q.ask[0];
@@ -4989,6 +4991,7 @@
           .querySelectorAll("button")
           .forEach((b) => {
             b.disabled = true;
+            b.classList.add(SETS.find((s) => s[0] === b.dataset.s)[3]);
             if (b.dataset.s === q.ask[0]) b.setAttribute("aria-pressed", "true");
             else if (b.dataset.s === pick) b.classList.add("faded");
           });
