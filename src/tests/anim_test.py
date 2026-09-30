@@ -670,8 +670,13 @@ def check_reception_ends(page: Page) -> None:
                 fail(f"{tag}: stages move {[st['moves'] for st in stages]}, expected {release} at the serve contact")
                 continue
             kind = {p: k for p, _, _, k in row["ar"]}
-            # The setter may wait for an attacker who starts in front of the set spot to get out of the way.
-            if any(stages[0]["delays"][p] > (1000 if kind[p] == "set" else 0) for p in release):
+            # The setter may wait for an attacker who starts in front of the set spot to get out of the way, and the
+            # front middle for the setter's run across its way to the front zone; it still takes off as the pass lands.
+            waits = {
+                p: 1000 if kind[p] == "set" else 1500 if p in row["front"] and p.startswith("MB") else 0
+                for p in release
+            }
+            if any(stages[0]["delays"][p] > waits[p] for p in release):
                 fail(f"{tag}: someone waits after the serve contact: {stages[0]['delays']}")
             ar = {p: (x, y) for p, x, y, _ in row["ar"]}
             track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, 'rec', 600)")
