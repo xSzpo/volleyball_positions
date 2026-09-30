@@ -97,7 +97,7 @@ def open_setup(pg: Page) -> None:
 
 def close_setup(pg: Page) -> None:
     if pg.locator("#setupPanel").is_visible():
-        pg.click("#setupDone")
+        pg.click("#roleChip")
 
 
 def pick_role(pg: Page, role: str) -> None:
@@ -116,48 +116,94 @@ def open_fold(pg: Page, sel: str) -> None:
         pg.click(f"{sel} > summary")
 
 
+def menu_open(pg: Page) -> bool:
+    return pg.is_visible("#setupPanel") and pg.get_attribute("#roleChip", "aria-expanded") == "true"
+
+
 def check_header(pg: Page, tag: str) -> None:
-    """First visit opens the role sheet; a pick closes it; the header chip reopens it with the rules."""
-    if not pg.is_visible("#setupPanel") or not pg.is_visible("#setupNudge"):
-        fail(f"{tag} first visit: role sheet not open with nudge")
+    """The role and rules list unrolls under the header button.
+
+    Covers the first visit, anchoring, no backdrop, the open and close paths and the keyboard.
+    """
+    if not menu_open(pg) or not pg.is_visible("#setupNudge"):
+        fail(f"{tag} first visit: role list not open with nudge")
     if pg.is_visible(".rulesmode"):
-        fail(f"{tag} first visit: the role sheet has more than one job")
+        fail(f"{tag} first visit: the role list has more than one job")
     if not pg.is_visible("#subtitle"):
         fail(f"{tag} first visit: subtitle hidden")
     pg.click('.role[data-r="OH1"]')
     if pg.is_visible("#setupPanel"):
-        fail(f"{tag} role pick did not close the sheet")
-    if pg.inner_text("#roleChip").strip() != "OH1" or "Outside 1" not in (
+        fail(f"{tag} role pick did not close the list")
+    if pg.get_attribute("#roleChip", "data-role") != "OH1" or "Outside 1" not in (
         pg.get_attribute("#roleChip", "aria-label") or ""
     ):
-        fail(f"{tag} role chip does not show the role")
+        fail(f"{tag} role button does not show the role")
+    if " ".join(pg.inner_text("#roleChip").split()) != "Outside 1 · Simplified":
+        fail(f"{tag} role button text is {pg.inner_text('#roleChip')!r}")
+    chip = pg.locator("#roleChip").bounding_box()
+    assert chip is not None
+    if chip["height"] < 44 or chip["height"] > 48:
+        fail(f"{tag} role button is not one 44 px line: {chip}")
+    if pg.evaluate("document.documentElement.scrollWidth > innerWidth"):
+        fail(f"{tag} the header scrolls sideways")
     pg.click("#roleChip")
-    if not pg.is_visible("#setupPanel") or pg.get_attribute("#roleChip", "aria-expanded") != "true":
-        fail(f"{tag} role chip did not open the sheet")
+    if not menu_open(pg):
+        fail(f"{tag} role button did not open the list")
+    if pg.evaluate("document.activeElement.dataset.r") != "OH1":
+        fail(f"{tag} opening the list does not focus the current role")
+    menu = pg.locator("#setup").bounding_box()
+    assert menu is not None
+    width = pg.evaluate("innerWidth")
+    if not (chip["y"] + chip["height"] <= menu["y"] <= chip["y"] + chip["height"] + 16):
+        fail(f"{tag} the list is not anchored under the button: button {chip}, list {menu}")
+    if menu["x"] > chip["x"] + chip["width"] or menu["x"] < 0 or menu["x"] + menu["width"] > width:
+        fail(f"{tag} the list is not under the button or leaves the screen: button {chip}, list {menu}")
+    small = pg.eval_on_selector_all(
+        "#setup button", "els => els.filter(e => e.getBoundingClientRect().height < 44).map(e => e.textContent.trim())"
+    )
+    if small:
+        fail(f"{tag} list tap targets under 44 px: {small}")
+    covered = pg.evaluate(
+        "(() => { const el = document.elementFromPoint(2, innerHeight - 2);"
+        " return !el || document.getElementById('setup').contains(el)"
+        " || getComputedStyle(el).position === 'fixed'; })()"
+    )
+    if covered or pg.evaluate("document.querySelector('.wrap').inert"):
+        fail(f"{tag} the open list has a backdrop or blocks the page")
     pg.click('.rulesmode [data-rm="official"]')
+    if pg.is_visible("#setupPanel") or pg.evaluate("document.activeElement.id") != "roleChip":
+        fail(f"{tag} a rules pick did not close the list and focus the button")
     if "Official rules" not in (pg.get_attribute("#roleChip", "aria-label") or ""):
-        fail(f"{tag} role chip label does not name the rules")
+        fail(f"{tag} role button label does not name the rules")
+    pg.click("#roleChip")
     pg.click('.rulesmode [data-rm="simple"]')
-    if not pg.evaluate("document.querySelector('.wrap').inert"):
-        fail(f"{tag} the page behind the open sheet is not inert")
-    for key in ["Tab"] * 12 + ["Shift+Tab"] * 12:
-        pg.keyboard.press(key)
-        if not pg.evaluate("document.getElementById('setup').contains(document.activeElement)"):
-            fail(f"{tag} Tab left the open sheet")
-            break
+    pg.click("#roleChip")
+    pg.click("#roleChip")
+    if pg.is_visible("#setupPanel") or pg.get_attribute("#roleChip", "aria-expanded") != "false":
+        fail(f"{tag} a second tap on the button did not close the list")
+    pg.focus("#roleChip")
+    pg.keyboard.press("Enter")
+    if not menu_open(pg):
+        fail(f"{tag} Enter on the button did not open the list")
+    pg.keyboard.press("Tab")
+    if not pg.evaluate("document.getElementById('setup').contains(document.activeElement)") or not menu_open(pg):
+        fail(f"{tag} Tab inside the open list left it")
     learn_tag = pg.inner_text("#learnTag")
     pg.evaluate("document.body.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true}))")
     if pg.inner_text("#learnTag") != learn_tag:
-        fail(f"{tag} an arrow key behind the open sheet changed the rotation")
+        fail(f"{tag} an arrow key with the list open changed the rotation")
     pg.keyboard.press("Escape")
-    if pg.is_visible("#setupPanel"):
-        fail(f"{tag} Escape did not close the sheet")
-    if pg.evaluate("document.querySelector('.wrap').inert") or pg.evaluate("document.activeElement.id") != "roleChip":
-        fail(f"{tag} closing the sheet did not restore the page and focus the role chip")
+    if pg.is_visible("#setupPanel") or pg.evaluate("document.activeElement.id") != "roleChip":
+        fail(f"{tag} Escape did not close the list and focus the button")
+    pg.click("#roleChip")
+    pg.focus('.rulesmode [data-rm="official"]')
+    pg.keyboard.press("Tab")
+    if pg.is_visible("#setupPanel") or pg.evaluate("document.activeElement.id") != "themeBtn":
+        fail(f"{tag} Tab past the list did not close it and move on")
     pg.click("#roleChip")
     pg.mouse.click(5, 5)
     if pg.is_visible("#setupPanel"):
-        fail(f"{tag} a tap outside did not close the sheet")
+        fail(f"{tag} a tap outside did not close the list")
     pg.reload()
     wait_ready(pg)
     if pg.is_visible("#setupPanel") or pg.is_visible("#setupNudge") or pg.is_visible("#subtitle"):

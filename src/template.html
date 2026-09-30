@@ -243,37 +243,46 @@
       display: block;
     }
     .roles {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 14px;
+      display: grid;
+      gap: 4px;
+      margin-bottom: 12px;
     }
     .role {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 44px;
+      padding: 0 12px;
       border: 2px solid var(--line);
+      border-radius: var(--radius);
       background: var(--panel);
       color: var(--ink);
       font:
-        700 14px Barlow,
+        700 16px Barlow,
         sans-serif;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      padding: 8px 12px;
-      border-radius: var(--radius);
+      text-align: left;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
     .role i {
-      width: 12px;
-      height: 12px;
+      flex: 0 0 auto;
+      width: 14px;
+      height: 14px;
       border-radius: 0;
-      display: inline-block;
     }
     .role[aria-pressed="true"] {
-      border-color: var(--ink);
-      background: var(--ink);
-      color: var(--panel);
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+    .role[aria-pressed="true"]::after {
+      content: "\2713";
+      margin-left: auto;
+      color: var(--accent-ink);
+      font-size: 20px;
+    }
+    .role:disabled {
+      opacity: 0.6;
+      cursor: default;
     }
     .tabs {
       display: grid;
@@ -318,6 +327,7 @@
       }
     }
     .topbtns {
+      position: relative;
       display: flex;
       gap: 8px;
       flex: 0 0 auto;
@@ -325,55 +335,57 @@
     .rolechip {
       display: flex;
       align-items: center;
-      gap: 4px;
-      min-width: 64px;
+      gap: 6px;
       height: 44px;
       margin-top: 4px;
-      padding: 0 10px;
-      border: var(--edge);
+      padding: 0 10px 0 12px;
+      border: 2px solid var(--accent);
       border-radius: var(--radius);
-      background: var(--panel);
-      color: var(--ink);
+      background: var(--accent);
+      color: var(--on-accent);
       font:
-        700 18px "Barlow Condensed",
+        700 17px "Barlow Condensed",
         sans-serif;
+      white-space: nowrap;
       cursor: pointer;
     }
     .rolechip::after {
       content: "\25BE";
-      font-size: 14px;
+      font-size: 16px;
     }
-    .sheetback {
-      position: fixed;
-      inset: 0;
-      z-index: 20;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      background: rgba(0, 0, 0, 0.45);
+    .rolechip[aria-expanded="true"]::after {
+      content: "\25B4";
     }
-    .sheetback[hidden] {
+    .rolechip .rcrules {
+      font-weight: 600;
+    }
+    @media (max-width: 359px) {
+      .rolechip {
+        gap: 4px;
+        padding: 0 8px;
+        font-size: 15px;
+      }
+    }
+    .menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 30;
+      width: min(340px, calc(100vw - 32px));
+      max-height: calc(100svh - 72px);
+      overflow-y: auto;
+      padding: 12px;
+      border: var(--edge);
+      border-radius: var(--radius-lg);
+      background: var(--panel);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+    .menu[hidden] {
       display: none;
     }
-    .sheet {
-      width: 100%;
-      max-width: 720px;
-      max-height: 90svh;
-      overflow-y: auto;
-      padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
-      border-top: var(--edge);
-      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-      background: var(--panel);
-    }
-    .sheethead {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .sheethead h2 {
-      margin: 0;
+    .menu h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
     }
     #setupNudge {
       margin: 0 0 8px;
@@ -1150,18 +1162,25 @@
       align-items: center;
       gap: 4px;
       flex-wrap: wrap;
-      margin: -4px 0 14px;
+      padding-top: 10px;
+      border-top: 1px solid var(--muted);
+    }
+    .rulesmode .vislabel {
+      flex-basis: 100%;
+      margin-bottom: 4px;
     }
     .rulesmode button {
+      flex: 1 1 0;
+      min-height: 44px;
       border: 2px solid var(--line);
       background: var(--panel);
       color: var(--ink);
       font:
-        700 13px Barlow,
+        700 14px Barlow,
         sans-serif;
       text-transform: uppercase;
       letter-spacing: 0.02em;
-      padding: 5px 11px;
+      padding: 0 10px;
       border-radius: var(--radius);
       cursor: pointer;
     }
@@ -1655,10 +1674,33 @@
             type="button"
             class="rolechip"
             id="roleChip"
-            aria-haspopup="dialog"
             aria-expanded="false"
             aria-controls="setup"
           ></button>
+          <div class="menu" id="setup" hidden>
+            <div id="setupPanel" role="group" aria-labelledby="setupTitle">
+              <h2 id="setupTitle">Pick your role</h2>
+              <p id="setupNudge" hidden>
+                Pick the role you play today. Change it any time with the button at the top.
+              </p>
+              <div class="roles" id="roles"></div>
+              <div class="rulesmode" role="radiogroup" aria-label="Rules">
+                <span class="vislabel">Rules</span>
+                <button type="button" role="radio" aria-checked="false" data-rm="simple">
+                  Simplified
+                </button><button
+                  type="button"
+                  role="radio"
+                  aria-checked="false"
+                  data-rm="official"
+                  id="rmOfficial"
+                >
+                  Official
+                </button>
+                <small id="rmSub"></small>
+              </div>
+            </div>
+          </div>
           <button type="button" class="themebtn" id="themeBtn" aria-label="Switch to dark mode">
             <svg
               class="moon"
@@ -2083,41 +2125,6 @@
         </div>
       </section>
     </div>
-    <div class="sheetback" id="setup" hidden>
-      <div
-        class="sheet"
-        id="setupPanel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="setupTitle"
-      >
-        <div class="sheethead">
-          <h2 id="setupTitle">Pick your role</h2>
-          <button type="button" class="btn" id="setupDone">Done</button>
-        </div>
-        <p id="setupNudge" hidden>
-          Pick the role you play today. Change it any time with the button at the top.
-        </p>
-        <p class="hint" style="margin-bottom:8px">I'm playing today as</p>
-        <div class="roles" id="roles"></div>
-        <div class="rulesmode" role="radiogroup" aria-label="Rules">
-          <span class="vislabel">Rules</span>
-          <button type="button" role="radio" aria-checked="false" data-rm="simple">
-            Simplified
-          </button><button
-            type="button"
-            role="radio"
-            aria-checked="false"
-            data-rm="official"
-            id="rmOfficial"
-          >
-            Official
-          </button>
-          <small id="rmSub"></small>
-        </div>
-      </div>
-    </div>
-
     <script>
     (() => {
       const DATA = __DATA__;
@@ -2923,8 +2930,10 @@
           });
       }
       function renderSetupSummary() {
-        $("roleChip").textContent = role;
-        $("roleChip").setAttribute(
+        const chip = $("roleChip");
+        chip.dataset.role = role;
+        chip.innerHTML = `<span>${NAMES[role]}</span><span aria-hidden="true">·</span><span class="rcrules">${RULES_NAME[rulesMode]}</span>`;
+        chip.setAttribute(
           "aria-label",
           `Playing as ${NAMES[role]}, ${RULES_NAME[rulesMode]} rules. Change`,
         );
@@ -2933,35 +2942,25 @@
         const wasOpen = !$("setup").hidden;
         if (!open) $("setupNudge").hidden = true;
         const first = !$("setupNudge").hidden;
-        $("setupTitle").textContent = first ? "Pick your role" : "Role and rules";
+        $("setupTitle").textContent = first ? "Pick your role" : "Your role";
         document.querySelector(".rulesmode").hidden = first;
         $("setup").hidden = !open;
-        document.querySelector(".wrap").inert = open;
         $("roleChip").setAttribute("aria-expanded", open);
         if (!focus) return;
-        if (open) (document.querySelector('.role[aria-pressed="true"]') || $("setupDone")).focus();
+        if (open) document.querySelector('.role[aria-pressed="true"]')?.focus();
         else if (wasOpen) $("roleChip").focus({ preventScroll: true });
       }
-      $("roleChip").onclick = () => setSetupOpen(true);
-      $("setupDone").onclick = () => setSetupOpen(false);
-      $("setup").onclick = (e) => {
-        if (e.target === $("setup")) setSetupOpen(false);
-      };
+      $("roleChip").onclick = () => setSetupOpen($("setup").hidden);
+      const inMenu = (el) => $("setup").contains(el) || $("roleChip").contains(el);
+      document.addEventListener("pointerdown", (e) => {
+        if (!$("setup").hidden && !inMenu(e.target))
+          setSetupOpen(false, $("setup").contains(document.activeElement));
+      });
+      document.addEventListener("focusin", (e) => {
+        if (!$("setup").hidden && !inMenu(e.target)) setSetupOpen(false, false);
+      });
       document.addEventListener("keydown", (e) => {
-        if ($("setup").hidden) return;
-        if (e.key === "Escape") setSetupOpen(false);
-        if (e.key !== "Tab") return;
-        const stops = [...$("setupPanel").querySelectorAll("button, input, select")].filter(
-          (el) => !el.disabled && el.getClientRects().length,
-        );
-        const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];
-        if (
-          stops.length &&
-          (document.activeElement === edge || !$("setup").contains(document.activeElement))
-        ) {
-          e.preventDefault();
-          (e.shiftKey ? stops[stops.length - 1] : stops[0]).focus();
-        }
+        if (!$("setup").hidden && e.key === "Escape") setSetupOpen(false);
       });
       $("subtitle").hidden = !firstVisit;
       $("setupNudge").hidden = !firstVisit;
@@ -6661,8 +6660,8 @@
         $("rmSub").textContent = locked
           ? "Set by the host for this match."
           : rulesMode === "official"
-            ? "Official (FIVB) rules: two middles, and the libero may not serve, so in R3 and R6 the middle in zone 1 serves."
-            : "Simplified KSV: a training convention for one middle, not a match lineup. MB is always front row and the libero always plays the back-row middle spot; in R3 and R6 a substitute serves.";
+            ? "FIVB: two middles, and the libero may not serve."
+            : "A training convention: one middle, the libero in the back row.";
         renderSetupSummary();
       }
       document.querySelectorAll(".rulesmode [data-rm]").forEach((b) => {
@@ -6686,6 +6685,7 @@
             cur = null;
             newQuestion();
           }
+          setSetupOpen(false);
         };
       });
       renderRulesMode();

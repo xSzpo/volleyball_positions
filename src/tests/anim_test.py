@@ -361,7 +361,7 @@ def check_nudge(browser: Browser) -> None:
         page.click("#roleChip")
         page.click('#roles .role[data-r="L"]')
         if page.is_visible("#setupPanel"):
-            page.click("#setupDone")
+            page.click("#roleChip")
         expect(6, "a role change")
         context.close()
 
@@ -450,13 +450,13 @@ def check_no_autoplay(page: Page) -> None:
     page.click("#roleChip")
     page.click('#roles .role[data-r="L"]')
     if page.is_visible("#setupPanel"):
-        page.click("#setupDone")
-    if page.inner_text("#roleChip").strip() != "L" or anim(page):
-        fail(f"a role change plays Our serve or does not apply: {page.inner_text('#roleChip')!r}")
+        page.click("#roleChip")
+    if page.get_attribute("#roleChip", "data-role") != "L" or anim(page):
+        fail(f"a role change plays Our serve or does not apply: {page.get_attribute('#roleChip', 'data-role')!r}")
     page.click("#roleChip")
     page.click('.rulesmode [data-rm="official"]')
     if page.is_visible("#setupPanel"):
-        page.click("#setupDone")
+        page.click("#roleChip")
     if page.get_attribute('.rulesmode [aria-checked="true"]', "data-rm") != "official" or anim(page):
         fail("a rules change plays Our serve or does not apply")
     check_positions(
