@@ -11,7 +11,10 @@ from playwright.sync_api import Browser, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from data import ROWS, SETS, UNCONFIRMED_SETS  # noqa: E402
+from data import SETS, UNCONFIRMED_SETS, lineup  # noqa: E402
+
+# The app opens in Simplified KSV.
+ROWS = [lineup(ri, "simple") for ri in range(6)]
 
 URL = (ROOT / "index.html").as_uri() + "?ff=all"
 FAIL: list[str] = []
@@ -30,9 +33,10 @@ def fail(message: str) -> None:
     print("FAIL:", message, flush=True)
 
 
-def new_page(browser: Browser) -> Page:
+def new_page(browser: Browser, rules: str = "simple") -> Page:
     page = browser.new_page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
     page.add_init_script(SEED_ROLE)
+    page.add_init_script(f"localStorage.setItem('ksv51:rulesMode', JSON.stringify('{rules}'))")
     page.on("pageerror", lambda error: FAIL.append(f"page error: {error}"))
     page.goto(URL)
     page.wait_for_timeout(300)
@@ -173,7 +177,7 @@ def check_peek(browser: Browser) -> None:
     if shown != "Shown: Nobody (full points) · Peeked: 1 moment":
         fail(f"end screen after one peek reads {shown!r}")
     best = page.evaluate("JSON.parse(localStorage.getItem('ksv51:gameBest'))")
-    if list(best) != ["v4|OH1|rec"]:
+    if list(best) != ["v5|OH1|rec"]:
         fail(f"best score saved under {list(best)}, expected the starting settings only")
     page.close()
 
@@ -181,13 +185,13 @@ def check_peek(browser: Browser) -> None:
 def check_best_key(browser: Browser) -> None:
     """Bests from before the scoring change are ignored, and the neighbour check has its own best."""
     page = new_page(browser)
-    page.evaluate("""localStorage.setItem('ksv51:gameBest', JSON.stringify({"v3|OH1|rec": 9999, "v4|OH1|rec": 500}))""")
+    page.evaluate("""localStorage.setItem('ksv51:gameBest', JSON.stringify({"v4|OH1|rec": 9999, "v5|OH1|rec": 500}))""")
     page.reload()
     page.wait_for_timeout(300)
     setup_match(page, "OH1", ("rec",))
     text = page.inner_text("#gBest")
     if "500" not in text:
-        fail(f"best line reads {text!r}, expected the v4 best of 500")
+        fail(f"best line reads {text!r}, expected the v5 best of 500")
     page.check("#nbGame")
     text = page.inner_text("#gBest")
     if text:
@@ -228,7 +232,7 @@ def check_our_serve(browser: Browser) -> None:
 
 def check_off_court_pill(browser: Browser) -> None:
     """A tap on the off court pill toggles I'm off court; the feedback then shows the solid pill."""
-    page = new_page(browser)
+    page = new_page(browser, rules="official")
     setup_match(page, "MB2", ("rec",))
     page.click("#gStart")
     page.wait_for_selector("#gOff:enabled")
@@ -248,6 +252,26 @@ def check_off_court_pill(browser: Browser) -> None:
         fail(f"off court feedback court reads {texts}, expected the solid pill")
     page.close()
     print("off court pill: toggles I'm off court, feedback shows the solid pill", flush=True)
+
+
+def check_libero_hint(browser: Browser) -> None:
+    """The libero's hint at the R3 serve, off court, names the rule set in play."""
+    for rules, want, unwanted in (("simple", "SUB", "official rules"), ("official", "official rules", "SUB")):
+        page = new_page(browser, rules=rules)
+        setup_match(page, "L", ("serve",))
+        page.click("#gStart")
+        for _ in range(2):
+            page.wait_for_selector("#gOff:enabled")
+            tap_at(page, 0.5, 0.5)
+            press_next(page)
+            press_next(page)
+        page.wait_for_selector("#gOff:enabled")
+        page.click("#gHelp")
+        hint = page.inner_text("#gFb")
+        if want not in hint or unwanted in hint:
+            fail(f"{rules} L hint at the R3 serve reads {hint!r}, expected {want!r}")
+        page.close()
+    print("libero hint: Simplified names SUB, Official the libero rule", flush=True)
 
 
 def check_match_order(browser: Browser) -> None:
@@ -373,7 +397,7 @@ def play_set_calls(browser: Browser, role: str, steps: tuple[str, ...], sets: bo
 
 
 def check_set_calls(browser: Browser) -> None:
-    for role in ("OH1", "MB1", "S"):
+    for role in ("OH1", "MB", "S"):
         page = play_set_calls(browser, role, ("rec", "ar"))
         stats = page.inner_text("#gStats")
         if "1/2 set calls right" not in stats.replace("\n", " "):
@@ -599,6 +623,7 @@ def main() -> None:
         check_our_serve(browser)
         check_off_court_pill(browser)
         check_match_order(browser)
+        check_libero_hint(browser)
         check_set_calls(browser)
         check_tap_then_continue(browser)
         check_breakdown(browser)

@@ -5,7 +5,7 @@ The 3 m line sits at y = 0.42 (as drawn in the KSV guide). Reception and
 after-reception positions are measured from KSV_M3.pdf pages 4-9.
 """
 
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 ATTACK_LINE = 0.42
 
@@ -203,3 +203,61 @@ SETS: list[tuple[str, float, float, str, str]] = [
 
 # Inferred from the guide's drawings only; left out of match questions until the coach confirms them.
 UNCONFIRMED_SETS: list[str] = ["Po", "4"]
+
+RulesMode = Literal["simple", "official"]
+RULES_MODES: tuple[RulesMode, ...] = ("simple", "official")
+ZONE_ORDER = [4, 3, 2, 5, 6, 1]
+MIDDLES = ("MB1", "MB2")
+
+
+def rotation_zones(row: Row) -> dict[int, str]:
+    """Maps each zone to the player standing there at the Rotation step."""
+    return dict(zip(ZONE_ORDER, row["front"] + row["back"], strict=True))
+
+
+def middle_pair(ri: int) -> tuple[int, int]:
+    """Returns the zones of the front-row middle slot and the back-row middle slot.
+
+    The back slot is where the libero stands for the back-row middle. In
+    Simplified KSV, MB always takes the front slot and L the back slot.
+    """
+    zones = rotation_zones(ROWS[ri])
+    front = next(z for z in (4, 3, 2) if zones[z] in MIDDLES)
+    back = next(z for z in (5, 6, 1) if zones[z] == "L")
+    return front, back
+
+
+def server(ri: int, mode: RulesMode) -> str:
+    """Returns who serves from zone 1: the libero may not, so a middle (Official) or SUB (Simplified) does."""
+    player = ROWS[ri]["back"][2]
+    if player != "L":
+        return player
+    return ROWS[ri]["liberofor"] if mode == "official" else "SUB"
+
+
+def lineup(ri: int, mode: RulesMode) -> Row:
+    """Returns rotation ri under a rule set, derived from the official data.
+
+    Simplified renames the front-row middle to MB and the back-row middle,
+    who is on court only at our serve in R3 and R6, to SUB.
+    """
+    row = ROWS[ri]
+    if mode == "official":
+        return row
+    front_zone, _ = middle_pair(ri)
+    rename = {rotation_zones(row)[front_zone]: "MB", row["liberofor"]: "SUB"}
+
+    def name(player: str) -> str:
+        return rename.get(player, player)
+
+    return Row(
+        name=row["name"],
+        setter=row["setter"],
+        liberofor="SUB" if server(ri, mode) == "SUB" else "",
+        front=[name(p) for p in row["front"]],
+        back=[name(p) for p in row["back"]],
+        rec=[(name(p), x, y) for p, x, y in row["rec"]],
+        ar=[(name(p), x, y, kind) for p, x, y, kind in row["ar"]],
+        serve=([name(p) for p in row["serve"][0]], [name(p) for p in row["serve"][1]]),
+        note=row["note"],
+    )

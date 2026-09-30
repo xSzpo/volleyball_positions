@@ -2069,10 +2069,16 @@
         <div class="roles" id="roles"></div>
         <div class="rulesmode" role="radiogroup" aria-label="Rules">
           <span class="vislabel">Rules</span>
-          <button type="button" role="radio" aria-checked="false" data-rm="official">
+          <button type="button" role="radio" aria-checked="false" data-rm="simple">
+            Simplified
+          </button><button
+            type="button"
+            role="radio"
+            aria-checked="false"
+            data-rm="official"
+            id="rmOfficial"
+          >
             Official
-          </button><button type="button" role="radio" aria-checked="false" data-rm="drill">
-            Drill
           </button>
           <small id="rmSub"></small>
         </div>
@@ -2082,12 +2088,25 @@
     <script>
     (() => {
       const DATA = __DATA__;
-      const ROWS = DATA.rows.map((r) => ({
-          ...r,
-          short: r.name,
-          name: `${r.name} (S${r.setter})`,
-        })),
-        AL = DATA.attackLine,
+      const RULE_ROWS = Object.fromEntries(
+        Object.entries(DATA.rows).map(([mode, rows]) => [
+          mode,
+          rows.map((r) => ({ ...r, short: r.name, name: `${r.name} (S${r.setter})` })),
+        ]),
+      );
+      // v1's Drill mode is dropped; a stored "drill" reads as Simplified.
+      function storedRules() {
+        try {
+          return JSON.parse(localStorage.getItem("ksv51:rulesMode")) === "official"
+            ? "official"
+            : "simple";
+        } catch (e) {
+          return "simple";
+        }
+      }
+      let rulesMode = storedRules();
+      let ROWS = RULE_ROWS[rulesMode];
+      const AL = DATA.attackLine,
         BASE_DEF = DATA.baseDef,
         SETS = DATA.sets,
         SETTER_X = DATA.setterX,
@@ -2101,22 +2120,39 @@
       const COLORS = {
         S: "var(--role-s)",
         OP: "var(--role-op)",
+        MB: "var(--role-mb)",
         MB1: "var(--role-mb)",
         MB2: "var(--role-mb)",
         OH1: "var(--role-oh)",
         OH2: "var(--role-oh)",
         L: "var(--role-l)",
+        SUB: "var(--role-sub)",
       };
       const NAMES = {
         S: "Setter",
         OP: "Opposite",
+        MB: "Middle",
         MB1: "Middle 1",
         MB2: "Middle 2",
         OH1: "Outside 1",
         OH2: "Outside 2",
         L: "Libero",
+        SUB: "Substitute",
       };
-      const ROLES = ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"];
+      const ROLE_SETS = {
+        simple: ["MB", "OH1", "OH2", "OP", "S", "L"],
+        official: ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"],
+      };
+      const ALL_ROLES = ["MB", "MB1", "MB2", "OH1", "OH2", "OP", "S", "L"];
+      const RULES_NAME = { simple: "Simplified", official: "Official" };
+      function roles() {
+        return ROLE_SETS[rulesMode];
+      }
+      // The same player under the other rule set: MB1 and MB2 exist only in Official.
+      function roleIn(mode, r) {
+        if (mode === "simple") return r === "MB1" || r === "MB2" ? "MB" : r;
+        return r === "MB" ? "MB1" : r;
+      }
       const PHASES = [
         ["start", "Rotation"],
         ["serve", "Our serve"],
@@ -2146,7 +2182,7 @@
         if (phase === "start") return grid(r.front, r.back);
         if (phase === "rec") return r.rec.map(([p, x, y]) => ({ p, x, y }));
         if (phase === "serve") {
-          const sv = serveLineup(ri);
+          const sv = r.serve;
           return [...sv[0], ...sv[1]].map((p, i) => {
             const [x, y, kind] = BASE_DEF[ORDER[i]];
             return { p, x, y, kind };
@@ -2154,26 +2190,8 @@
         }
         return r.ar.map(([p, x, y, k]) => ({ p, x, y, kind: k }));
       }
-      let rulesMode = (() => {
-        try {
-          return JSON.parse(localStorage.getItem("ksv51:rulesMode")) || "official";
-        } catch (e) {
-          return "official";
-        }
-      })();
-      const MID_SERVER = { 2: "MB1", 5: "MB2" }; // rotations where a middle is in zone 1 when we serve
-      function serveLineup(ri) {
-        const r = ROWS[ri];
-        if (rulesMode === "drill" && MID_SERVER[ri]) {
-          const m = MID_SERVER[ri];
-          return [r.serve[0], ["L", ...r.serve[1].filter((p) => p !== m)]];
-        }
-        return r.serve;
-      }
       function server(ri) {
-        const p = ROWS[ri].back[2];
-        if (p !== "L") return p;
-        return rulesMode === "drill" ? "L" : MID_SERVER[ri];
+        return ROWS[ri].server;
       }
       function zoneOf(ri, role) {
         const r = ROWS[ri];
@@ -2193,18 +2211,18 @@
         const me = pl.find((o) => o.p === role);
         const z = zoneOf(ri, role);
         if (!me) {
+          if (role === "L" && rulesMode === "simple")
+            return {
+              t: "Off court",
+              d: "You are in zone 1, but the libero may never serve. A substitute (SUB) comes on, serves, then defends zone 6. If we win the rally, SUB serves again. When we lose the serve, you come back on for SUB and take SUB's zone.",
+            };
           if (role === "L") {
-            const m = MID_SERVER[ri];
+            const m = server(ri);
             return {
               t: "Off court",
               d: `${m} is in zone 1, so ${m} has to serve. Under the official rules (FIVB, used in Denmark) the libero may never serve, so you are off while ${m} is serving. If we win the rally, ${m} serves again and you stay off. When we lose the serve, you come back in for ${m} after that rally.`,
             };
           }
-          if (phase === "serve" && rulesMode === "drill" && MID_SERVER[ri] === role)
-            return {
-              t: "Off court",
-              d: "Drill rules: the libero stays on and serves from zone 1 for you. Under the official rules you would serve here yourself.",
-            };
           if (phase === "serve")
             return { t: "Off court", d: "The libero is in for you while your team serves." };
           return {
@@ -2281,7 +2299,7 @@
             d: "Cover the attack, then defend from here.",
           };
         }
-        const sv = serveLineup(ri);
+        const sv = r.serve;
         const zz = ORDER[[...sv[0], ...sv[1]].indexOf(role)];
         const front = me.kind === "zone";
         const t = front ? `Front row, zone ${zz}` : `Defend zone ${zz}`;
@@ -2293,10 +2311,8 @@
         let d = `${job} Stand here already before the serve: since 2025 the serving team has no overlap rule (FIVB 7.4).`;
         if (role === server(ri)) {
           d = `Serve, then run to zone ${zz}. ${job}`;
-          if (rulesMode === "official" && MID_SERVER[ri] === role)
+          if (r.liberofor === role)
             d = `You are in zone 1, so you serve: the libero may not serve under the official rules. Serve, then run to zone ${zz}, deep. If we win the rally, you serve again. When we lose the serve, the libero comes back in for you.`;
-          if (role === "L")
-            d = `Drill rules: you serve for ${MID_SERVER[ri]}. Serve, then run to zone ${zz}, deep. Under the official rules the libero may not serve.`;
         }
         return { t, d };
       }
@@ -2308,6 +2324,7 @@
       const ROLE_KEY = {
         S: "s",
         OP: "op",
+        MB: "mb",
         MB1: "mb",
         MB2: "mb",
         OH1: "oh",
@@ -2503,7 +2520,7 @@
         "match-solo": true,
         "set-call-check": true,
         "match-same-device": true,
-        "match-online": true,
+        "match-online": false,
         "sets-tab": true,
         "sets-quiz": true,
         downloads: true,
@@ -2527,6 +2544,7 @@
       };
       const FEATURE_ELEMENTS = {
         "learn-tab": ["tabLearn", "learn"],
+        "rules-official": ["rmOfficial"],
         "learn-guides": ["howTo", "checks", "thumbsBox"],
         "rotations-table": ["allRots"],
         "drill-tab": ["tabDrill", "drill"],
@@ -2623,7 +2641,14 @@
         const tabs = TABS.filter(([, k]) => feature(k)).map(([t]) => t);
         $("tabs").hidden = tabs.length < 2;
         $("ffEmpty").hidden = tabs.length > 0;
-        if (!ROLES.includes(store.get("role", null))) {
+        if (!feature("rules-official") && rulesMode === "official") {
+          setRules("simple");
+          renderRulesMode();
+        } else if (feature("rules-official") && !ON && !G && rulesMode !== storedRules()) {
+          setRules(storedRules());
+          renderRulesMode();
+        }
+        if (!ALL_ROLES.includes(store.get("role", null))) {
           $("setupNudge").hidden = false;
           setSetupOpen(tabs.length > 0, false);
         }
@@ -2670,17 +2695,19 @@
       });
       darkQuery.addEventListener("change", paintThemeButton);
       paintThemeButton();
-      const firstVisit = !ROLES.includes(store.get("role", null));
-      let role = firstVisit ? "MB1" : store.get("role", "MB1");
+      const firstVisit = !ALL_ROLES.includes(store.get("role", null));
+      let role = roleIn(rulesMode, firstVisit ? "MB" : store.get("role", "MB"));
       let ri = 0,
         phase = "rec",
         stats = store.get("stats2", {});
 
       function renderRoles() {
-        $("roles").innerHTML = ROLES.map(
-          (r) =>
-            `<button class="role" aria-pressed="${r === role}" data-r="${r}"${ON && ON.meta.state !== "lobby" ? " disabled" : ""}><i style="background:${COLORS[r]}"></i>${NAMES[r]}</button>`,
-        ).join("");
+        $("roles").innerHTML = roles()
+          .map(
+            (r) =>
+              `<button class="role" aria-pressed="${r === role}" data-r="${r}"${ON && ON.meta.state !== "lobby" ? " disabled" : ""}><i style="background:${COLORS[r]}"></i>${NAMES[r]}</button>`,
+          )
+          .join("");
         $("roles")
           .querySelectorAll(".role")
           .forEach((b) => {
@@ -2711,7 +2738,7 @@
         $("roleChip").textContent = role;
         $("roleChip").setAttribute(
           "aria-label",
-          `Playing as ${NAMES[role]}, ${rulesMode === "official" ? "Official" : "Drill"} rules. Change`,
+          `Playing as ${NAMES[role]}, ${RULES_NAME[rulesMode]} rules. Change`,
         );
       }
       function setSetupOpen(open, focus = true) {
@@ -2733,7 +2760,20 @@
         if (e.target === $("setup")) setSetupOpen(false);
       };
       document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && !$("setup").hidden) setSetupOpen(false);
+        if ($("setup").hidden) return;
+        if (e.key === "Escape") setSetupOpen(false);
+        if (e.key !== "Tab") return;
+        const stops = [...$("setupPanel").querySelectorAll("button, input, select")].filter(
+          (el) => !el.disabled && el.getClientRects().length,
+        );
+        const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];
+        if (
+          stops.length &&
+          (document.activeElement === edge || !$("setup").contains(document.activeElement))
+        ) {
+          e.preventDefault();
+          (e.shiftKey ? stops[stops.length - 1] : stops[0]).focus();
+        }
       });
       $("subtitle").hidden = !firstVisit;
       $("setupNudge").hidden = !firstVisit;
@@ -2829,6 +2869,12 @@
           "Back row in R4, R5, R6: stand deep behind the receivers, then go straight to zone 1 for the back-row attack.",
           "Except R1, you attack from the right.",
         ],
+        MB: [
+          "You are always in the front row, in the middle slot. Start where the guide's front-row middle starts, get to the 3 m line and attack in the middle.",
+          "Into R3 and R6 the middle pair resets: you walk along the net from zone 2 to zone 4, and the libero walks across the back from zone 5 to zone 1.",
+          "When we serve: middle of zone 3.",
+          "Simplified KSV is a training convention for one middle. In a match both middles play.",
+        ],
         MB1: [
           "Front row in R1, R2, R6: start at the net (R6 far left, R2 right of the setter), get to the 3 m line and attack in the middle.",
           "R3, R4, R5: you are off, the libero is in for you.",
@@ -2848,7 +2894,7 @@
           "Back row in R2, R3, R4: after reception cover middle back (zone 6); the libero covers left back.",
         ],
         L: [
-          "You replace the back-row middle: MB2 in R1, R2 and R6, MB1 in R3, R4 and R5. You are never in the front row.",
+          "@LSLOT",
           "@LSERVE",
           "You receive in every rotation: in the middle of the line in R1, R2 and R5, on the right in R3, R4 and R6.",
           "After reception: cover the hitter, then move to left back (zone 5).",
@@ -2863,12 +2909,12 @@
       const THUMB = [
         {
           t: "When we serve: no overlap rule",
-          roles: ["OH1", "OH2", "MB1", "MB2", "OP", "S", "L"],
+          roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
           d: "Stand in your defence spot (rows still count for blocking and attacking). Not in the guide: FIVB rule 7.4, since 2025.",
         },
         {
           t: "Three players receive",
-          roles: ["OH1", "OH2", "MB1", "MB2", "OP", "S", "L"],
+          roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
           d: "The two outside hitters and the libero pass the serve. Everyone else stays out of the passing lanes so the setter can set, the middle can run the quick and the opposite can attack.",
         },
         {
@@ -2900,18 +2946,17 @@
       function ruleText(x) {
         const off = rulesMode === "official";
         const T = {
-          "@MB1SERVE": off
-            ? "Exception: in R3 you are in zone 1, so you serve, then run to zone 6. The libero may not serve, so you stay on until your team loses the serve."
-            : "Drill rules: in R3 the libero serves for you, so you are off. (Official rules: you serve.)",
-          "@MB2SERVE": off
-            ? "Exception: in R6 you are in zone 1, so you serve, then run to zone 6. The libero may not serve, so you stay on until your team loses the serve."
-            : "Drill rules: in R6 the libero serves for you, so you are off. (Official rules: you serve.)",
+          "@MB1SERVE":
+            "Exception: in R3 you are in zone 1, so you serve, then run to zone 6. The libero may not serve, so you stay on until your team loses the serve.",
+          "@MB2SERVE":
+            "Exception: in R6 you are in zone 1, so you serve, then run to zone 6. The libero may not serve, so you stay on until your team loses the serve.",
+          "@LSLOT": off
+            ? "You replace the back-row middle: MB2 in R1, R2 and R6, MB1 in R3, R4 and R5. You are never in the front row."
+            : "You always play the back-row middle spot, opposite MB. You are never in the front row. Into R3 and R6 the middle pair resets: you walk across the back from zone 5 to zone 1.",
           "@LSERVE": off
             ? "When we serve: defend zone 5. Exception: in R3 and R6 the back-row middle is in zone 1 and must serve, because the libero may never serve (FIVB rules). You are off until your team loses the serve."
-            : "When we serve: defend zone 5. Drill rules: in R3 and R6 you serve from zone 1 for the middle, then run to zone 5.",
-          "@OHSERVE": off
-            ? "When we serve: front → middle of zone 4; back → defend zone 6 (zone 5 in R3 and R6, when a middle serves)."
-            : "When we serve: front → middle of zone 4; back → defend zone 6.",
+            : "When we serve: defend zone 5. Exception: in R3 and R6 you are in zone 1, but the libero may never serve. A substitute (SUB) serves and defends zone 6. You come back on for SUB when your team loses the serve.",
+          "@OHSERVE": `When we serve: front → middle of zone 4; back → defend zone 6 (zone 5 in R3 and R6, when ${off ? "a middle" : "SUB"} serves).`,
         };
         return lab(T[x] || x);
       }
@@ -2945,8 +2990,12 @@
         const sz = zoneOf(ri, "S"),
           k = LINEUP.indexOf(r);
         if (r === "S") return `You are the setter: the name ${ROWS[ri].name} tells you your zone.`;
+        if (r === "L" && rulesMode === "simple")
+          return `You play the back-row middle spot, opposite MB: zone ${zoneOf(ri, "L")}.`;
         if (r === "L")
           return `You replace the back-row middle, ${ROWS[ri].liberofor}, so you take ${ROWS[ri].liberofor}'s zone ${zoneOf(ri, "L")}.`;
+        if (r === "MB")
+          return `You are always in the front row, in the middle slot: zone ${zoneOf(ri, "MB")}. Into R3 and R6 the middle pair resets: you walk along the net from zone 2 to zone 4.`;
         if (k === 3)
           return `The setter is in zone ${sz}. You are always directly opposite the setter, three zones away.`;
         return `The setter is in zone ${sz}. In the serving order you come ${k} after the setter, so count ${k} zone${k > 1 ? "s" : ""} on from the setter's zone (1→2→3→4→5→6).`;
@@ -3581,12 +3630,12 @@
       }
       function gKey() {
         return (
-          "v4|" +
+          "v5|" +
           role +
           "|" +
           gSteps().join(",") +
           (gOrder() === "mixed" ? "|mixed" : "") +
-          (rulesMode === "drill" ? "|drill" : "") +
+          (rulesMode === "official" ? "|official" : "") +
           (visGame !== "none" ? `|${visGame}` : "") +
           (nbOn("nbGame") && gSteps().includes("rec") ? "|nb" : "") +
           (setOn() ? "|sets" : "")
@@ -3846,7 +3895,9 @@
           return `Look inside the highlighted area. ${describe(st.ri, st.phase, G.role).t}.`;
         }
         if (!me && G.role === "L")
-          return "Who is in zone 1 when we serve? Remember: under the official rules the libero may never serve.";
+          return rulesMode === "official"
+            ? "Who is in zone 1 when we serve? Remember: under the official rules the libero may never serve."
+            : "Who is in zone 1 when we serve? In Simplified KSV a substitute (SUB) serves in R3 and R6, so the libero waits off court.";
         if (!me)
           return st.phase === "serve"
             ? "Who does the libero replace while we serve? And who is serving from zone 1?"
@@ -3855,6 +3906,8 @@
           if (G.role === "L") return `${relation(st.ri, "L")} Find the back-row middle first.`;
           const pz = zoneOf((st.ri + 5) % 6, G.role);
           if (G.mixed || G.replay) return relation(st.ri, G.role);
+          if (pz && zoneOf(st.ri, G.role) !== (pz === 1 ? 6 : pz - 1))
+            return `In the previous rotation you were in zone ${pz}. The middle pair resets here: MB walks along the net from zone 2 to zone 4, the libero across the back from zone 5 to zone 1.`;
           return pz
             ? `In the previous rotation you were in zone ${pz}. Everyone moves one zone clockwise: 2→1→6→5→4→3→2.`
             : `You were off court in the previous rotation. You come back on in the front row, zone 4.`;
@@ -4217,14 +4270,17 @@
         );
       }
       let mpPlayers = store.get("mpPlayers", [
-        { name: "Player 1", role: "MB1" },
+        { name: "Player 1", role: "MB" },
         { name: "Player 2", role: "OP" },
       ]);
       if (!Array.isArray(mpPlayers) || mpPlayers.length < 2)
         mpPlayers = [
-          { name: "Player 1", role: "MB1" },
+          { name: "Player 1", role: "MB" },
           { name: "Player 2", role: "OP" },
         ];
+      mpPlayers.forEach((p) => {
+        p.role = roleIn(rulesMode, ALL_ROLES.includes(p.role) ? p.role : "OH1");
+      });
       function gPlayersMode() {
         const r = document.querySelector('input[name="gPlayers"]:checked');
         return r ? r.value : "solo";
@@ -4239,15 +4295,26 @@
           if (gPlayersMode() === "online") onRejoinCheck();
         };
       });
+      // Simplified shows MB; keep a stored MB1/MB2 so Official gets it back.
       function saveMp() {
-        store.set("mpPlayers", mpPlayers);
+        const prev = store.get("mpPlayers", []);
+        store.set(
+          "mpPlayers",
+          mpPlayers.map((p, k) =>
+            p.role === "MB" && ["MB1", "MB2"].includes(prev?.[k]?.role)
+              ? { ...p, role: prev[k].role }
+              : p,
+          ),
+        );
       }
       function renderMp() {
         $("mpList").innerHTML = mpPlayers
           .map(
             (p, k) => `<div class="mprow"><i style="background:${PCOL[k]}"></i>
     <input type="text" maxlength="16" value="${esc(p.name)}" data-k="${k}" aria-label="Player ${k + 1} name">
-    <select data-k="${k}" aria-label="Player ${k + 1} role">${ROLES.map((r) => `<option value="${r}"${r === p.role ? " selected" : ""}>${NAMES[r]}</option>`).join("")}</select>
+    <select data-k="${k}" aria-label="Player ${k + 1} role">${roles()
+      .map((r) => `<option value="${r}"${r === p.role ? " selected" : ""}>${NAMES[r]}</option>`)
+      .join("")}</select>
     <button type="button" data-rm="${k}" aria-label="Remove player ${k + 1}" ${mpPlayers.length <= 2 ? "disabled" : ""}>✕</button></div>`,
           )
           .join("");
@@ -4284,7 +4351,7 @@
         const used = mpPlayers.map((p) => p.role);
         mpPlayers.push({
           name: `Player ${mpPlayers.length + 1}`,
-          role: ROLES.find((r) => !used.includes(r)) || "OH1",
+          role: roles().find((r) => !used.includes(r)) || "OH1",
         });
         saveMp();
         renderMp();
@@ -4637,8 +4704,8 @@
         const out = { q: VERDICTS.includes(r.q) ? r.q : "miss", pts: num(r.pts) };
         if (isObj(r.nb))
           out.nb = {
-            pick: ROLES.includes(r.nb.pick) ? r.nb.pick : "?",
-            a: ROLES.includes(r.nb.a) ? r.nb.a : "?",
+            pick: ALL_ROLES.includes(r.nb.pick) ? r.nb.pick : "?",
+            a: ALL_ROLES.includes(r.nb.a) ? r.nb.a : "?",
             ok: r.nb.ok === true,
           };
         const names = SETS.map((s) => s[0]);
@@ -4671,16 +4738,16 @@
           vis: ["none", "ref", "all"].includes(m.vis) ? m.vis : "none",
           nb: m.nb === true,
           sets: m.sets === true,
-          rulesMode: m.rulesMode === "drill" ? "drill" : "official",
+          rulesMode: m.rulesMode === "official" ? "official" : "simple",
           queue,
         };
         if (meta.state !== "lobby" && !queue.length) meta.state = "done";
         const players = {};
         Object.entries(isObj(raw.players) ? raw.players : {}).forEach(([uid, p]) => {
-          if (!UID.test(uid) || !isObj(p) || !ROLES.includes(p.role)) return;
+          if (!UID.test(uid) || !isObj(p) || !ALL_ROLES.includes(p.role)) return;
           players[uid] = {
             name: (typeof p.name === "string" ? p.name.slice(0, 16) : "").trim() || "Player",
-            role: p.role,
+            role: roleIn(meta.rulesMode, p.role),
             color: HEX.test(p.color) ? p.color : "#888888",
             joinedAt: num(p.joinedAt),
             online: p.online === true,
@@ -4938,7 +5005,7 @@
         G = null;
         $("onNote").hidden = true;
         $("gWait").hidden = true;
-        rulesMode = store.get("rulesMode", "official");
+        setRules(feature("rules-official") ? storedRules() : "simple");
         renderRulesMode();
         renderLearn();
         visGame = store.get("visGame", "none");
@@ -5038,7 +5105,7 @@
         ON.revealing = -1;
         $("gWait").hidden = true;
         if (!ON.isHost && rulesMode !== meta.rulesMode) {
-          rulesMode = meta.rulesMode;
+          setRules(meta.rulesMode);
           renderLearn();
         }
         renderRulesMode();
@@ -5051,11 +5118,20 @@
         $("lCode").textContent = showCode(ON.code);
         const n = (meta.steps || []).length * 6;
         $("lSet").textContent =
-          `${n} moments · ${meta.order === "mixed" ? "mixed order" : "in order"} · ${meta.rulesMode === "drill" ? "Drill" : "Official"} rules`;
+          `${n} moments · ${meta.order === "mixed" ? "mixed order" : "in order"} · ${RULES_NAME[meta.rulesMode]} rules`;
         $("lList").innerHTML = onList(room, 0)
           .map(
             (p) =>
-              `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}${p.uid === meta.host ? "<small>host</small>" : ""}${p.uid === ON.uid && meta.state === "lobby" ? `<span class="lroles">${ROLES.map((r) => `<button type="button" data-r="${r}" aria-pressed="${r === p.role}">${r}</button>`).join("")}</span>` : ""}</div>${p.uid === ON.uid && ON.bench ? '<span class="pres on">● in lobby</span>' : onPres(p)}</li>`,
+              `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}${p.uid === meta.host ? "<small>host</small>" : ""}${
+                p.uid === ON.uid && meta.state === "lobby"
+                  ? `<span class="lroles">${roles()
+                      .map(
+                        (r) =>
+                          `<button type="button" data-r="${r}" aria-pressed="${r === p.role}">${r}</button>`,
+                      )
+                      .join("")}</span>`
+                  : ""
+              }</div>${p.uid === ON.uid && ON.bench ? '<span class="pres on">● in lobby</span>' : onPres(p)}</li>`,
           )
           .join("");
         $("lList")
@@ -5089,7 +5165,7 @@
             replay: false,
           });
         const changed = rulesMode !== meta.rulesMode;
-        rulesMode = meta.rulesMode;
+        setRules(meta.rulesMode);
         ON.last = null;
         G = {
           queue: meta.queue,
@@ -5384,6 +5460,31 @@
       gRenderSetup();
 
       // ---------- Rules mode ----------
+      function setRules(mode) {
+        rulesMode = mode;
+        ROWS = RULE_ROWS[mode];
+        const saved = store.get("role", role);
+        const next =
+          ALL_ROLES.includes(saved) && roleIn("simple", saved) === roleIn("simple", role)
+            ? roleIn(mode, saved)
+            : roleIn(mode, role);
+        if (next !== role) {
+          role = next;
+          renderRefLabels();
+          if (!G) gRenderSetup();
+          onRole();
+        }
+        renderRoles();
+        const stored = store.get("mpPlayers", []);
+        mpPlayers.forEach((p, k) => {
+          const old = stored?.[k]?.role;
+          p.role =
+            ALL_ROLES.includes(old) && roleIn("simple", old) === roleIn("simple", p.role)
+              ? roleIn(mode, old)
+              : roleIn(mode, p.role);
+        });
+        renderMp();
+      }
       function renderRulesMode() {
         const locked = !!G?.online || (!!ON && !ON.isHost);
         document.querySelectorAll(".rulesmode [data-rm]").forEach((b) => {
@@ -5393,13 +5494,13 @@
         $("rmSub").textContent = locked
           ? "Set by the host for this match."
           : rulesMode === "official"
-            ? "Official (FIVB) rules: the libero may not serve, so in R3 and R6 the middle in zone 1 serves."
-            : "Drill rules: the libero stays on court all the time and also serves in R3 and R6. The printable schema uses the official rules.";
+            ? "Official (FIVB) rules: two middles, and the libero may not serve, so in R3 and R6 the middle in zone 1 serves."
+            : "Simplified KSV: a training convention for one middle, not a match lineup. MB is always front row and the libero always plays the back-row middle spot; in R3 and R6 a substitute serves.";
         renderSetupSummary();
       }
       document.querySelectorAll(".rulesmode [data-rm]").forEach((b) => {
         b.onclick = () => {
-          rulesMode = b.dataset.rm;
+          setRules(b.dataset.rm);
           store.set("rulesMode", rulesMode);
           track("rules_changed", { mode: rulesMode });
           if (ON?.isHost && ON.meta.state === "lobby")
@@ -5414,7 +5515,10 @@
             gView("gSetup");
           }
           gRenderSetup();
-          if (!$("drill").hidden && cur) drawDrill(lastTap);
+          if (!$("drill").hidden && cur) {
+            cur = null;
+            newQuestion();
+          }
         };
       });
       renderRulesMode();
