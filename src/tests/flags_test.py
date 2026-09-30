@@ -17,12 +17,31 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from playwright.sync_api import Browser, Page, Route, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Page, Route, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 URL = (ROOT / "index.html").as_uri()
 PAGES_URL = "https://xszpo.github.io/volleyball_positions/"
 FAIL: list[str] = []
+PRIVACY = {
+    "api_host": "https://us.i.posthog.com",
+    "ui_host": "https://us.posthog.com",
+    "persistence": "memory",
+    "person_profiles": "identified_only",
+    "autocapture": False,
+    "capture_pageview": True,
+    "capture_pageleave": True,
+    "disable_session_recording": True,
+    "disable_surveys": True,
+    "disable_web_experiments": True,
+    "capture_heatmaps": False,
+    "capture_dead_clicks": False,
+    "capture_performance": False,
+    "rageclick": False,
+    "mask_all_text": True,
+    "mask_all_element_attributes": True,
+    "respect_dnt": True,
+}
 UNBUILT = {"learn-animation", "rules-official", "after-dig"}
 FAKE_POSTHOG = """
 window.posthog = {
@@ -156,13 +175,14 @@ def pages_html() -> str:
     return re.sub(r'integrity: "sha384-[^"]+"', f'integrity: "sha384-{digest}"', html)
 
 
-def check_posthog(browser: Browser) -> None:
+def open_pages(browser: Browser, seed: dict[str, str], query: str = "") -> tuple[BrowserContext, Page, list[str]]:
+    """Opens the app on the Pages host with the fake PostHog SDK and ``seed`` in localStorage on the first load."""
     context = browser.new_context(viewport={"width": 360, "height": 740})
     context.add_init_script(
-        """if (!sessionStorage.getItem('seeded')) {
+        f"""if (!sessionStorage.getItem('seeded')) {{
             sessionStorage.setItem('seeded', '1');
-            localStorage.setItem('ksv51:flags', JSON.stringify({'drill-tab': false}));
-        }"""
+            Object.entries({json.dumps(seed)}).forEach(([k, v]) => localStorage.setItem(k, v));
+        }}"""
     )
     page = context.new_page()
     errors: list[str] = []
@@ -174,15 +194,53 @@ def check_posthog(browser: Browser) -> None:
             body=FAKE_POSTHOG, content_type="text/javascript", headers={"Access-Control-Allow-Origin": "*"}
         ),
     )
-    page.goto(PAGES_URL)
+    page.goto(PAGES_URL + query)
     page.wait_for_function("!!(window.posthog && window.posthog.callback)")
+    return context, page, errors
+
+
+def check_bad_storage(browser: Browser, file_page: Page) -> None:
+    for bad in ('"x"', "[1]", "7"):
+        file_page.evaluate("(v) => localStorage.setItem('ksv51:ffOverride', v)", bad)
+        open_app(file_page)
+        if values(file_page) != {k: k not in UNBUILT for k in values(file_page)}:
+            fail(f"file://: stored override {bad} not ignored")
+        context, page, errors = open_pages(browser, {"ksv51:flags": bad, "ksv51:ffOverride": bad})
+        config: dict[str, Any] = page.evaluate("window.posthog.config")
+        if config.get("bootstrap") != {"featureFlags": {}}:
+            fail(f"pages: stored flags {bad} passed to bootstrap: {config.get('bootstrap')}")
+        if not present(page, "learn") or errors:
+            fail(f"pages: app did not start with stored {bad}: {errors}")
+        context.close()
+    open_app(file_page, "?ff=reset")
+
+
+def check_players_mode_restored(browser: Browser) -> None:
+    context, page, errors = open_pages(
+        browser, {"ksv51:flags": '{"match-online": false}', "ksv51:gPlayers": '"online"'}
+    )
+    if present(page, "gPlayersOnline") or page.evaluate("localStorage.getItem('ksv51:gPlayers')") != '"online"':
+        fail("players mode: online shown, or the stored choice overwritten, while match-online is off")
+    page.evaluate(
+        "window.posthog.fire({'learn-tab': true, 'match-solo': true, 'match-same-device': true, 'match-online': true})"
+    )
+    checked = page.evaluate("document.querySelector('input[name=\"gPlayers\"]:checked')?.value")
+    if checked != "online":
+        fail(f"players mode: after match-online came on, {checked!r} is checked, not the stored online")
+    page.click("#tabGame")
+    if not page.is_visible("#onBox") or page.is_visible("#mpBox"):
+        fail("players mode: the online setup is not shown")
+    if errors:
+        fail(f"players mode: page errors: {errors}")
+    context.close()
+
+
+def check_posthog(browser: Browser) -> None:
+    context, page, errors = open_pages(browser, {"ksv51:flags": '{"drill-tab": false}'})
     config: dict[str, Any] = page.evaluate("window.posthog.config")
-    if "advanced_disable_flags" in config:
-        fail("posthog: advanced_disable_flags still set")
-    if config.get("persistence") != "memory" or config.get("autocapture") is not False:
-        fail(f"posthog: privacy settings changed: {config}")
-    if config.get("bootstrap") != {"featureFlags": {"drill-tab": False}}:
-        fail(f"posthog: bootstrap is {config.get('bootstrap')}")
+    expected = {**PRIVACY, "bootstrap": {"featureFlags": {"drill-tab": False}}}
+    if config != expected:
+        fail(f"posthog: init options {config}, expected {expected}")
     if page.evaluate("window.posthog.calls.register") != [{"app_version": "2"}]:
         fail("posthog: app_version not registered")
     if present(page, "drill"):
@@ -221,6 +279,8 @@ def main() -> None:
             check(page)
         if errors:
             fail(f"page errors: {errors}")
+        check_bad_storage(browser, page)
+        check_players_mode_restored(browser)
         check_posthog(browser)
         browser.close()
     print("FLAGS TEST FAILURES:", len(FAIL))

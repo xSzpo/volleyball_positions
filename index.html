@@ -2348,7 +2348,7 @@
                 mask_all_text: true,
                 mask_all_element_attributes: true,
                 respect_dnt: true,
-                bootstrap: { featureFlags: store.get("flags", {}) },
+                bootstrap: { featureFlags: storedObject("flags") || {} },
               });
               posthog = window.posthog;
               posthog.register({ app_version: "2" });
@@ -2436,6 +2436,10 @@
           });
         return Object.keys(next).length ? next : null;
       }
+      function storedObject(key) {
+        const value = store.get(key, null);
+        return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+      }
       function featureValues(base, override) {
         const out = {};
         const on = (k) => {
@@ -2449,8 +2453,8 @@
         return out;
       }
       const flagsLive = analyticsOn(location.hostname, POSTHOG_KEY);
-      let flagsBase = flagsLive ? { ...FEATURES, ...store.get("flags", {}) } : FEATURES;
-      let ffOverride = store.get("ffOverride", null);
+      let flagsBase = flagsLive ? { ...FEATURES, ...storedObject("flags") } : FEATURES;
+      let ffOverride = storedObject("ffOverride");
       const ffParam = new URLSearchParams(location.search).get("ff");
       if (ffParam !== null) {
         ffOverride = ffParse(ffParam, ffOverride);
@@ -2461,7 +2465,7 @@
       const feature = (key) => !!flags[key];
       const nbOn = (id) => feature("neighbour-check") && $(id).checked;
       let touched = false;
-      ["pointerdown", "touchstart", "keydown"].forEach((type) => {
+      ["pointerdown", "touchstart", "keydown", "wheel"].forEach((type) => {
         document.addEventListener(type, () => (touched = true), { capture: true, passive: true });
       });
       const SLOTS = new Map();
@@ -2496,14 +2500,18 @@
         const tabs = TABS.filter(([, k]) => feature(k)).map(([t]) => t);
         $("tabs").hidden = tabs.length < 2;
         $("ffEmpty").hidden = tabs.length > 0;
-        if (!$("game").querySelector('input[name="gPlayers"]:checked'))
-          $("game").querySelector('input[name="gPlayers"][value="solo"]').checked = true;
+        const players =
+          $("game").querySelector(
+            `input[name="gPlayers"][value="${store.get("gPlayers", "solo")}"]`,
+          ) || $("game").querySelector('input[name="gPlayers"][value="solo"]');
+        players.checked = true;
         if (tabs.length && tabs.every((t) => $(t).hidden)) setTab(tabs[0], true);
         drawVis("drill", visDrill);
         drawVis("game", visGame);
         renderRefLabels();
         renderLearn();
         gRenderSetup();
+        if (!$("game").hidden && gPlayersMode() === "online") onRejoinCheck();
       }
       function flagsFromPosthog(_enabled, variants, context) {
         if (context?.errorsLoading) return;
