@@ -26,9 +26,9 @@ src/
   gen_sets.py         front row sets   ->  downloads/KSV_front_row_sets.{svg,png,pdf}
   pdf.py              SVG -> PDF with a fixed CreationDate, so rebuilds are byte-stable
   tests/audit.py      data consistency checks (rotation order, overlap legality, serve lineups)
-  tests/qa.py         Playwright end-to-end sweep (arg: m = phone/light, d = desktop/dark; --quick, --seed N)
+  tests/qa.py         Playwright end-to-end sweep (arg: m = phone/light, d = desktop/dark; --quick, --all-combos, --seed N)
   tests/fast.sh       iteration loop: build, audit, theme_test, analytics_test, flags_test, qa.py m --quick (~50 s)
-  tests/full.sh       pre-PR run: everything, qa m and d in parallel; per-test pass/fail and time, logs in tests/_out/logs
+  tests/full.sh       once per ticket, after review fixes: every test in parallel (qa d --quick); per-test pass/fail and time, logs in tests/_out/logs
   tests/mp_test.py    Playwright test of same-device multiplayer
   tests/match_test.py Playwright test of solo match scoring (Show on court multiplier) and the set call check
   tests/online_test.py Playwright test of online multiplayer (host + guest) on the Firebase emulators
@@ -61,10 +61,10 @@ python src/tests/theme_test.py
 python src/tests/analytics_test.py
 python src/tests/flags_test.py
 python src/tests/match_test.py        # solo scoring and set call check
-python src/tests/qa.py m && python src/tests/qa.py d   # slow (~3.5 min each); expect "TOTAL FAILURES: 0"
+python src/tests/qa.py m && python src/tests/qa.py d   # slow (~2 min each); expect "TOTAL FAILURES: 0"; --all-combos plays all 15 match step combos
 ```
 
-Iterate with `src/tests/fast.sh` plus the one Playwright test that covers the change. Run `src/tests/full.sh` (~4-5 min) once before opening the PR, and again after review fixes; it exits non-zero on any failure. A qa failure prints its seed; replay it with `--seed N`. Agents run any command longer than about 5 minutes (full.sh, a full qa sweep) in the background (`run_in_background`) and poll for it, rather than blocking, to stay clear of the 600 s watchdog.
+Before review, run `src/tests/fast.sh` plus the one Playwright test that covers the change. Run `src/tests/full.sh` (~2 min) once per ticket, after review fixes; it exits non-zero on any failure. A qa failure prints its seed; replay it with `--seed N`. Agents run any command longer than about 5 minutes (full.sh, a full qa sweep) in the background (`run_in_background`) and poll for it, rather than blocking, to stay clear of the 600 s watchdog.
 
 Order matters: the PDFs must exist before `build.py`, because it base64-embeds them into `index.html` (so the download buttons work on GitHub Pages with no extra files).
 
@@ -80,10 +80,9 @@ Version 2 is planned in `docs/v2.md` and split into GitHub issues (milestones **
 - **Branch and PR.** One issue, one branch `v2/<issue>-<short-slug>`, one PR. Title `#<issue> <imperative, plain>`. The body follows the `pr-description` skill and starts with `Closes #<issue>`.
 - **Before the PR.**
   1. Implement. New behaviour gets a test.
-  2. Iterate with `src/tests/fast.sh`.
-  3. Run `src/tests/full.sh` in the background. It must pass.
-  4. Update this file where the app structure, data model or tests changed.
-- **Review.** A `reviewer` agent reviews the pushed branch. Fix the real findings, then run `full.sh` again.
+  2. Iterate with `src/tests/fast.sh` plus the one Playwright test that covers the change.
+  3. Update this file where the app structure, data model or tests changed.
+- **Review.** A `reviewer` agent reviews the pushed branch, in parallel with step 2's last run. Fix the real findings, then run `src/tests/full.sh` in the background, once. It must pass.
 - **Merge.** After `checks` passes on the PR, squash-merge and delete the branch.
 - **Issue comment after merge**, always, in this shape:
 

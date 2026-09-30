@@ -1,8 +1,10 @@
 """Playwright end-to-end sweep of index.html.
 
-Usage: python src/tests/qa.py [m|d] [--quick] [--seed N], where m is phone size
-in light theme and d is desktop size in dark theme. --quick runs a reduced sweep
-for the edit-and-test loop; the default is the full sweep.
+Usage: python src/tests/qa.py [m|d] [--quick] [--all-combos] [--seed N], where m is
+phone size in light theme and d is desktop size in dark theme. --quick runs a reduced
+sweep for the edit-and-test loop; the default is the full sweep. The match section
+plays each single step, all steps and two combos picked with the seed; --all-combos
+plays all 15.
 """
 
 import argparse
@@ -291,11 +293,21 @@ def sweep_drill(pg: Page, tag: str, quick: bool) -> None:
     drill_steps(pg, tag + " after reset", 3)
 
 
-def sweep_match(pg: Page, tag: str, quick: bool) -> None:
-    """All step combinations, orders and neighbour on/off; quick: two combinations."""
-    section("MATCH: all step combos")
+def match_combos(quick: bool, all_combos: bool) -> list[tuple[str, ...]]:
+    """The step combinations to play: every single step, all steps and two picked with the seed."""
+    every = [c for r in range(1, 5) for c in itertools.combinations(STEPS, r)]
+    if all_combos:
+        return every
+    if quick:
+        return list(QUICK_COMBOS)
+    fixed = [c for c in every if len(c) in (1, len(STEPS))]
+    return fixed + random.sample([c for c in every if c not in fixed], 2)
+
+
+def sweep_match(pg: Page, tag: str, combos: list[tuple[str, ...]], quick: bool) -> None:
+    """The given step combinations with mixed orders, neighbour on/off and rules; then no steps."""
+    section(f"MATCH: {len(combos)} step combos")
     pg.click("#tabGame")
-    combos = QUICK_COMBOS if quick else [c for r in range(1, 5) for c in itertools.combinations(STEPS, r)]
     for ci, combo in enumerate(combos):
         role = ROLES[ci % 7]
         pick_role(pg, role)
@@ -423,9 +435,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("mode", nargs="?", default="m", choices=sorted(CONFIGS))
     parser.add_argument("--quick", action="store_true", help="reduced sweep for the edit-and-test loop")
+    parser.add_argument("--all-combos", action="store_true", help="play all 15 match step combinations")
     parser.add_argument("--seed", type=int, default=7, help="random seed, printed on failure for a replay")
     args = parser.parse_args()
     random.seed(args.seed)
+    combos = match_combos(args.quick, args.all_combos)
+    print(f"Seed {args.seed}. Match combos: {combos}", flush=True)
     vp, mobile, scheme = CONFIGS[args.mode]
     with sync_playwright() as p:
         b = p.chromium.launch()
@@ -443,7 +458,7 @@ def main() -> None:
         check_header(pg, tag)
         sweep_learn(pg, tag, args.quick)
         sweep_drill(pg, tag, args.quick)
-        sweep_match(pg, tag, args.quick)
+        sweep_match(pg, tag, combos, args.quick)
         sweep_sets(pg, tag)
         check_downloads(pg, tag)
         check_persistence(pg, tag)
@@ -453,8 +468,8 @@ def main() -> None:
         b.close()
     print(f"\nTOTAL FAILURES: {len(FAIL)} ({time.monotonic() - START:.0f} s)")
     if FAIL:
-        quick = " --quick" if args.quick else ""
-        print(f"Seed {args.seed}. Replay: python src/tests/qa.py {args.mode}{quick} --seed {args.seed}", flush=True)
+        flags = (" --quick" if args.quick else "") + (" --all-combos" if args.all_combos else "")
+        print(f"Seed {args.seed}. Replay: python src/tests/qa.py {args.mode}{flags} --seed {args.seed}", flush=True)
         sys.exit(1)
 
 
