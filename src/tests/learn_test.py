@@ -218,17 +218,40 @@ def check_texts(page: Page) -> None:
             fail(f"SUB R{rotation + 1} Reception: {sub[(rotation, 'rec')]!r}")
 
 
-def check_rule_folds(page: Page) -> None:
-    """The pre-serve checklist and the rules of thumb teach the whistle timing, not the service hit."""
-    open_app(page, {"role": "OH1", "rulesMode": "simple"})
-    for fold in ("#checks", "#thumbsBox"):
-        text = " ".join((page.text_content(fold) or "").split())
+def check_rules_of_thumb(page: Page) -> None:
+    """Learn keeps only the Rules of thumb fold, closed, worded for each rule set and the whistle timing."""
+    for mode, want, unwanted in (
+        ("simple", ("SUB", "MB plays the front middle"), ("MB1", "19.3")),
+        ("official", ("MB1", "MB2", "19.3"), ("SUB",)),
+    ):
+        open_app(page, {"role": "L", "rulesMode": mode})
+        html = page.content()
+        for gone in ("How to learn", "Before every serve", 'id="howTo"', 'id="checks"'):
+            if gone in html:
+                fail(f"{mode}: the page still has {gone!r}")
+        if page.get_attribute("#thumbsBox", "open") is not None:
+            fail(f"{mode}: Rules of thumb open by default")
+        text = " ".join((page.text_content("#thumbsBox") or "").split())
         if "whistle" not in text or WHISTLE_MOVE not in text:
-            fail(f"{fold} lacks the whistle timing: {text!r}")
+            fail(f"{mode} Rules of thumb lack the whistle timing: {text!r}")
         if OLD_TIMING.search(text):
-            fail(f"{fold} uses the old overlap timing: {text!r}")
-    if "1 October 2026" not in (page.text_content("#thumbsBox") or ""):
-        fail("rules of thumb do not date the Volleyball Danmark rule")
+            fail(f"{mode} Rules of thumb use the old overlap timing: {text!r}")
+        if "1 October 2026" not in text:
+            fail(f"{mode} Rules of thumb do not date the Volleyball Danmark rule")
+        if "@" in text:
+            fail(f"{mode} Rules of thumb show a placeholder: {text!r}")
+        for word in want:
+            if word not in text:
+                fail(f"{mode} Rules of thumb lack {word!r}")
+        for word in unwanted:
+            if word in text:
+                fail(f"{mode} Rules of thumb mention {word!r}")
+        middles = page.locator("#thumbs li", has_text="middle").last.inner_text()
+        if us_libero_rule(middles):
+            fail(f"{mode} the middles rule of thumb teaches a US libero rule: {middles!r}")
+        mine = page.locator("#thumbs li.mine b").all_text_contents()
+        if not any("middle" in title for title in mine):
+            fail(f"{mode} L: the middles rule is not marked as your rule: {mine}")
 
 
 def walkthrough_rows() -> list[list[str]]:
@@ -369,7 +392,7 @@ def main() -> None:
                 check_walk(page, mode, role)
         check_next_in_view(page)
         check_texts(page)
-        check_rule_folds(page)
+        check_rules_of_thumb(page)
         check_official_walkthrough(page)
         check_official_libero(page)
         for error in errors:

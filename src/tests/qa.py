@@ -124,8 +124,6 @@ def check_header(pg: Page, tag: str) -> None:
         fail(f"{tag} first visit: the role sheet has more than one job")
     if not pg.is_visible("#subtitle"):
         fail(f"{tag} first visit: subtitle hidden")
-    if pg.get_attribute("#howTo", "open") is None:
-        fail(f"{tag} first visit: how-to not open")
     pg.click('.role[data-r="OH1"]')
     if pg.is_visible("#setupPanel"):
         fail(f"{tag} role pick did not close the sheet")
@@ -164,13 +162,11 @@ def check_header(pg: Page, tag: str) -> None:
     wait_ready(pg)
     if pg.is_visible("#setupPanel") or pg.is_visible("#setupNudge") or pg.is_visible("#subtitle"):
         fail(f"{tag} returning visit: role sheet or subtitle shown")
-    if pg.get_attribute("#howTo", "open") is not None:
-        fail(f"{tag} returning visit: how-to open")
     pg.click("#tabSets")
     if not pg.is_visible("#roleChip"):
         fail(f"{tag} role chip hidden on Sets")
     pg.click("#tabLearn")
-    for sel in ["#checks", "#thumbsBox", "#allRots"]:
+    for sel in ["#thumbsBox", "#allRots"]:
         if pg.get_attribute(sel, "open") is not None:
             fail(f"{tag} {sel} open by default")
     open_fold(pg, "#allRots")
