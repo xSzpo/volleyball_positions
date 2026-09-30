@@ -375,7 +375,7 @@
     .sheethead h2 {
       margin: 0;
     }
-    .nudge {
+    #setupNudge {
       margin: 0 0 8px;
       font-weight: 700;
       padding-left: 10px;
@@ -610,19 +610,10 @@
       animation: playNudge 700ms ease-out 1;
     }
     @keyframes playNudge {
-      0% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 var(--accent);
-      }
       30% {
-        transform: scale(1.12);
-      }
-      60% {
-        transform: scale(0.97);
-      }
-      100% {
-        transform: scale(1);
-        box-shadow: 0 0 0 8px transparent;
+        border-color: var(--accent);
+        background-color: var(--accent);
+        color: var(--on-accent);
       }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -2098,7 +2089,7 @@
           <h2 id="setupTitle">Pick your role</h2>
           <button type="button" class="btn" id="setupDone">Done</button>
         </div>
-        <p class="nudge" id="setupNudge" hidden>
+        <p id="setupNudge" hidden>
           Pick the role you play today. Change it any time with the button at the top.
         </p>
         <p class="hint" style="margin-bottom:8px">I'm playing today as</p>
