@@ -1,5 +1,7 @@
 """Playwright test of the light/dark theme button and the court and role colour contrast in index.html.
 
+The app opens light whatever the system scheme; only a stored choice or a tap makes it dark.
+
 Usage: python src/tests/theme_test.py [screenshot directory]
 """
 
@@ -124,7 +126,7 @@ def run(scheme: Literal["light", "dark"], shots: Path | None) -> None:
             return
         if page.get_attribute("html", "data-theme") is not None:
             fail(f"{tag}: data-theme set without a stored choice")
-        check_button(page, f"{tag} default", scheme)
+        check_button(page, f"{tag} default", "light")
         check_contrast(page, f"{tag} tokens")
         box = page.locator("#themeBtn").bounding_box()
         if box is None or box["width"] < 44 or box["height"] < 44:
@@ -134,7 +136,7 @@ def run(scheme: Literal["light", "dark"], shots: Path | None) -> None:
             page.locator(".top").screenshot(path=str(shots / f"header_{scheme}.png"))
             page.set_viewport_size({"width": 360, "height": 740})
         page.click("#themeBtn")
-        flipped = OPPOSITE[scheme]
+        flipped = "dark"
         if page.get_attribute("html", "data-theme") != flipped:
             fail(f"{tag}: tap did not set data-theme={flipped}")
         check_button(page, f"{tag} after tap", flipped)
@@ -151,7 +153,7 @@ def run(scheme: Literal["light", "dark"], shots: Path | None) -> None:
         if overflow > 1:
             fail(f"{tag}: horizontal overflow {overflow}px")
         page.click("#themeBtn")
-        check_button(page, f"{tag} second tap", scheme)
+        check_button(page, f"{tag} second tap", "light")
         if errors:
             fail(f"{tag}: JS errors: {errors[:3]}")
         browser.close()
