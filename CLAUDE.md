@@ -27,7 +27,7 @@ src/
   pdf.py              SVG -> PDF with a fixed CreationDate, so rebuilds are byte-stable
   tests/audit.py      data consistency checks under both rule sets (rotation order, middle-pair reset, overlap legality, serve lineups, docs/v2.md walk-through tables)
   tests/qa.py         Playwright end-to-end sweep (arg: m = phone/light, d = desktop/dark; --quick, --all-combos, --seed N)
-  tests/fast.sh       iteration loop: build, audit, theme_test, analytics_test, flags_test, rules_test, qa.py m --quick (~50 s)
+  tests/fast.sh       iteration loop: build, audit, theme_test, analytics_test, flags_test, rules_test, learn_test, qa.py m --quick (~70 s)
   tests/full.sh       once per ticket, after review fixes: every test in parallel (qa d --quick); per-test pass/fail and time, logs in tests/_out/logs
   tests/mp_test.py    Playwright test of same-device multiplayer
   tests/match_test.py Playwright test of solo match scoring (Show on court multiplier) and the set call check
@@ -35,6 +35,7 @@ src/
   tests/analytics_test.py Playwright test that PostHog loads only on the Pages host with a real key
   tests/flags_test.py Playwright test of the feature flags: defaults, ?ff=, no DOM trace, dependencies, PostHog override (fake SDK), stored rules and middles restored when rules-official comes on
   tests/rules_test.py Playwright test of the rule sets: Simplified default, stored drill, Official behind its flag, middle roles across a switch, SUB in Learn
+  tests/learn_test.py Playwright test of Learn: every role, rotation and step in both rule sets via Next, overlap lines and caption, Our serve rule text, sticky Next, SUB and MB texts
   tests/v2_pending.py v1 tests skipped until their v2 issue ports the feature (empty = none skipped)
 reference/KSV_M3.pdf  official club guide (git-ignored; keep it private)
 infra/                Terraform for Firebase (project, web app, Realtime Database, optional auth/budget)
@@ -61,6 +62,7 @@ python src/tests/online_test.py       # starts the auth + database emulators its
 python src/tests/theme_test.py
 python src/tests/analytics_test.py
 python src/tests/flags_test.py
+python src/tests/learn_test.py        # every Learn step in both rule sets
 python src/tests/match_test.py        # solo scoring and set call check
 python src/tests/qa.py m && python src/tests/qa.py d   # slow (~2 min each); expect "TOTAL FAILURES: 0"; --all-combos plays all 15 match step combos
 ```
@@ -162,7 +164,7 @@ Tabs: **Learn**, **Drill**, **Match**, **Sets** (each with a one-line caption, h
 
 Secondary content uses native `<details class="fold">`: in Learn, "How to learn" (open only on the first visit, `howToSeen`), "Before every serve", "Rules of thumb" and the all-rotations table; "Drill options" (`#dOpts`: neighbour check, reset) and "Match options" (`#gOpts`: steps, order, neighbour check, set call check). Match setup shows only Who is playing, Show on court and Start by default. Tests open these with `open_fold()` / `open_setup()` (and close the sheet with `close_setup()`) in `tests/qa.py`. The other Playwright tests seed `ksv51:role` (`SEED_ROLE`) so the first-visit sheet does not cover the page.
 
-Court drawing: every court SVG uses viewBox `-4 -14 108 127` with `W = H = 100` units, so a data spot `(x, y)` is drawn at `(100x, 100y)`. `courtBase(off)` draws the court, 3 m line, net and the "off court" pill (solid when you are off court, in Learn and in Drill/Match feedback). In Drill and Match a tap on the pill (`onPill()`) works like the I'm off court button; in Learn it does nothing. `chip()` draws a role-coloured marker (`g.mk`, radius `MARKER_R` 6, 1-unit edge, dashed for SUB), your player with a double ring (`.me-ring`), faded ones at 35% (`.faded`, no pointer events). `route()` draws a movement (`g.rt`: a `.halo` under a `line.route` in `--route-*`, T-bar end). Learn shows a title tag (`#learnTag`, "R1 (S1) · Reception") above the court; the rotation buttons read `R1` with the full name in the aria-label. `check_court_look()` in `tests/qa.py` covers this.
+Court drawing: every court SVG uses viewBox `-4 -14 108 127` with `W = H = 100` units, so a data spot `(x, y)` is drawn at `(100x, 100y)`. `courtBase(off)` draws the court, 3 m line, net and the "off court" pill (solid when you are off court, in Learn and in Drill/Match feedback). In Drill and Match a tap on the pill (`onPill()`) works like the I'm off court button; in Learn it does nothing. `chip()` draws a role-coloured marker (`g.mk`, radius `MARKER_R` 6, 1-unit edge, dashed for SUB), your player with a double ring (`.me-ring`), faded ones at 35% (`.faded`, no pointer events). `route()` draws a movement (`g.rt`: a `.halo` under a `line.route` in `--route-*`, T-bar end). In Learn at Rotation and Reception, `boundLines()` draws your overlap limits (`g.bnd`, same shape): one line per partner from `partners(ri, role)` (behind/front in your column, left/right in your row), from your marker edge to that partner's x or y, in the partner's route colour; a limit inside your marker gets no line. The caption adds `overlapText()` ("Overlap: stay in front of L, right of OP and left of OH1."); this text stays out of `describe()`, which Drill and Match show after the neighbour check. Below the caption a sticky row (`.lctl`) holds the primary `#lNext` ("Next: Reception ▸"), which steps through `PHASES` and from After reception into the next rotation (R6 wraps to R1). `window.ksvLearn.describe` exposes `describe()` for `tests/learn_test.py`. Learn shows a title tag (`#learnTag`, "R1 (S1) · Reception") above the court; the rotation buttons read `R1` with the full name in the aria-label. `check_court_look()` in `tests/qa.py` covers this.
 
 Key JS pieces (all inside one IIFE):
 

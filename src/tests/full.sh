@@ -2,7 +2,7 @@
 # Once per ticket, after review fixes: build and audit, then every browser test in parallel.
 source "$(dirname "$0")/lib.sh"
 
-ORDER=(build audit qa-m qa-d theme analytics flags rules match mp online)
+ORDER=(build audit qa-m qa-d theme analytics flags rules learn match mp online)
 run build src/build.py
 run audit src/tests/audit.py
 read -r rc _ <"$LOGS/build.status"
@@ -17,6 +17,7 @@ if [ "$rc" = 0 ]; then
     run analytics src/tests/analytics_test.py
     run flags src/tests/flags_test.py
     run rules src/tests/rules_test.py
+    run learn src/tests/learn_test.py
   } &
   wait
 fi
