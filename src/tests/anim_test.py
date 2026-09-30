@@ -422,6 +422,25 @@ def check_path_shapes(page: Page) -> None:
                             fail(f"{mode} R{ri + 1} {phase} stage {n + 1}: {p} runs {length:.2f} for {straight:.2f}")
 
 
+def check_switch_behind(page: Page) -> None:
+    """After the spike, a front-row player who switches sides crosses the middle's spot at least GAP behind it."""
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            row = lineup(ri, mode)  # type: ignore[arg-type]
+            stage = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")[-1]
+            middle = next(p for p in row["front"] if p.startswith("MB"))
+            mid = stage["to"].get(middle) or stage["from"][middle]
+            for p, raw in stage["paths"].items():
+                path = [(q["x"] - mid["x"], q["y"]) for q in raw]
+                if p not in row["front"] or abs(path[0][0]) < 0.2 or path[0][0] * path[-1][0] >= 0:
+                    continue
+                a, b = next((a, b) for a, b in zip(path, path[1:], strict=False) if a[0] * b[0] <= 0)
+                y = a[1] - (b[1] - a[1]) * a[0] / ((b[0] - a[0]) or 1)
+                if y < mid["y"] + GAP:
+                    fail(f"{mode} R{ri + 1} after the spike: {p} crosses the middle at y {y:.2f}, not behind {middle}")
+
+
 def check_no_overlap(page: Page) -> None:
     """No marker passes through another at any moment, and no run is faster than TOP_SPEED.
 
@@ -773,6 +792,7 @@ def main() -> None:
         check_reception_stages(page)
         check_reception_ends(page)
         check_path_shapes(page)
+        check_switch_behind(page)
         check_no_overlap(page)
         check_passer(page)
         check_serve_run(page)
