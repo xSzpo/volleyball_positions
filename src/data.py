@@ -77,10 +77,10 @@ ROWS: list[Row] = [
             },
             "rec": {
                 "MB1": "Stand at the net in the middle, out of the receivers' way.",
-                "OP": "Stand at the left sideline on the 3 m line: in R1 the opposite plays left.",
+                "OP": "Stand at the left sideline on the 3 m line: here the opposite plays left.",
                 "OH2": "Receive on the left of the passing line.",
                 "L": "Receive in the middle of the passing line.",
-                "OH1": "Receive on the right: in R1 outside hitter 1 plays right.",
+                "OH1": "Receive on the right: here outside hitter 1 plays right.",
                 "S": "Hide behind OH1 in zone 1, out of the passing lanes.",
             },
             "ar": {
