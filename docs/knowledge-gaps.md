@@ -846,9 +846,9 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #119
 - **Problem:** Drill and Match graded L, the deep outside hitter and the back-row opposite where the Learn play had them as the pass lands (#69), a point mid-run, while their hint and feedback (#79) name the cover spot. A tap on the spot the text names read "Not there".
-- **Decision:** These three are graded on the cover spot they stand on at the spike (the start of Reception's base stage, `coverAt`). Everyone else is still graded as the pass lands (#69). This amends #69 for the covers.
+- **Decision:** These three are graded on the cover spot they stand on at the spike (the start of Reception's base stage, `tr.spike`). Everyone else is still graded as the pass lands (#69). This amends #69 for the covers. A cover's question asks for its cover spot as the zone 4 hitter spikes, and its feedback and hint say "cover spot as … spikes". The picture after its answer shows one moment, the spike: everyone where they are then and the ball at the hitter. On a same-device reveal where every player covers, the reveal shows the spike too; with mixed roles it shows the pass landing, with each player's own role ringed on the spot it is graded on.
 - **Alternatives:** keep grading mid-run and change the texts to "on the way to …"; ask about the moment of the spike for everyone.
-- **Reversible by:** `tr.coverAt` in `buildReception()` and `answerSpots()` in `src/template.html`.
+- **Reversible by:** `tr.spike` in `buildReception()`, `coversAttack()`, `answerSpots()`, `momentBall()`, `arQuestion()` and `mpReveal()` in `src/template.html`.
 
 ### 113. Detours stay inside the court
 
@@ -865,3 +865,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The hit point is 0.08 (about 0.7 m) inside the start (`HIT_IN`), so the approach angles in from the sideline. The 3-2 close cover (#68) is placed round the hit point, so it moves in by the same amount. Every Learn animation check still holds. The `ar` spots are unchanged. Coach question #16 may give a better angle.
 - **Alternatives:** start the hitter outside the sideline (off the guide's spot); a curved approach.
 - **Reversible by:** `HIT_IN` in `src/template.html`.
+
+### 115. The set call question for a covering back-row opposite
+
+- **Issue:** #119
+- **Problem:** In R4 to R6 the back-row opposite is graded as a deep cover (#112), but the set call check asked it the back-row set of its third "for you", as if it attacked from zone 1.
+- **Decision:** A player who covers at the Attack step is asked the set call as a watcher: "The setter sets this ball. What is the call?", from every match set, like the libero and the other back row. A back-row opposite who attacks is still asked its own back set.
+- **Alternatives:** keep asking the zone 1 set (A) for a later back-row attack; skip the set call check for covers.
+- **Reversible by:** `setQ()` in `src/template.html`.
