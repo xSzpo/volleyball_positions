@@ -893,12 +893,12 @@
     }
     .btn.dreset {
       min-height: 44px;
-      max-width: 96px;
-      padding: 4px 8px;
+      width: 64px;
+      padding: 4px 0;
       font-size: 14px;
-      line-height: 1.1;
+      white-space: nowrap;
     }
-    .btn.dreset.armed {
+    .btn.quiet.dreset.armed {
       border-color: var(--bad);
       color: var(--bad);
     }
@@ -5572,16 +5572,19 @@
       const RESET_ARM_MS = 3000,
         RESET_NOTE_MS = 2000;
       let resetTimer = 0;
-      function resetLabel(text, armed) {
+      // A fixed one-line label, so arming never moves the court under a finger.
+      function resetLabel(label, note, armed) {
         clearTimeout(resetTimer);
-        $("dReset").textContent = text;
+        $("dReset").textContent = label;
+        if (armed) $("dReset").setAttribute("aria-label", note);
+        else $("dReset").removeAttribute("aria-label");
         $("dReset").classList.toggle("armed", armed);
-        $("dResetNote").textContent = text === "Reset" ? "" : text;
+        $("dResetNote").textContent = note;
       }
       $("dReset").onclick = () => {
         if (!$("dReset").classList.contains("armed")) {
-          resetLabel("Tap again to reset", true);
-          resetTimer = setTimeout(() => resetLabel("Reset", false), RESET_ARM_MS);
+          resetLabel("Sure?", "Tap again to reset", true);
+          resetTimer = setTimeout(() => resetLabel("Reset", "", false), RESET_ARM_MS);
           return;
         }
         stats = {};
@@ -5591,8 +5594,8 @@
         store.set("stats2", stats);
         store.set("score2", score);
         newQuestion();
-        resetLabel("Progress reset.", false);
-        resetTimer = setTimeout(() => resetLabel("Reset", false), RESET_NOTE_MS);
+        resetLabel("Reset", "Progress reset.", false);
+        resetTimer = setTimeout(() => resetLabel("Reset", "", false), RESET_NOTE_MS);
       };
       function updateScore() {
         $("dscore").textContent = `${score.ok}/${score.n}`;

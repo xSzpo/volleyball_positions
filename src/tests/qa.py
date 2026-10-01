@@ -950,10 +950,16 @@ def check_drill_reset(browser: Browser, tag: str) -> None:
 
     fits("at rest")
     question = pg.inner_text("#dq") + pg.inner_text("#dsub")
+    court_top = pg.locator("#courtD").bounding_box()
     pg.tap("#dReset")
     armed = pg.inner_text("#dReset").strip().lower()
-    if armed != "tap again to reset" or pg.inner_text("#dResetNote") != "Tap again to reset":
-        fail(f"{tag} drill reset after one tap reads {armed!r}, note {pg.inner_text('#dResetNote')!r}")
+    label = pg.get_attribute("#dReset", "aria-label")
+    note = pg.inner_text("#dResetNote")
+    if armed != "sure?" or label != "Tap again to reset" or note != "Tap again to reset":
+        fail(f"{tag} drill reset after one tap reads {armed!r}, label {label!r}, note {note!r}")
+    armed_top = pg.locator("#courtD").bounding_box()
+    if not court_top or not armed_top or armed_top["y"] != court_top["y"]:
+        fail(f"{tag} arming drill reset moved the court from {court_top} to {armed_top}")
     if pg.evaluate(stored) != before or pg.inner_text("#dscore") != "1/3":
         fail(f"{tag} one tap on drill reset changed the progress")
     fits("armed")
