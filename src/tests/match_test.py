@@ -1666,6 +1666,7 @@ def drill_page(browser: Browser, steps: list[str], query: str = "?ff=all", reduc
     )
     page.add_init_script(SEED_ROLE)
     page.add_init_script(f"localStorage.setItem('ksv51:drillSteps', JSON.stringify({steps!r}))")
+    page.add_init_script(ZONES_UNDER)
     page.on("pageerror", lambda error: FAIL.append(f"page error: {error}"))
     page.goto(URL.split("?")[0] + query)
     page.wait_for_timeout(300)
@@ -1697,11 +1698,65 @@ def tap_far(page: Page, court: str = "courtD") -> dict[str, Any]:
                 target: svg.querySelectorAll('circle.target').length,
                 route: svg.querySelectorAll('g.glideroute').length,
                 next: !next.hidden && !next.disabled,
+                zones: window.zonesUnder(id),
             };
         }""",
         [court, drill_ri(page.inner_text("#dq"))],
     )
     return result
+
+
+ZONES_UNDER = """window.zonesUnder = (id) => {
+    const svg = document.getElementById(id), g = svg && svg.querySelector('g.zones');
+    if (!g) return 'no zone numbers';
+    if (getComputedStyle(g).visibility !== 'visible') return 'zone numbers hidden';
+    if (g.querySelectorAll('text').length !== 6) return 'not six zone numbers';
+    const late = [...svg.querySelectorAll('.mk, .am, g.glide')].some(
+        (m) => !(g.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING));
+    return late ? 'a marker under the zone numbers' : 'ok';
+};"""
+
+
+def zones_under(page: Page, ctx: str, court: str = "courtD", want_markers: bool = True) -> None:
+    """The court shows the six zone numbers, drawn before every marker."""
+    got = page.evaluate("(id) => window.zonesUnder(id)", court)
+    if got != "ok":
+        fail(f"zones {ctx}: {got}")
+    if want_markers and not page.locator(f"#{court} .mk").count():
+        fail(f"zones {ctx}: no markers on the court")
+
+
+def check_zones_courts(browser: Browser) -> None:
+    """The zone numbers sit under the markers on Drill Rotate, the Attack picture and the answer glide."""
+    page = drill_page(browser, ["ar"])
+    for i in range(6):
+        if "Attack" not in page.inner_text("#dq"):
+            fail(f"zones Attack: question {page.inner_text('#dq')!r}")
+        zones_under(page, f"Attack picture before the answer {i + 1}")
+        got = tap_far(page)
+        if got["zones"] != "ok":
+            fail(f"zones Attack glide frame {i + 1}: {got['zones']}")
+        zones_under(page, f"Attack picture after the answer {i + 1}")
+        page.wait_for_timeout(500)
+        zones_under(page, f"Attack picture after the glide {i + 1}")
+        page.click("#nextBtn")
+    page.close()
+    page = drill_page(browser, ["start"])
+    for i in range(3):
+        if not page.inner_text("#dq").endswith("Rotation"):
+            fail(f"zones Rotate: question {page.inner_text('#dq')!r}")
+        zones_under(page, f"Rotate before the answer {i + 1}", want_markers=False)
+        for x, y in ZONE_SPOTS:
+            if page.locator("#nextBtn").is_enabled():
+                break
+            tap_at(page, x, y, "courtD")
+            zones_under(page, f"Rotate placing {i + 1}")
+        page.click("#nextBtn")
+        zones_under(page, f"Rotate glide frame {i + 1}")
+        page.wait_for_timeout(500)
+        zones_under(page, f"Rotate after the answer {i + 1}")
+        page.click("#nextBtn")
+    page.close()
 
 
 def glide_shift(page: Page, court: str) -> float | None:
@@ -1887,8 +1942,8 @@ def check_watch_fit_and_boxes(browser: Browser) -> None:
         fail(f"watch fit: the Drill court is not on screen while it plays: {box}")
     if not page.locator("#dWatch .wcap").is_visible():
         fail("watch fit: the Drill caption is hidden")
-    if page.locator("#courtD .zones").count():
-        fail("watch: the Learn zone numbers drawn on the Drill court")
+    if page.locator("#courtD g.zones").count() != 1 or not page.locator("#courtD g.zones").is_visible():
+        fail("watch: no zone numbers on the Drill court while it plays")
     page.click("#nextBtn")
     for _ in range(40):
         if tap_far(page)["on"]:
@@ -1992,6 +2047,7 @@ def main() -> None:
         check_attack_drill(browser)
         check_receive_limits(browser)
         check_answer_glide(browser)
+        check_zones_courts(browser)
         check_watch_move(browser)
         check_reveal_motion(browser)
         browser.close()

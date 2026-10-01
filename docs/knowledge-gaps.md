@@ -978,3 +978,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `match-online` stays off in `FEATURES` in this PR. The owner applies the rules and wipes `rooms`, then the PostHog flag goes on, and a follow-up PR flips the built-in default.
 - **Alternatives:** flip the default in this PR and accept failing creates between the merge and the apply.
 - **Reversible by:** `FEATURES["match-online"]` in `src/template.html` and `DEFAULT_OFF` in `src/tests/flags_test.py`.
+
+### 129. Zone numbers on every court, on by default
+
+- **Issue:** #130
+- **Problem:** #105 and #106 put the zone numbers only on the Learn court, off until the Zones toggle is pressed. The owner decided on 2026-10-01 that they belong "everywhere".
+- **Decision:** This amends the off-by-default choice of #105 and replaces #106. Every court draws the numbers (Learn, every Drill and Match court, Rotate, the Attack picture, the glide, Watch the move, the same-device and online reveal). An unset `ksv51:zones` reads as on; a stored value is kept, so a player who switched them off keeps them off. One setting for every view: the Learn Zones toggle, and a "Zone numbers on the court" row in Drill options and in Match options. Zones never changes Match scoring. `court-zones` no longer needs `learn-tab`.
+- **Alternatives:** a separate key per tab; zones lowering the Match score like Show on court; resetting stored values to on.
+- **Reversible by:** the `zonesSvg()` call in `courtBase()` and the `zones` default in `src/template.html`.

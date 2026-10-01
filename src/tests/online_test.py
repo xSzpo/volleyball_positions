@@ -476,6 +476,14 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
         assert guest.is_hidden("#rNext") and guest.is_visible("#rWait"), "guest can advance the match"
         if i == 0:
             host.locator("#gReveal").screenshot(path=str(SHOTS / "online1.png"))
+            for page in (host, guest):
+                assert page.evaluate(
+                    """() => { const g = document.querySelector('#courtR g.zones');
+                    const first = document.querySelector('#courtR .mk');
+                    return !!g && getComputedStyle(g).visibility === 'visible'
+                      && g.querySelectorAll('text').length === 6
+                      && (!first || !!(g.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING)); }"""
+                ), "the online reveal court has no zone numbers under the markers"
         if i == 2:
             rejoin(guest, code)
             check_reveal(guest, expected)
@@ -1024,7 +1032,7 @@ def failed_join(browser: Browser, url: str, emulator_db: str, errors: list[str])
     host.click("#lStart")
     guest.wait_for_selector("#gOff:enabled", timeout=20000)
     assert guest.is_hidden("#gVisPlay"), "Show on court can be changed during an online match"
-    chips = "#courtG g[opacity]"
+    chips = "#courtG g[opacity]:not(.zones)"
     assert guest.locator(chips).count() == 0, "the guest's own Show on court setting is used online"
     guest.evaluate("document.querySelector('#gVisPlay [data-v=\"ref\"]').click()")
     assert guest.locator(chips).count() == 0, "the in-play picker changes the online court"

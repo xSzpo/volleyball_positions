@@ -609,10 +609,10 @@ def check_learn_fit(browser: Browser, tag: str, quick: bool) -> None:
     ctx.close()
 
 
-ZONES_JS = """() => {
-  const g = document.querySelector('#courtL .zones');
+ZONES_JS = """(id) => {
+  const g = document.querySelector(`#${id} g.zones`);
   if (!g) return null;
-  const first = document.querySelector('#courtL .mk, #courtL .am');
+  const first = document.querySelector(`#${id} .mk, #${id} .am`);
   const front = [], back = [];
   [...g.querySelectorAll('text')]
     .sort((a, b) => a.getAttribute('x') - b.getAttribute('x'))
@@ -620,30 +620,44 @@ ZONES_JS = """() => {
   return { shown: getComputedStyle(g).visibility === 'visible',
     under: !first || !!(g.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING),
     rows: front.join('') + '/' + back.join(''),
-    pressed: document.querySelector('#lZones').getAttribute('aria-pressed') };
+    setting: [document.querySelector('#lZones').getAttribute('aria-pressed') === 'true',
+      document.querySelector('#dZones').checked, document.querySelector('#gZones').checked] };
 }"""
 
 
-def zones_shown(pg: Page, ctx: str, on: bool) -> None:
-    """The zone numbers layer: front 4 3 2, back 5 6 1, under the markers, shown and pressed as `on`."""
-    state = pg.evaluate(ZONES_JS)
+def zones_shown(pg: Page, ctx: str, on: bool, court: str = "courtL") -> None:
+    """The zone numbers layer of `court`: front 4 3 2, back 5 6 1, under the markers, shown as `on`.
+
+    The Learn toggle and the Drill and Match options rows show the same setting.
+    """
+    state = pg.evaluate(ZONES_JS, court)
     if state is None:
-        fail(f"{ctx}: no zone numbers layer on the Learn court")
+        fail(f"{ctx}: no zone numbers layer on #{court}")
     elif state["rows"] != "432/561" or not state["under"]:
         fail(f"{ctx}: zone numbers {state['rows']}, under the markers {state['under']}")
-    elif state["shown"] != on or state["pressed"] != str(on).lower():
-        fail(f"{ctx}: zones shown {state['shown']}, pressed {state['pressed']}, want {on}")
+    elif state["shown"] != on or state["setting"] != [on, on, on]:
+        fail(f"{ctx}: zones shown {state['shown']}, Learn/Drill/Match setting {state['setting']}, want {on}")
+
+
+def zones_row(pg: Page, ctx: str, row: str) -> None:
+    """The options row is a 44 px tap target."""
+    box = pg.locator(row).bounding_box()
+    assert box is not None
+    if box["height"] < 44:
+        fail(f"{ctx}: {row} tap target {box['height']:.0f} px high")
 
 
 def check_zones(browser: Browser, tag: str) -> None:
-    """The Zones toggle beside Next: off by default, stored, kept across screens, reloads and a Reception play."""
-    section("LEARN zones toggle")
+    """Zone numbers on every court, on by default, one setting for Learn, Drill and Match, kept across reloads."""
+    section("zone numbers")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
     ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
     pg = ctx.new_page()
     pg.goto(URL)
     wait_ready(pg)
-    zones_shown(pg, f"{tag} zones default", False)
+    zones_shown(pg, f"{tag} zones default", True)
+    if pg.evaluate("localStorage.getItem('ksv51:zones')") is not None:
+        fail(f"{tag} the zones default is stored before a tap")
     box, row = pg.locator("#lZones").bounding_box(), pg.locator("#lCtl").bounding_box()
     assert box is not None and row is not None
     if box["width"] < 44 or box["height"] < 44:
@@ -652,6 +666,10 @@ def check_zones(browser: Browser, tag: str) -> None:
         fail(f"{tag} Zones is not in the sticky Next row")
     if pg.evaluate("(() => { const n = document.querySelector('#lNext'); return n.scrollWidth > n.clientWidth; })()"):
         fail(f"{tag} the Next label is cut off beside Zones")
+    pg.click("#lZones")
+    zones_shown(pg, f"{tag} zones off by Learn", False)
+    if pg.evaluate("localStorage.getItem('ksv51:zones')") != "false":
+        fail(f"{tag} zones off is not stored")
     pg.click("#lZones")
     if pg.evaluate("localStorage.getItem('ksv51:zones')") != "true":
         fail(f"{tag} zones on is not stored")
@@ -679,6 +697,30 @@ def check_zones(browser: Browser, tag: str) -> None:
     zones_shown(pg, f"{tag} zones off after a reload", False)
     if pg.evaluate("localStorage.getItem('ksv51:zones')") != "false":
         fail(f"{tag} zones off is not stored")
+    pg.click("#tabDrill")
+    zones_shown(pg, f"{tag} Drill zones off from Learn", False, "courtD")
+    open_fold(pg, "#dOpts")
+    zones_row(pg, f"{tag} Drill", "#dZonesCheck")
+    pg.click("#dZonesCheck")
+    zones_shown(pg, f"{tag} Drill zones on by the option", True, "courtD")
+    if pg.evaluate("localStorage.getItem('ksv51:zones')") != "true":
+        fail(f"{tag} Drill zones on is not stored")
+    for i in range(6):
+        drill_miss(pg)
+        zones_shown(pg, f"{tag} Drill zones question {i + 1}", True, "courtD")
+    pg.click("#tabGame")
+    open_fold(pg, "#gOpts")
+    zones_row(pg, f"{tag} Match", "#gZonesCheck")
+    pg.click("#gZonesCheck")
+    if pg.evaluate("localStorage.getItem('ksv51:zones')") != "false":
+        fail(f"{tag} Match zones off is not stored")
+    pg.click("#gStart")
+    zones_shown(pg, f"{tag} Match zones off by the option", False, "courtG")
+    pg.click("#tabLearn")
+    zones_shown(pg, f"{tag} Learn zones off from Match", False)
+    pg.click("#lZones")
+    pg.click("#tabGame")
+    zones_shown(pg, f"{tag} Match zones on from Learn", True, "courtG")
     ctx.close()
 
 

@@ -119,17 +119,28 @@ def check_off_leaves_no_trace(page: Page) -> None:
 
 
 def check_zones_off(page: Page) -> None:
-    """With court-zones off, a stored zones on draws no button and no zone numbers."""
+    """With court-zones off, a stored zones on draws no toggle and no zone numbers on any court."""
     page.goto(URL)
     page.evaluate("localStorage.setItem('ksv51:zones', 'true')")
     open_app(page, "?ff=reset,-court-zones")
-    if present(page, "lZones") or page.locator("#courtL .zones").count():
-        fail("court-zones off: Zones button or zone numbers in the DOM")
+    for element_id in ("lZones", "dZonesCheck", "dZones", "gZonesCheck", "gZones"):
+        if present(page, element_id):
+            fail(f"court-zones off: #{element_id} still in the DOM")
+    if page.locator("#courtL .zones").count():
+        fail("court-zones off: zone numbers on the Learn court")
     if not page.is_visible("#lNext"):
         fail("court-zones off: Next missing")
+    page.click("#tabDrill")
+    if page.locator("#courtD .zones").count():
+        fail("court-zones off: zone numbers on the Drill court")
+    page.click("#tabGame")
+    page.click("#gStart")
+    page.wait_for_timeout(200)
+    if page.locator("#courtG .zones").count():
+        fail("court-zones off: zone numbers on the Match court")
     open_app(page, "?ff=reset,-learn-tab")
-    if values(page)["court-zones"]:
-        fail("learn-tab off: court-zones still on")
+    if not values(page)["court-zones"]:
+        fail("learn-tab off: court-zones switched off too")
     page.evaluate("localStorage.removeItem('ksv51:zones'); localStorage.removeItem('ksv51:ffOverride')")
 
 
