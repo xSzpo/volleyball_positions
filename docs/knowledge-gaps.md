@@ -743,3 +743,19 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Build to the current play. A front-row player who passes behind the middle (`SWITCH_VIA`) reads "Cross behind the middle to zone 4: block or defend the next ball." (the zone 4 hitter: "Spike over the net, then cross behind the middle to zone 2."). Any other run to base that changes side of the centre line by more than `CROSS_DX` (0.3) reads "Cross to zone 2: block or defend the next ball." in the front row (the front-row setter in R4 to R6) and "Cross the court to zone 1 and defend while they play the ball." in the back row (the back-row setter in R1 to R3). No L or back-row OH run changes side today, so none of them says "cross".
 - **Alternatives:** name the partner the player crosses with ("switch with OH1"); leave the setter's run uncaptioned as a cross because it starts near the centre.
 - **Reversible by:** `ATTACK_NOTES.base`, `ATTACK_NOTES.hit[1]` and the `cross` map in `buildReception()` in `src/template.html`.
+
+### 97. The Learn court at 390 × 664
+
+- **Issue:** #113
+- **Problem:** At 390 × 664 the court keeps its 381 px floor (#10 above), so back-row markers opened under the sticky Next row (up to 25 px under it in R4 to R6 Reception). The issue asks for the court and your marker in view at rest with Next still in view, without shrinking the markers below 36 px.
+- **Decision:** On phone screens up to 700 px high the space above the court is tighter: page top padding 8 px (was 18), tabs 8 px (was 16), rotation and phase chips 6 px (was 10) and the title tag 4 px (was 8) below. The court moves up 30 px; the lowest marker ends about 5 px above the Next row in every rotation, step, role and rule set. Nothing scrolls on arrival, and taller screens are unchanged.
+- **Alternatives:** lower the 381 px floor (markers under 36 px); scroll the court into place on arrival (moves the page under the user's finger); a shorter Next row (the primary action gets smaller).
+- **Reversible by:** the `max-height: 700px` media query after `.learnmain` in `src/template.html`.
+
+### 98. The gap between the Learn caption and the hint
+
+- **Issue:** #113
+- **Problem:** The audit saw about 50 px of empty space between the caption and the hint on Our serve and Base, read as space kept for Reception's "Then:" list. Nothing is kept for that list: the gap is the sticky Next row's own place in the page, which full-page screenshots leave empty because they draw the row at the bottom of the viewport. On a real scroll the row sits in that place. The caption's two-line minimum and the invisible animation bar on static screens (#38 above) are real space, kept so the caption and Next do not jump between screens.
+- **Decision:** No layout change. `check_learn_fit()` in `src/tests/qa.py` checks the court against the Next row instead.
+- **Alternatives:** drop the bar or the caption minimum on static screens (Next and the hint jump 22 to 52 px between Reception and the other steps).
+- **Reversible by:** nothing to reverse.
