@@ -946,7 +946,6 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** on by default, with every send denied until the apply.
 - **Reversible by:** `FEATURES` in `src/template.html`.
 
-
 ### 125. Drill Reset takes two taps and has no flag
 
 - **Issue:** #124
