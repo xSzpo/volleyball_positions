@@ -1010,3 +1010,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** This replaces the solo peek. The in-play picker, the peek scoring and "Peeked: n moments" are gone, and `match_finished` drops `peeked`. Every moment scores with the setting chosen at Start. The best-score key stays `v8|`: a match without a peek scores as before, and a best from a match with a peek is lower than the same play scores now, so old bests stay fair to beat.
 - **Alternatives:** keep the peek but count it as a separate best; bump the key to `v9|` and drop every old best.
 - **Reversible by:** `gVis()`, `gVisMult()` and `gShownHtml()` in `src/template.html`.
+
+### 134. Match names rotations by the setter only, and Rotate asks by H
+
+- **Issue:** #135
+- **Problem:** Match named rotations `R1 (H1)`, and Match Rotate from the name asked by H or R at random per moment (#93-#95). The owner asked on 2026-10-01 for Match to show only the setter's zone, as Drill does (#110).
+- **Decision:** This amends #93-#95. Every Match text names the rotation `H<n>` only: the setup options, the story, the title (before and after the answer), hints, feedback, the pass screen, the reveal and the mistakes lists, in solo, same-device and online play. Match Rotate always asks by H; the H/R pick (`gRotHow()`) and the match seed it read are gone, so every player of a moment still gets the same name and online play needs no seed. The best-score key stays `v8|`: Rotate scores the same whichever name it asks by. Learn keeps `R1 (H1)`.
+- **Alternatives:** keep the H/R pick for Rotate only; an "R names" option in Match options.
+- **Reversible by:** `hName()` and `hOnly()` in the Match code of `src/template.html`.

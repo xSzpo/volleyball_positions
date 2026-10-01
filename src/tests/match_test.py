@@ -446,8 +446,8 @@ def answer_match_rotate(page: Page, ctx: str, ri: int, role: str, wrong: bool = 
     """Places every Match Rotate marker in the asked order and presses Continue; returns the asked name."""
     order, spots = rotate_lineup(page, ri, role)
     name = page.inner_text("#gTitle")
-    if name not in (f"R{ri + 1}", f"H{setter_zone(spots)}"):
-        fail(f"{ctx}: Rotate title {name!r}, expected R{ri + 1} or H{setter_zone(spots)} alone")
+    if name != f"H{setter_zone(spots)}":
+        fail(f"{ctx}: Rotate title {name!r}, expected H{setter_zone(spots)} alone")
     if page.locator("#courtG g.mk").count():
         fail(f"{ctx}: teammates shown before the answer with Show on court Everyone")
     for k, mate in enumerate(order):
@@ -473,50 +473,109 @@ def answer_match_rotate(page: Page, ctx: str, ri: int, role: str, wrong: bool = 
         fail(f"{ctx}: grades {grades!r}, expected {right!r}")
     if wrong and not grades.startswith(f"{order[0]}: wrong"):
         fail(f"{ctx}: the setter one zone off graded {grades!r}")
-    full = f"R{ri + 1} (H{setter_zone(spots)})"
-    if page.inner_text("#gTitle") != full:
-        fail(f"{ctx}: title after the answer {page.inner_text('#gTitle')!r}, expected {full!r}")
+    if page.inner_text("#gTitle") != name:
+        fail(f"{ctx}: title after the answer {page.inner_text('#gTitle')!r}, expected {name!r}")
     if page.inner_text("#gAsk"):
         fail(f"{ctx}: the prompt stays after the answer: {page.inner_text('#gAsk')!r}")
     return name
 
 
 def check_match_rotate(browser: Browser) -> None:
-    """Match Rotate names the rotation as H or R alone, asks every marker, grades each one and scores at x1."""
-    names: set[str] = set()
-    for match in range(4):
-        page = new_page(browser)
-        setup_match(page, "OH1", ("start",), vis="all")
-        page.click("#gStart")
-        for ri in range(6):
-            ctx = f"match {match} R{ri + 1}"
-            page.wait_for_selector("#gOff:enabled")
-            wrong = ri == 5
-            names.add(answer_match_rotate(page, ctx, ri, "OH1", wrong)[0])
-            line = page.inner_text("#gBd")
-            parts, total = breakdown_total(line)
-            if parts != total or "%" in line:
-                fail(f"{ctx}: breakdown {line!r} does not add up at x1")
-            want = "Position: wrong 0" if wrong else "Position: exact 100"
-            if not line.startswith(want):
-                fail(f"{ctx}: breakdown {line!r}, expected {want!r}")
-            press_next(page)
-        page.close()
-        if names == {"H", "R"}:
-            break
-    if names != {"H", "R"}:
-        fail(f"Match Rotate named every rotation the same way ({names}) in four matches")
+    """Match Rotate names the rotation H<n> alone, asks every marker, grades each one and scores at x1."""
+    page = new_page(browser)
+    setup_match(page, "OH1", ("start",), vis="all")
+    page.click("#gStart")
+    for ri in range(6):
+        ctx = f"Rotate R{ri + 1}"
+        page.wait_for_selector("#gOff:enabled")
+        wrong = ri == 5
+        answer_match_rotate(page, ctx, ri, "OH1", wrong)
+        line = page.inner_text("#gBd")
+        parts, total = breakdown_total(line)
+        if parts != total or "%" in line:
+            fail(f"{ctx}: breakdown {line!r} does not add up at x1")
+        want = "Position: wrong 0" if wrong else "Position: exact 100"
+        if not line.startswith(want):
+            fail(f"{ctx}: breakdown {line!r}, expected {want!r}")
+        press_next(page)
+    page.close()
     page = new_page(browser, query="?ff=all,-match-rotate-name&anim=0")
     setup_match(page, "OH1", ("start",))
     page.click("#gStart")
     page.wait_for_selector("#gOff:enabled")
-    if page.inner_text("#gTitle") != "R1 (H1)" or page.locator("#gAsk").count():
+    if page.inner_text("#gTitle") != "H1" or page.locator("#gAsk").count():
         fail(f"flag off: Rotate title {page.inner_text('#gTitle')!r} or a marker prompt")
     tap_at(page, 0.5, 0.5)
     if not page.locator("#gNext").is_enabled():
         fail("flag off: one tap does not enable Continue at Rotate")
     page.close()
-    print("match rotate: H or R name, every marker asked and graded, x1 scoring, flag off", flush=True)
+    print("match rotate: H name, every marker asked and graded, x1 scoring, flag off", flush=True)
+
+
+R_NAME = re.compile(r"\bR[1-6]\b")
+# The whole Match tab, closed folds and mistakes lists included, and every aria-label in it.
+GAME_TEXT_JS = (
+    "() => { const g = document.getElementById('game');"
+    " return [g.textContent, ...[...g.querySelectorAll('[aria-label]')].map(e => e.getAttribute('aria-label'))]"
+    ".join(' | '); }"
+)
+
+
+def r_name_in_game(page: Page, ctx: str) -> bool:
+    """Fails and returns True when any Match text or aria-label names a rotation R<n>."""
+    text = page.evaluate(GAME_TEXT_JS)
+    found = R_NAME.search(text)
+    if found:
+        fail(f"{ctx}: Match names a rotation by R: ...{text[max(0, found.start() - 80) : found.end() + 40]!r}")
+    return bool(found)
+
+
+def check_match_h_names(browser: Browser) -> None:
+    """Every Match text names a rotation H<n> only: setup, story, title, hints, feedback, mistakes and end screen."""
+    for rules in RULES_MODES:
+        for role in ("OH1", "L", "S", "MB" if rules == "simple" else "MB2"):
+            ctx = f"{rules} {role}"
+            page = new_page(browser, rules)
+            setup_match(page, role, ("start", "serve", "rec", "ar"))
+            if r_name_in_game(page, f"{ctx} setup"):
+                page.close()
+                continue
+            page.click("#gStart")
+            moments = 0
+            while not page.is_visible("#gEnd") and moments < 30:
+                page.wait_for_selector("#gOff:enabled")
+                moments += 1
+                if not re.fullmatch(r"H[1-6]", page.inner_text("#gTitle")):
+                    fail(f"{ctx}: title {page.inner_text('#gTitle')!r}, expected H<n>")
+                if page.inner_text("#gStepName").startswith("Rotation"):
+                    fill_rotate(page)
+                else:
+                    for _ in range(2):
+                        if page.is_enabled("#gHelp"):
+                            page.click("#gHelp")
+                    if r_name_in_game(page, f"{ctx} moment {moments} hint"):
+                        break
+                    page.click("#gOff")
+                    if not page.locator("#gNext").is_enabled():
+                        page.click("#gOff")
+                press_next(page)
+                if r_name_in_game(page, f"{ctx} moment {moments} feedback"):
+                    break
+                if page.is_visible("#gNext") and page.is_enabled("#gNext"):
+                    press_next(page)
+            if not page.is_visible("#gEnd"):
+                page.close()
+                continue
+            if not page.locator("#gMist li").count():
+                fail(f"{ctx}: no mistakes listed on the end screen")
+            r_name_in_game(page, f"{ctx} end screen")
+            page.close()
+    page = new_page(browser)
+    page.click("#tabLearn")
+    if not re.match(r"R[1-6] \(H[1-6]\) · ", page.inner_text("#learnTag")):
+        fail(f"Learn lost the R<n> (H<n>) name: {page.inner_text('#learnTag')!r}")
+    page.close()
+    print("match names: H<n> only in every Match text, Learn keeps R<n> (H<n>)", flush=True)
 
 
 def check_match_order(browser: Browser) -> None:
@@ -2017,6 +2076,7 @@ def main() -> None:
         check_off_court_pill(browser)
         check_match_order(browser)
         check_match_rotate(browser)
+        check_match_h_names(browser)
         check_libero_hint(browser)
         check_hint_rule_numbers(browser)
         check_hints_without_guides(browser)
