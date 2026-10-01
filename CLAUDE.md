@@ -49,7 +49,7 @@ python3 -m venv .venv && source .venv/bin/activate   # Homebrew Python refuses g
 pip install -r requirements.txt        # playwright
 pip install -r requirements-dev.txt    # ruff, mypy, pre-commit (includes requirements.txt)
 pre-commit install
-python -m playwright install chromium
+python -m playwright install chromium webkit
 
 python src/build.py                    # ALWAYS after editing template.html or data.py
 python src/tests/audit.py              # must print "DATA AUDIT: no issues"

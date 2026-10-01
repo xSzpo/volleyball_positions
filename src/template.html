@@ -7216,7 +7216,9 @@
           // Auth without a popup/redirect resolver: on iOS that resolver loads apis.google.com
           // and the auth iframe before any sign-in, and a report needs neither.
           const provider = reportApp._delegate?.container?.getProvider("auth");
-          if (provider && !provider.isInitialized()) provider.initialize({ options: {} });
+          try {
+            if (provider && !provider.isInitialized()) provider.initialize({ options: {} });
+          } catch (e) {}
           if (EMU) {
             reportApp.auth().useEmulator(`http://${EMU.auth}`);
             const [host, port] = EMU.db.split(":");
