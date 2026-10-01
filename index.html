@@ -355,6 +355,101 @@
     .menu[hidden] {
       display: none;
     }
+    .reportitem {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 44px;
+      margin-top: 12px;
+      padding: 0 12px;
+      border: 2px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--ink);
+      font:
+        700 16px Barlow,
+        sans-serif;
+      text-align: left;
+      cursor: pointer;
+    }
+    .reportitem svg {
+      flex: 0 0 auto;
+      width: 20px;
+      height: 20px;
+    }
+    @media (max-width: 479px) {
+      #reportBtn {
+        display: none;
+      }
+      .reportitem {
+        display: flex;
+      }
+      .reportitem[hidden] {
+        display: none;
+      }
+    }
+    .sheet {
+      width: min(440px, calc(100vw - 32px));
+      max-height: calc(100svh - 32px);
+      padding: 16px;
+      border: var(--edge);
+      border-radius: var(--radius-lg);
+      background: var(--panel);
+      color: var(--ink);
+    }
+    .sheet::backdrop {
+      background: rgba(0, 0, 0, 0.5);
+    }
+    .sheet h2 {
+      margin: 0 0 4px;
+      font:
+        800 24px "Barlow Condensed",
+        sans-serif;
+    }
+    .sheetsub {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .shotbox img {
+      display: block;
+      max-width: 100%;
+      max-height: 30svh;
+      margin: 0 auto 4px;
+      border: var(--edge);
+      border-radius: var(--radius);
+    }
+    .shotbox img[hidden] {
+      display: none;
+    }
+    .shotbox small {
+      color: var(--muted);
+    }
+    .sheet textarea {
+      display: block;
+      width: 100%;
+      margin-top: 4px;
+      padding: 8px;
+      border: 2px solid var(--ink);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--ink);
+      font: inherit;
+      resize: vertical;
+    }
+    #reportMsg {
+      min-height: 1.45em;
+      margin: 6px 0;
+    }
+    .sheetacts {
+      display: flex;
+      gap: 8px;
+    }
+    .sheetacts .btn {
+      flex: 1;
+      min-height: 44px;
+    }
     .menu h2 {
       margin: 0 0 8px;
       font-size: 20px;
@@ -1742,6 +1837,21 @@
                 </button>
                 <small id="rmSub"></small>
               </div>
+              <button type="button" class="reportitem" id="reportItem" aria-haspopup="dialog">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 4h16v12H9l-5 4z" />
+                  <path d="M12 7.5v4M12 13.8v.2" />
+                </svg
+                >Report a problem
+              </button>
             </div>
           </div>
           <button type="button" class="themebtn" id="themeBtn" aria-label="Switch to dark mode">
@@ -1770,8 +1880,52 @@
               />
             </svg>
           </button>
+          <button
+            type="button"
+            class="themebtn"
+            id="reportBtn"
+            aria-label="Report a problem"
+            aria-haspopup="dialog"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 4h16v12H9l-5 4z" />
+              <path d="M12 7.5v4M12 13.8v.2" />
+            </svg>
+          </button>
         </div>
       </div>
+      <dialog class="sheet" id="reportSheet" aria-labelledby="reportTitle">
+        <form method="dialog" id="reportForm" novalidate>
+          <h2 id="reportTitle">Report a problem</h2>
+          <p class="sheetsub">
+            We send your comment, the screenshot and what the app shows (tab, role, rotation). Never
+            your name.
+          </p>
+          <div class="shotbox">
+            <img id="reportShot" alt="Screenshot of the app" hidden>
+            <small id="reportShotNote" aria-live="polite"></small>
+          </div>
+          <label class="check"
+            ><input type="checkbox" id="reportIncl" checked>
+            Include screenshot</label
+          >
+          <label class="vislabel" for="reportText">What went wrong?</label>
+          <textarea id="reportText" rows="4" maxlength="1000"></textarea>
+          <p id="reportMsg" aria-live="polite"></p>
+          <div class="sheetacts">
+            <button type="button" class="btn primary" id="reportSend">Send</button>
+            <button type="button" class="btn" id="reportCancel">Cancel</button>
+          </div>
+        </form>
+      </dialog>
 
       <div class="tabs" role="tablist" id="tabs">
         <button type="button" class="tab" role="tab" id="tabLearn" aria-selected="true">
@@ -2971,6 +3125,7 @@
         "sets-tab": true,
         "sets-quiz": true,
         "after-dig": false,
+        "bug-report": true,
       };
       const FEATURE_NEEDS = {
         "court-zones": ["learn-tab"],
@@ -3011,6 +3166,7 @@
         "match-online": ["gPlayersOnline", "onBox"],
         "sets-tab": ["tabSets", "sets"],
         "sets-quiz": ["setsQuiz"],
+        "bug-report": ["reportBtn", "reportItem", "reportSheet"],
       };
       const TABS = [
         ["learn", "learn-tab"],
@@ -3252,6 +3408,7 @@
         const first = !$("setupNudge").hidden;
         $("setupTitle").textContent = first ? "Pick your role" : "Your role";
         document.querySelector(".rulesmode").hidden = first;
+        $("reportItem").hidden = first;
         $("setup").hidden = !open;
         $("roleChip").setAttribute("aria-expanded", open);
         if (!focus) return;
@@ -4656,7 +4813,13 @@
       });
       motionQuery.addEventListener("change", () => renderLearn());
       document.addEventListener("keydown", (e) => {
-        if ($("learn").hidden || !$("setup").hidden || e.target.tagName === "INPUT") return;
+        if (
+          $("learn").hidden ||
+          !$("setup").hidden ||
+          $("reportSheet").open ||
+          e.target.tagName === "INPUT"
+        )
+          return;
         if (e.key === "ArrowRight") learnGo((ri + 1) % 6, phase);
         if (e.key === "ArrowLeft") learnGo((ri + 5) % 6, phase);
       });
@@ -6846,6 +7009,195 @@
           );
         }
       }
+
+      // ---------- Report a problem ----------
+      const HTML2CANVAS = {
+        src: "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",
+        integrity: "sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H",
+      };
+      const SHOT_SIDE = 1080;
+      // About 250 kB of JPEG as base64; the database rules allow 350 000 characters.
+      const SHOT_CHARS = 333000;
+      const COMMENT_MAX = 1000;
+      let h2cInit = null;
+      let shot = null;
+      let shotRun = 0;
+      let reportBusy = false;
+      function h2cSdk() {
+        if (window.html2canvas) return Promise.resolve(window.html2canvas);
+        if (!h2cInit)
+          h2cInit = new Promise((resolve, reject) => {
+            const el = document.createElement("script");
+            el.src = HTML2CANVAS.src;
+            el.integrity = HTML2CANVAS.integrity;
+            el.crossOrigin = "anonymous";
+            el.onload = () => resolve(window.html2canvas);
+            el.onerror = () => {
+              el.remove();
+              h2cInit = null;
+              reject(new Error("html2canvas did not load"));
+            };
+            document.head.appendChild(el);
+          });
+        return h2cInit;
+      }
+      // An inline SVG is drawn as an image, where the page's CSS (and its variables) do not apply.
+      function inlineSvgStyles(doc) {
+        const view = doc.defaultView;
+        const props = [
+          "fill",
+          "fill-opacity",
+          "stroke",
+          "stroke-width",
+          "stroke-dasharray",
+          "stroke-opacity",
+          "opacity",
+          "visibility",
+          "font-family",
+          "font-size",
+          "font-weight",
+        ];
+        doc.querySelectorAll("svg, svg *").forEach((el) => {
+          const cs = view.getComputedStyle(el);
+          props.forEach((p) => {
+            el.style.setProperty(p, cs.getPropertyValue(p));
+          });
+          if (cs.display === "none") el.setAttribute("display", "none");
+        });
+      }
+      async function reportCapture() {
+        const h2c = await h2cSdk();
+        const w = innerWidth;
+        const h = innerHeight;
+        const canvas = await h2c(document.body, {
+          x: scrollX,
+          y: scrollY,
+          width: w,
+          height: h,
+          scale: Math.min(devicePixelRatio || 1, SHOT_SIDE / Math.max(w, h)),
+          backgroundColor: getComputedStyle(document.body).backgroundColor,
+          logging: false,
+          ignoreElements: (el) => el.id === "reportSheet",
+          onclone: inlineSvgStyles,
+        });
+        for (const quality of [0.8, 0.6, 0.45, 0.3]) {
+          const url = canvas.toDataURL("image/jpeg", quality);
+          if (url.startsWith("data:image/jpeg;base64,") && url.length <= SHOT_CHARS) return url;
+        }
+        return null;
+      }
+      function currentTab() {
+        return TABS.map(([t]) => t).find((t) => !$(t).hidden) || "none";
+      }
+      function viewText(tab) {
+        if (tab === "learn") return `R${ri + 1} ${phase}${anim ? " playing" : ""}`;
+        if (tab === "drill") return cur ? `R${cur.ri + 1} ${cur.phase}` : "";
+        if (tab === "game" && G) {
+          const q = G.queue[G.i];
+          const mode = ON ? "online" : G.mp ? "device" : "solo";
+          return `${mode} ${G.i + 1}/${G.queue.length}${q ? ` R${q.ri + 1} ${q.phase}` : ""}`;
+        }
+        return "";
+      }
+      // Never a player name, room code or uid.
+      function reportContext() {
+        const tab = currentTab();
+        const out = {};
+        FEATURE_KEYS.forEach((k) => {
+          out[k] = feature(k);
+        });
+        return {
+          tab,
+          role,
+          rules: rulesMode,
+          view: viewText(tab).slice(0, 120),
+          theme: document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+          viewport: `${innerWidth}x${innerHeight}@${Math.round((devicePixelRatio || 1) * 100) / 100}`,
+          ua: navigator.userAgent.slice(0, 300),
+          version: "2",
+          flags: out,
+        };
+      }
+      function reportShow() {
+        const has = !!shot;
+        $("reportShot").hidden = !has || !$("reportIncl").checked;
+        if (has) $("reportShot").src = shot;
+        $("reportIncl").disabled = !has;
+      }
+      function reportOpen() {
+        const run = ++shotRun;
+        shot = null;
+        $("reportMsg").textContent = "";
+        $("reportIncl").checked = true;
+        $("reportShotNote").textContent = "Taking a screenshot…";
+        reportShow();
+        $("reportSheet").showModal();
+        // Let the sheet paint before html2canvas takes the main thread.
+        requestAnimationFrame(() =>
+          setTimeout(() => {
+            reportCapture()
+              .catch(() => null)
+              .then((url) => {
+                if (run !== shotRun) return;
+                shot = url;
+                $("reportShotNote").textContent = url
+                  ? ""
+                  : "No screenshot. The report goes without it.";
+                reportShow();
+              });
+          }),
+        );
+      }
+      async function reportSend() {
+        if (reportBusy) return;
+        const comment = $("reportText").value.trim();
+        if (!comment) {
+          $("reportMsg").textContent = "Write a few words about the problem.";
+          $("reportText").focus();
+          return;
+        }
+        reportBusy = true;
+        $("reportSend").disabled = true;
+        $("reportMsg").textContent = "Sending…";
+        const image = $("reportIncl").checked && shot ? shot : null;
+        const context = reportContext();
+        try {
+          const { fb, db } = await fbReady();
+          const report = {
+            ...context,
+            comment: comment.slice(0, COMMENT_MAX),
+            createdAt: fb.database.ServerValue.TIMESTAMP,
+          };
+          if (image) report.image = image;
+          await withTimeout(db.ref("reports").push(report));
+          track("report_sent", { tab: context.tab, has_image: !!image });
+          $("reportText").value = "";
+          $("reportMsg").textContent = "Thanks, sent.";
+          $("reportCancel").textContent = "Close";
+        } catch (e) {
+          $("reportMsg").textContent = "Could not send. Try again.";
+        }
+        reportBusy = false;
+        $("reportSend").disabled = false;
+      }
+      $("reportBtn").addEventListener("click", reportOpen);
+      $("reportItem").addEventListener("click", () => {
+        setSetupOpen(false, false);
+        reportOpen();
+      });
+      $("reportIncl").addEventListener("change", reportShow);
+      $("reportSend").addEventListener("click", reportSend);
+      $("reportCancel").addEventListener("click", () => $("reportSheet").close());
+      $("reportSheet").addEventListener("close", () => {
+        shotRun++;
+        shot = null;
+        $("reportShot").removeAttribute("src");
+        $("reportCancel").textContent = "Cancel";
+        if ($("reportMsg").textContent === "Thanks, sent.") $("reportMsg").textContent = "";
+        ($("reportBtn").offsetParent ? $("reportBtn") : $("roleChip")).focus();
+      });
+      window.ksvReport = { context: reportContext, sdk: HTML2CANVAS };
+
       function clean(v) {
         return JSON.parse(JSON.stringify(v));
       }

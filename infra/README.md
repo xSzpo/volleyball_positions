@@ -1,6 +1,6 @@
 # Firebase infrastructure (Terraform)
 
-Creates the Firebase backend for online multiplayer: a Google Cloud project with Firebase, a web app registration, the default Realtime Database in `europe-west1`, the database security rules (uploaded with the Firebase CLI), and optionally anonymous sign-in and a budget alert.
+Creates the Firebase backend for online multiplayer and Report a problem: a Google Cloud project with Firebase, a web app registration, the default Realtime Database in `europe-west1`, the database security rules (uploaded with the Firebase CLI), and optionally anonymous sign-in and a budget alert.
 
 ## Two ways to run it
 
@@ -53,4 +53,5 @@ terraform import google_firebase_database_instance.default projects/PROJECT_ID/l
 
 - `terraform.tfvars` and `*.tfstate` are git-ignored. The state contains the web API key (not a secret, but keep state out of the public repo anyway).
 - The project has `deletion_policy = "PREVENT"`, and the default Realtime Database can never be deleted once created, so `terraform destroy` won't remove them. Delete the project in the Cloud console if you really want it gone.
+- The rules cover `rooms/` (online multiplayer) and `reports/` (Report a problem: create only, nobody can read or change a report from the app; read them in the Firebase console under Realtime Database → Data).
 - Changing `database.rules.json` and running `terraform apply` re-uploads the rules. You can also run `firebase deploy --only database --project PROJECT_ID` from this folder.
