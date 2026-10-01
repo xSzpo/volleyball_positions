@@ -82,7 +82,7 @@ def check_defaults(page: Page) -> None:
     for key, on in got.items():
         if on != (key not in DEFAULT_OFF):
             fail(f"default {key} = {on}")
-    for element_id in ("tabLearn", "drill", "game", "sets", "setsQuiz", "thumbsBox", "allRots"):
+    for element_id in ("tabLearn", "lZones", "drill", "game", "sets", "setsQuiz", "thumbsBox", "allRots"):
         if not present(page, element_id):
             fail(f"default: #{element_id} missing")
     if page.is_hidden("#tabs") or page.is_visible("#ffEmpty"):
@@ -116,6 +116,21 @@ def check_off_leaves_no_trace(page: Page) -> None:
     page.wait_for_timeout(200)
     if not page.is_visible("#gPlay"):
         fail("drill-tab off: Match does not start")
+
+
+def check_zones_off(page: Page) -> None:
+    """With court-zones off, a stored zones on draws no button and no zone numbers."""
+    page.goto(URL)
+    page.evaluate("localStorage.setItem('ksv51:zones', 'true')")
+    open_app(page, "?ff=reset,-court-zones")
+    if present(page, "lZones") or page.locator("#courtL .zones").count():
+        fail("court-zones off: Zones button or zone numbers in the DOM")
+    if not page.is_visible("#lNext"):
+        fail("court-zones off: Next missing")
+    open_app(page, "?ff=reset,-learn-tab")
+    if values(page)["court-zones"]:
+        fail("learn-tab off: court-zones still on")
+    page.evaluate("localStorage.removeItem('ksv51:zones'); localStorage.removeItem('ksv51:ffOverride')")
 
 
 def check_override_storage(page: Page) -> None:
@@ -349,7 +364,7 @@ def main() -> None:
         page.add_init_script(SEED_ROLE)
         errors: list[str] = []
         page.on("pageerror", lambda error: errors.append(str(error)))
-        for check in (check_defaults, check_off_leaves_no_trace, check_override_storage, check_tabs):
+        for check in (check_defaults, check_off_leaves_no_trace, check_zones_off, check_override_storage, check_tabs):
             check(page)
         if errors:
             fail(f"page errors: {errors}")

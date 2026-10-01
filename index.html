@@ -652,6 +652,19 @@
       line-height: 1.35;
       color: var(--muted);
     }
+    .lctl .zones {
+      width: auto;
+      height: auto;
+      min-height: 48px;
+      margin-right: 8px;
+      padding: 0 12px;
+      font-size: 16px;
+    }
+    .lctl .zones[aria-pressed="true"] {
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--accent);
+      color: var(--accent-ink);
+    }
     .lctl .btn.primary {
       flex: 1;
       min-width: 0;
@@ -1783,6 +1796,7 @@
           </div>
           <div class="lcap" id="lCap" aria-live="polite"></div>
           <div class="lctl" id="lCtl">
+            <button type="button" class="ictl zones" id="lZones" aria-pressed="false">Zones</button>
             <button type="button" class="btn primary" id="lNext"></button>
           </div>
           <div class="cue" id="cue"></div>
@@ -2462,6 +2476,22 @@
         s += `<text x="${off ? 22 : 17}" y="108.6" text-anchor="middle" font-size="3.8" font-weight="${off ? 700 : 400}" fill="var(--net-label)" font-family="Barlow,sans-serif">${off ? "you: off court" : "off court"}</text>`;
         return s;
       }
+      const ZONE_SPOTS = [
+        [4, 1 / 6, 0.36],
+        [3, 1 / 2, 0.36],
+        [2, 5 / 6, 0.36],
+        [5, 1 / 6, 0.94],
+        [6, 1 / 2, 0.94],
+        [1, 5 / 6, 0.94],
+      ];
+      function zonesSvg() {
+        if (!feature("court-zones")) return "";
+        const texts = ZONE_SPOTS.map(
+          ([z, x, y]) =>
+            `<text x="${x * W}" y="${y * H + 3.2}" text-anchor="middle" font-size="9" font-weight="700" font-family="Barlow Condensed,sans-serif">${z}</text>`,
+        ).join("");
+        return `<g class="zones" fill="var(--court-line)" opacity="0.4" pointer-events="none"${zonesOn ? "" : ' visibility="hidden"'}>${texts}</g>`;
+      }
       // Every marker keeps its role text, even faded: MB red and OH green look alike to some viewers.
       function chip(o, { me = false, dim = false, small = false } = {}) {
         const X = o.x * W,
@@ -2822,6 +2852,7 @@
           } catch (e) {}
         },
       };
+      let zonesOn = store.get("zones", false) === true;
       // ---------- Analytics (PostHog, only on the Pages host) ----------
       const POSTHOG_KEY = "phc_REPLACE_ME";
       const POSTHOG_SDK = {
@@ -2881,6 +2912,7 @@
       // ---------- Feature flags ----------
       const FEATURES = {
         "learn-tab": true,
+        "court-zones": true,
         "learn-animation": true,
         "rules-official": true,
         "learn-guides": true,
@@ -2900,6 +2932,7 @@
         "after-dig": false,
       };
       const FEATURE_NEEDS = {
+        "court-zones": ["learn-tab"],
         "learn-animation": ["learn-tab"],
         "rules-official": ["learn-tab", "learn-animation"],
         "learn-guides": ["learn-tab"],
@@ -2919,6 +2952,7 @@
       };
       const FEATURE_ELEMENTS = {
         "learn-tab": ["tabLearn", "learn"],
+        "court-zones": ["lZones"],
         "learn-animation": ["lCap", "lAnim", "lDots"],
         "rules-official": ["rmOfficial"],
         "learn-guides": ["thumbsBox"],
@@ -3265,7 +3299,7 @@
         const pl = learnPlayers(ri, phase);
         learnTr = animPhase(phase) ? phaseStages(ri, phase) : { stages: [] };
         const me = pl.find((o) => o.p === role);
-        let s = DEFS + courtBase(!me);
+        let s = DEFS + courtBase(!me) + zonesSvg();
         if (phase === "start") s += rotArrows();
         if (phase === "serve") s += serveLayer(ri, pl, role);
         pl.filter((o) => o.p !== role).forEach((o) => {
@@ -4135,7 +4169,7 @@
         const off = !tr.from[role];
         const mark = (p, me) =>
           `<g class="am" data-p="${p}">${chip({ p, x: 0, y: 0 }, { me })}</g>`;
-        let s = DEFS + courtBase(off);
+        let s = DEFS + courtBase(off) + zonesSvg();
         const trails = [];
         tr.stages.forEach((st, k) => {
           Object.entries(st.mv).forEach(([p, m]) => {
@@ -4266,6 +4300,17 @@
         if (!anim?.playing) animStep();
       };
       $("lBack").onclick = () => animBack();
+      function renderZones() {
+        $("lZones").setAttribute("aria-pressed", String(zonesOn));
+        const g = $("courtL").querySelector(".zones");
+        if (g) g.setAttribute("visibility", zonesOn ? "visible" : "hidden");
+      }
+      $("lZones").onclick = () => {
+        zonesOn = !zonesOn;
+        store.set("zones", zonesOn);
+        renderZones();
+      };
+      renderZones();
       $("lSpeed").onclick = () => {
         animSpeed = animSpeed === 1 ? 0.5 : 1;
         store.set("animSpeed", animSpeed);
