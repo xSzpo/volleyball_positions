@@ -962,3 +962,19 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** "Thanks, sent." stays in the sheet for 1.2 s (`REPORT_DONE_MS`), with Send disabled, then the sheet closes by itself and focus returns to the opener. It reuses the sheet's own message line, so nothing new is drawn on the page.
 - **Alternatives:** close at once and show a 2.5 s status toast on the page.
 - **Reversible by:** `REPORT_DONE_MS` and `reportSend()` in `src/template.html`.
+
+### 127. Online rooms carry an integer version, checked on join
+
+- **Issue:** #33
+- **Problem:** A cached v1 app reads a v2 room differently (`rulesMode` `simple`, role `MB`) and plays a different match without a warning. The issue asks for a version guard but leaves its form open.
+- **Decision:** `ROOM_V` in `src/template.html` is the integer 2 (v1 rooms had none). Create and Start write `meta.v`. A higher `meta.v` gets "Reload the app to join this room."; a missing or lower one gets "This room is from an older version. Ask the host to make a new room." and clears `ksv51:room`, so the Rejoin row goes; a stale room is still deleted first. The rules require `v` in every `meta` write (not only the create) and accept a number from 1 to 1000; the host's later writes keep it, because `onMeta()` spreads the stored meta and the reset and takeover write single children. A new player node must carry `v` equal to `meta/v`, so an old client that skips the check cannot join either; writes to an existing node (role, presence, colour, score, the host's clears) need no `v`.
+- **Alternatives:** the app version string; a range of compatible versions; hide Rejoin for a room of another version.
+- **Reversible by:** `ROOM_V` and `onJoin()` in `src/template.html`, `meta/v` in `infra/database.rules.json`.
+
+### 128. Online room stays off by default until the rules apply
+
+- **Issue:** #33
+- **Problem:** #15 kept `match-online` off until the live rules accept Simplified; the owner applied those on 2026-09-30. The new rules for `meta.v` and the player `v` are live only after the next `terraform apply`, and the live rules deny `v` (`$other: false`) until then, so Create a room would fail.
+- **Decision:** `match-online` stays off in `FEATURES` in this PR. The owner applies the rules and wipes `rooms`, then the PostHog flag goes on, and a follow-up PR flips the built-in default.
+- **Alternatives:** flip the default in this PR and accept failing creates between the merge and the apply.
+- **Reversible by:** `FEATURES["match-online"]` in `src/template.html` and `DEFAULT_OFF` in `src/tests/flags_test.py`.
