@@ -1887,8 +1887,8 @@ def check_watch_fit_and_boxes(browser: Browser) -> None:
         fail(f"watch fit: the Drill court is not on screen while it plays: {box}")
     if not page.locator("#dWatch .wcap").is_visible():
         fail("watch fit: the Drill caption is hidden")
-    if page.locator("#courtD .zones").count():
-        fail("watch: the Learn zone numbers drawn on the Drill court")
+    if page.locator("#courtD g.zones").count() != 1 or not page.locator("#courtD g.zones").is_visible():
+        fail("watch: no zone numbers on the Drill court while it plays")
     page.click("#nextBtn")
     for _ in range(40):
         if tap_far(page)["on"]:
