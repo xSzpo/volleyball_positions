@@ -185,36 +185,36 @@ def check_vis_scoring(browser: Browser) -> None:
         fail(f"points are not 70% / 30% of the full score: {points}")
 
 
-def check_peek(browser: Browser) -> None:
-    """Peeking at teammates during a moment scores that moment only with the peeked setting."""
+def check_vis_fixed(browser: Browser) -> None:
+    """Solo Match offers no Show on court picker in play and scores every moment with the setting at Start."""
     page = new_page(browser)
-    setup_match(page, "OH1", ("rec",))
+    setup_match(page, "OH1", ("rec",), "ref")
     page.click("#gStart")
     page.wait_for_selector("#gOff:enabled")
-    page.click('#gVisPlay [data-v="all"]')
-    page.click('#gVisPlay [data-v="none"]')
-    tap_spot(page, "OH1", 0, "rec")
-    page.wait_for_selector("#gFb .pts")
-    peeked = points(page)
-    press_next(page)
-    page.wait_for_selector("#gOff:enabled")
-    tap_spot(page, "OH1", 1, "rec")
-    page.wait_for_selector("#gFb .pts")
-    after = points(page)
-    print("points with a peek, then without:", peeked, after, flush=True)
-    if not 0 < peeked <= 36:
-        fail(f"a moment with a peek at Everyone scored {peeked}, expected 30% of the full score")
-    if after < 100:
-        fail(f"the moment after a peek scored {after}; the peek should not carry over")
+    if page.locator("#gVisPlay").count() or page.locator('#gPlay .vis[data-vis="game"]').count():
+        fail("solo Match shows a Show on court picker in play")
+    page.evaluate('document.querySelector(\'.vis[data-vis="game"] [data-v="all"]\').click()')
+    scored = []
+    for ri in range(2):
+        page.wait_for_selector("#gOff:enabled")
+        tap_spot(page, "OH1", ri, "rec")
+        page.wait_for_selector("#gFb .pts")
+        scored.append(points(page))
+        if "Setter 70%" not in page.inner_text("#gBd"):
+            fail(f"moment {ri + 1} scored {page.inner_text('#gBd')!r}, expected the Setter multiplier from Start")
+        press_next(page)
+    print("points with Setter fixed at Start:", scored, flush=True)
+    if not all(70 <= p <= 98 for p in scored):
+        fail(f"moments scored {scored}, expected 70% of the full score")
     while not page.is_visible("#gEnd"):
         if page.is_enabled("#gOff") and page.is_visible("#gOff"):
             page.click("#gOff")
         press_next(page)
     shown = page.inner_text("#gShown")
-    if shown != "Shown: Nobody (full points) · Peeked: 1 moment":
-        fail(f"end screen after one peek reads {shown!r}")
+    if shown != "Shown: Setter (70% points)":
+        fail(f"end screen reads {shown!r}")
     best = page.evaluate("JSON.parse(localStorage.getItem('ksv51:gameBest'))")
-    if list(best) != ["v8|OH1|rec"]:
+    if list(best) != ["v8|OH1|rec|ref"]:
         fail(f"best score saved under {list(best)}, expected the starting settings only")
     page.close()
 
@@ -450,8 +450,6 @@ def answer_match_rotate(page: Page, ctx: str, ri: int, role: str, wrong: bool = 
         fail(f"{ctx}: Rotate title {name!r}, expected R{ri + 1} or H{setter_zone(spots)} alone")
     if page.locator("#courtG g.mk").count():
         fail(f"{ctx}: teammates shown before the answer with Show on court Everyone")
-    if page.is_visible("#gVisPlay"):
-        fail(f"{ctx}: the Show on court peek is offered at Rotate")
     for k, mate in enumerate(order):
         who = "you stand" if mate == role else "the setter (S) stands" if mate == "S" else f"{mate} stands"
         if page.inner_text("#gAsk") != f"Tap where {who}.":
@@ -1186,8 +1184,6 @@ def check_attack_match(browser: Browser) -> None:
             for ri in range(6):
                 tag = f"match {rules} {vis} R{ri + 1}"
                 page.wait_for_selector("#gOff:enabled")
-                if ri == 0 and vis == "none":
-                    page.click('#gVisPlay [data-v="all"]')
                 check_from_picture(court_picture(page, "courtG"), rows[ri], ri, "OH1", tag)
                 story = page.inner_text("#gStory")
                 if not story.endswith(attack_question(ri, "OH1", rows[ri])):
@@ -1206,8 +1202,6 @@ def check_attack_match(browser: Browser) -> None:
                     fail(f"{tag}: Attack scored {line!r}, expected full points")
                 press_next(page)
             page.wait_for_selector("#gEnd", state="visible")
-            if "Peeked" in page.inner_text("#gShown"):
-                fail(f"match {rules} {vis}: a peek at the Attack step counted: {page.inner_text('#gShown')!r}")
             page.close()
     print("match Attack: reception picture, ball, tap line, full points", flush=True)
 
@@ -2017,7 +2011,7 @@ def main() -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         check_vis_scoring(browser)
-        check_peek(browser)
+        check_vis_fixed(browser)
         check_best_key(browser)
         check_our_serve(browser)
         check_off_court_pill(browser)
