@@ -584,6 +584,22 @@
     .lanim[hidden] {
       display: none;
     }
+    .watch {
+      margin-top: 8px;
+    }
+    .watch .lanim {
+      justify-content: flex-start;
+      padding: 0;
+    }
+    .watch .lcap {
+      margin-top: 6px;
+    }
+    .btn.wbtn {
+      min-height: 44px;
+      padding-left: 0;
+      border-color: transparent;
+      color: var(--accent-ink);
+    }
     .ictl {
       width: 44px;
       height: 44px;
@@ -1845,6 +1861,7 @@
             <button type="button" class="btn" id="offBtn">I'm off court</button>
             <button type="button" class="btn primary" id="nextBtn" hidden>Next</button>
           </div>
+          <div class="watch" id="dWatch" hidden></div>
           <div class="fb" id="fb"></div>
           <div class="weak" id="weak"></div>
           <div class="row" id="reviewRow">
@@ -2056,6 +2073,7 @@
             viewBox="-4 -14 108 127"
             aria-label="Everyone's answers"
           ></svg>
+          <div class="watch" id="rWatch" hidden></div>
           <ul class="rlist" id="rList"></ul>
           <ul class="rwhy" id="rWhy"></ul>
           <div class="board" id="rBoard"></div>
@@ -2109,6 +2127,7 @@
             <button type="button" class="btn" id="gHelp">Help</button>
             <button type="button" class="btn quiet" id="gQuit">Quit</button>
           </div>
+          <div class="watch" id="gWatch" hidden></div>
           <div class="fb" id="gFb"></div>
           <div id="gWait" hidden>
             <p class="hint" id="wText"></p>
@@ -2924,6 +2943,7 @@
         "neighbour-check": true,
         "match-solo": true,
         "match-rotate-name": true,
+        "answer-glide": true,
         "set-call-check": true,
         "match-same-device": true,
         "match-online": false,
@@ -2944,6 +2964,7 @@
         "neighbour-check": ["drill-tab"],
         "match-solo": ["learn-tab"],
         "match-rotate-name": ["match-solo"],
+        "answer-glide": ["learn-animation"],
         "set-call-check": ["match-solo", "sets-tab"],
         "match-same-device": ["match-solo"],
         "match-online": ["match-same-device"],
@@ -2963,6 +2984,7 @@
         "drill-rotate-name": ["dName"],
         "neighbour-check": ["nbDrillCheck", "nbGameCheck"],
         "match-solo": ["tabGame", "game"],
+        "answer-glide": ["dWatch", "gWatch", "rWatch"],
         "set-call-check": ["setGameCheck", "setGameHint"],
         "match-same-device": ["gPlayersMp", "mpBox"],
         "match-online": ["gPlayersOnline", "onBox"],
@@ -3257,6 +3279,7 @@
       function setTab(t, quiet) {
         if (!quiet) track("tab_viewed", { tab: t });
         if (t !== "learn" && anim) renderLearn();
+        if (watch?.a) watchRest();
         const opens = t === "learn" && $("learn").hidden;
         ["Learn", "Drill", "Game", "Sets"].forEach((n) => {
           const k = n.toLowerCase();
@@ -3984,7 +4007,8 @@
       function captionPlan(ri, phase, tr, r) {
         const want = [];
         tr.stages.forEach((st, k) => {
-          if (st.notes[r] || k === 0) want.push({ t: st.start, html: stageCaption(st, r) });
+          if (r == null || st.notes[r] || k === 0)
+            want.push({ t: st.start, html: stageCaption(st, r) });
         });
         const out = [];
         want.forEach((w) => {
@@ -4026,8 +4050,11 @@
         return i;
       }
       function paintAnim() {
-        const a = anim,
-          tr = a.tr;
+        paintPlay(anim);
+      }
+      // One frame of a play: markers, trails, ball, stage and caption at a.t.
+      function paintPlay(a) {
+        const tr = a.tr;
         tr.players.forEach((p) => {
           const s = posAt(tr, p, a.t),
             g = a.els[p];
@@ -4071,16 +4098,16 @@
         }
         if (i !== a.stage) {
           a.stage = i;
-          renderDots();
+          a.onStage();
         }
         const cap = a.caps.findLast((c) => c.t <= a.t) || a.caps[0];
         if (cap && cap !== a.cap) {
           a.cap = cap;
-          $("lCap").innerHTML = cap.html;
+          a.capEl.innerHTML = cap.html;
         }
         const fade = cap && a.capShown !== cap ? Math.min(1, (a.t - cap.t) / FADE_MS) : 1;
         if (fade >= 1) a.capShown = cap;
-        $("lCap").style.opacity = cap ? fade : "";
+        a.capEl.style.opacity = cap ? fade : "";
       }
       function animFrame(now) {
         const a = anim;
@@ -4166,10 +4193,27 @@
         restList = null;
         const tr = phaseStages(ri, phase);
         if (!tr.stages.length) return false;
-        const off = !tr.from[role];
+        const { s, trails } = playMarkup(tr, role);
+        $("courtL").innerHTML = DEFS + courtBase(!tr.from[role]) + zonesSvg() + s;
+        anim = {
+          tr,
+          t: 0,
+          ...playEls($("courtL"), trails),
+          stage: null,
+          total: tr.total,
+          caps: captionPlan(ri, phase, tr, role),
+          cap: null,
+          capEl: $("lCap"),
+          onStage: renderDots,
+        };
+        paintAnim();
+        return true;
+      }
+      // A play's trails, markers (yours on top) and ball, drawn at their start.
+      function playMarkup(tr, r) {
         const mark = (p, me) =>
           `<g class="am" data-p="${p}">${chip({ p, x: 0, y: 0 }, { me })}</g>`;
-        let s = DEFS + courtBase(off) + zonesSvg();
+        let s = "";
         const trails = [];
         tr.stages.forEach((st, k) => {
           Object.entries(st.mv).forEach(([p, m]) => {
@@ -4179,35 +4223,23 @@
           });
         });
         tr.players
-          .filter((p) => p !== role)
+          .filter((p) => p !== r)
           .forEach((p) => {
             s += mark(p, false);
           });
-        if (tr.players.includes(role)) s += mark(role, true);
-        s += BALL_SVG;
-        $("courtL").innerHTML = s;
+        if (tr.players.includes(r)) s += mark(r, true);
+        return { s: s + BALL_SVG, trails };
+      }
+      function playEls(svg, trails) {
         const els = {};
-        $("courtL")
-          .querySelectorAll(".am")
-          .forEach((g) => {
-            els[g.dataset.p] = g;
-          });
-        anim = {
-          tr,
-          t: 0,
+        svg.querySelectorAll(".am").forEach((g) => {
+          els[g.dataset.p] = g;
+        });
+        return {
           els,
-          trails: [...$("courtL").querySelectorAll(".trail")].map((el, i) => ({
-            el,
-            ...trails[i],
-          })),
-          ball: $("courtL").querySelector(".ball"),
-          stage: null,
-          total: tr.total,
-          caps: captionPlan(ri, phase, tr, role),
-          cap: null,
+          trails: [...svg.querySelectorAll(".trail")].map((el, i) => ({ el, ...trails[i] })),
+          ball: svg.querySelector(".ball"),
         };
-        paintAnim();
-        return true;
       }
       // Plays the current phase from its start to the rest picture; with step, only the first stage.
       function animPlay(step = false) {
@@ -4316,8 +4348,279 @@
         store.set("animSpeed", animSpeed);
         renderAnimControls();
       };
+      // ---------- Drill and Match: answer glide and Watch the move ----------
+      const ANSWER_GLIDE_MS = 400;
+      let glideAt = -Infinity,
+        // Watch the move: { box, svg, ri, role, redraw, a }; a is the play while one is on the court.
+        watch = null;
+      const glideOn = () => feature("answer-glide") && !ANIM_OFF && !motionQuery.matches;
+      function glideStart() {
+        glideAt = performance.now();
+      }
+      // A marker drawn on its right spot that glides there from the tap; a redraw mid-glide carries on from the clock.
+      function glideChip(o, tap, opts) {
+        const c = chip(o, opts);
+        if (!tap || !feature("answer-glide")) return c;
+        return `<g class="glide" data-dx="${(tap.x - o.x) * W}" data-dy="${(tap.y - o.y) * H}">${c}</g>`;
+      }
+      function glideRun(svg) {
+        const els = [...svg.querySelectorAll("g.glide")];
+        if (!els.length) return;
+        const frame = (now) => {
+          if (!els[0].isConnected) return;
+          const u = glideOn() ? Math.min(1, Math.max(0, (now - glideAt) / ANSWER_GLIDE_MS)) : 1,
+            k = 1 - ease(u);
+          els.forEach((el) => {
+            el.setAttribute("transform", `translate(${el.dataset.dx * k} ${el.dataset.dy * k})`);
+          });
+          if (u < 1) requestAnimationFrame(frame);
+        };
+        frame(performance.now());
+      }
+      // Your tap, the right spot as a ring outline, the route between them and your marker gliding along it.
+      function answerMe(me, tap) {
+        let s = "";
+        if (!feature("answer-glide")) {
+          if (tap && me)
+            s += `<line x1="${tap.x * W}" y1="${tap.y * H}" x2="${me.x * W}" y2="${me.y * H}" stroke="var(--net-label)" stroke-width="0.5" stroke-dasharray="1 1" opacity=".7"/>`;
+          if (tap) s += tapMark(tap);
+          return me ? s + chip(me, { me: true }) : s;
+        }
+        if (me)
+          s += `<circle class="target" cx="${me.x * W}" cy="${me.y * H}" r="8.3" fill="none" stroke="var(--ring)" stroke-width="0.8" stroke-dasharray="1.6 1.2"/>`;
+        if (tap && me && Math.hypot(tap.x - me.x, tap.y - me.y) > 0.08) {
+          const [a, b, c, d] = shorten(tap.x * W, tap.y * H, me.x * W, me.y * H, 3);
+          s += route(a, b, c, d, me.p, { cls: "rt glideroute" });
+        }
+        if (tap) s += tapMark(tap);
+        return me ? s + glideChip(me, tap, { me: true }) : s;
+      }
+      // Watch the move plays Learn's Reception play, which also passes the spots the Attack step grades.
+      const watchOn = (phase) =>
+        feature("answer-glide") && animated() && (phase === "rec" || phase === "ar");
+      const WATCH_BAR =
+        '<div class="lanim"><div class="ldots" aria-hidden="true"></div>' +
+        '<button type="button" class="ictl" data-w="replay" aria-label="Replay">⟲</button>' +
+        '<button type="button" class="ictl" data-w="play" aria-label="Play">▶</button>' +
+        '<button type="button" class="ictl" data-w="back" aria-label="Step back">|◂</button>' +
+        '<button type="button" class="ictl" data-w="step" aria-label="Step one stage">▸|</button>' +
+        '<button type="button" class="ictl speed" data-w="speed">1×</button></div>' +
+        '<div class="lcap wcap" aria-live="polite"></div>';
+      // Shows the Watch the move button under the answer; a key keeps a live reveal from mounting it twice.
+      function watchMount(boxId, svgId, ri, phase, r, redraw, key = null) {
+        const box = $(boxId);
+        if (key != null && box.dataset.key === key && !box.hidden) return;
+        watchClose(box);
+        if (!watchOn(phase)) return;
+        box.dataset.key = key ?? "";
+        box.hidden = false;
+        box.innerHTML = '<button type="button" class="btn wbtn">Watch the move ▸</button>';
+        const spec = { box, svg: $(svgId), ri, role: r, redraw };
+        // Each box keeps its own answer; a tap in it takes over the one play from any other box.
+        const take = () => {
+          if (watch?.box === box) return;
+          if (watch) watchRest();
+          watch = { ...spec, a: null };
+        };
+        box.querySelector(".wbtn").onclick = () => {
+          take();
+          box.innerHTML = WATCH_BAR;
+          box.querySelectorAll("[data-w]").forEach((b) => {
+            b.onclick = () => {
+              take();
+              watchAct(b.dataset.w);
+            };
+          });
+          watchPlay();
+          watchFit();
+        };
+      }
+      // As learnFit(): the whole court on screen, the caption too when it fits.
+      function watchFit() {
+        const court = watch.svg.getBoundingClientRect(),
+          cap = watch.box.getBoundingClientRect();
+        const down = Math.min(cap.bottom - (innerHeight - 6), court.top);
+        if (court.top < 0 || down > 0) scrollBy(0, court.top < 0 ? court.top : down);
+      }
+      // With a box, closes only that box; without, the one that plays.
+      function watchClose(box = null) {
+        const target = box ?? watch?.box;
+        if (!target) return;
+        if (watch?.box === target) {
+          if (watch.a) cancelAnimationFrame(watch.a.raf);
+          watch = null;
+        }
+        target.hidden = true;
+        target.innerHTML = "";
+        delete target.dataset.key;
+      }
+      // A redraw of the answer court ends a play on it.
+      function watchYield(svg) {
+        if (!watch?.a || watch.svg !== svg) return;
+        cancelAnimationFrame(watch.a.raf);
+        watch.a = null;
+        watchControls();
+      }
+      // Back to the answer picture, the bar kept.
+      function watchRest() {
+        if (!watch) return;
+        watchYield(watch.svg);
+        watch.redraw();
+      }
+      function watchBuild() {
+        const w = watch;
+        if (w.a) cancelAnimationFrame(w.a.raf);
+        const tr = phaseStages(w.ri, "rec"),
+          r = tr.players.includes(w.role) ? w.role : null;
+        const { s, trails } = playMarkup(tr, r);
+        w.svg.innerHTML = DEFS + courtBase(w.role != null && !r) + s;
+        w.a = {
+          tr,
+          t: 0,
+          ...playEls(w.svg, trails),
+          stage: null,
+          caps: captionPlan(w.ri, "rec", tr, r),
+          cap: null,
+          capEl: w.box.querySelector(".wcap"),
+          onStage: watchControls,
+        };
+        paintPlay(w.a);
+      }
+      function watchPlay(step = false) {
+        watchBuild();
+        const first = watch.a.tr.stages[0];
+        watchResume(step ? first.start + first.dur : null);
+      }
+      function watchResume(stopAt = null) {
+        const a = watch.a;
+        a.playing = true;
+        a.stopAt = stopAt;
+        a.last = null;
+        cancelAnimationFrame(a.raf);
+        a.raf = requestAnimationFrame(watchFrame);
+        watchControls();
+      }
+      function watchPause() {
+        const a = watch?.a;
+        if (!a) return;
+        cancelAnimationFrame(a.raf);
+        a.playing = false;
+        a.stopAt = null;
+        a.capShown = a.cap;
+        a.capEl.style.opacity = "";
+        watchControls();
+      }
+      function watchFrame(now) {
+        const a = watch?.a;
+        if (!a) return;
+        const dt = a.last == null ? 0 : now - a.last;
+        a.last = now;
+        const stop = a.stopAt ?? a.tr.total;
+        a.t = Math.min(stop, a.t + dt * animSpeed);
+        paintPlay(a);
+        if (a.t >= a.tr.total) return watchFade(now);
+        if (a.t >= stop) return watchPause();
+        a.raf = requestAnimationFrame(watchFrame);
+      }
+      // As in Learn, the end of the play fades out, then the answer picture comes back.
+      function watchFade(start) {
+        const a = watch.a;
+        a.fading = true;
+        a.playing = false;
+        watchControls();
+        const els = [...Object.values(a.els), a.ball, ...a.trails.map((t) => t.el)];
+        const base = els.map((el) => +(el.getAttribute("opacity") ?? 1));
+        const frame = (now) => {
+          if (watch?.a !== a) return;
+          const f = 1 - (now - start) / FADE_BACK_MS;
+          if (f <= 0) return watchRest();
+          els.forEach((el, k) => {
+            el.setAttribute("opacity", base[k] * f);
+          });
+          a.raf = requestAnimationFrame(frame);
+        };
+        a.raf = requestAnimationFrame(frame);
+      }
+      function watchBackTarget() {
+        const a = watch?.a;
+        if (!a || a.playing) return null;
+        const ends = a.tr.stages.map((st) => st.start + st.dur),
+          last = ends[ends.length - 1];
+        if (a.fading) return last;
+        const t = Math.min(a.t, last);
+        if (t <= 0) return null;
+        return ends.filter((e) => e < t - 1).pop() ?? 0;
+      }
+      function watchStep() {
+        const a = watch.a;
+        if (!a || a.fading) return watchPlay(true);
+        const i = stageAt(a.tr, a.t),
+          st = a.tr.stages[i],
+          next = a.t < st.start + st.dur ? st : a.tr.stages[i + 1];
+        if (next) watchResume(next.start + next.dur);
+      }
+      function watchBack() {
+        const t = watchBackTarget();
+        if (t == null) return;
+        if (watch.a.fading) watchBuild();
+        else cancelAnimationFrame(watch.a.raf);
+        watch.a.t = t;
+        paintPlay(watch.a);
+        watchPause();
+      }
+      function watchAct(act) {
+        const a = watch?.a;
+        if (act === "replay") watchPlay();
+        else if (act === "play") {
+          if (a?.playing) watchPause();
+          else if (a && !a.fading) watchResume();
+          else watchPlay();
+        } else if (act === "step" && !a?.playing) watchStep();
+        else if (act === "back") watchBack();
+        else if (act === "speed") {
+          animSpeed = animSpeed === 1 ? 0.5 : 1;
+          store.set("animSpeed", animSpeed);
+          watchControls();
+        }
+      }
+      function watchControls() {
+        const box = watch?.box,
+          bar = box?.querySelector(".lanim");
+        if (!bar) return;
+        const a = watch.a,
+          playing = !!a?.playing,
+          at = a ? (a.stage ?? -1) : -1;
+        const b = (k) => bar.querySelector(`[data-w="${k}"]`);
+        b("play").textContent = playing ? "❚❚" : "▶";
+        b("play").setAttribute("aria-label", playing ? "Pause" : "Play");
+        b("step").disabled = playing;
+        b("back").disabled = watchBackTarget() == null;
+        b("speed").textContent = animSpeed === 1 ? "1×" : "0.5×";
+        b("speed").setAttribute("aria-label", `Speed ${animSpeed === 1 ? "normal" : "half"}`);
+        const n = phaseStages(watch.ri, "rec").stages.length;
+        bar.querySelector(".ldots").innerHTML = Array.from(
+          { length: n },
+          (_, i) => `<i${i <= at ? ' class="on"' : ""}></i>`,
+        ).join("");
+        if (!a) {
+          const cap = box.querySelector(".wcap");
+          cap.textContent = "";
+          cap.style.opacity = "";
+        }
+      }
+      window.ksvWatch = {
+        glideMs: ANSWER_GLIDE_MS,
+        play: () =>
+          watch?.a && {
+            t: watch.a.t,
+            playing: !!watch.a.playing,
+            fading: !!watch.a.fading,
+            total: watch.a.tr.total,
+          },
+      };
       document.addEventListener("visibilitychange", () => {
         if (document.hidden && anim) renderLearn();
+        if (document.hidden && watch?.a) watchRest();
       });
       motionQuery.addEventListener("change", () => renderLearn());
       document.addEventListener("keydown", (e) => {
@@ -4775,7 +5078,7 @@
         });
         r.order.forEach((p) => {
           const right = pl.find((o) => o.p === p);
-          if (right) s += chip(right, { me: p === me });
+          if (right) s += glideChip(right, r.spots[p], { me: p === me });
         });
         return s;
       }
@@ -4810,6 +5113,7 @@
         newQuestion();
       }
       function newQuestion() {
+        watchClose($("dWatch"));
         rot = null;
         lastTap = null;
         dLimits = false;
@@ -4878,8 +5182,10 @@
         updateScore();
       }
       function drawDrill(tap) {
+        watchYield($("courtD"));
         if (rot) {
           $("courtD").innerHTML = drawRotate(rot, answered);
+          glideRun($("courtD"));
           return;
         }
         const pl = answerSpots(cur.ri, cur.phase);
@@ -4905,15 +5211,14 @@
         });
         if (answered && dNb?.done) s += nbLayer(pl, cur.role, dNb.a);
         if (answered && dLimits) s += limitsLayer(cur.ri, cur.role);
-        if (answered) {
-          const me = pl.find((o) => o.p === cur.role);
-          if (tap && me)
-            s += `<line x1="${tap.x * W}" y1="${tap.y * H}" x2="${me.x * W}" y2="${me.y * H}" stroke="var(--net-label)" stroke-width="0.5" stroke-dasharray="1 1" opacity=".7"/>`;
-          if (tap) s += tapMark(tap);
-          if (me) s += chip(me, { me: true });
-        }
+        if (answered)
+          s += answerMe(
+            pl.find((o) => o.p === cur.role),
+            tap,
+          );
         if (answered && cur.phase === "ar") s += momentBall(cur.ri, cur.phase, "d");
         $("courtD").innerHTML = s;
+        glideRun($("courtD"));
       }
       function record(ok) {
         const k = `${cur.role}|${cur.ri}|${cur.phase}`;
@@ -4930,6 +5235,7 @@
         if (review && ok) review.ok++;
         store.set("lastPractice", Date.now());
         answered = true;
+        glideStart();
         $("nextBtn").hidden = false;
         $("offBtn").disabled = true;
         $("nextBtn").focus({ preventScroll: true });
@@ -4944,6 +5250,7 @@
           result: { good: "right", close: "close", bad: "wrong" }[cls],
         });
         const d = describe(cur.ri, cur.phase, cur.role);
+        watchMount("dWatch", "courtD", cur.ri, cur.phase, cur.role, () => drawDrill(lastTap));
         $("fb").className = `fb ${cls}`;
         $("fb").innerHTML = `<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
         if (cur.phase === "rec" && nbOn("nbDrill")) {
@@ -5384,6 +5691,9 @@
         gOptText();
       }
       function gView(v) {
+        ["gWatch", "rWatch"].forEach((id) => {
+          if (!$(v).contains($(id))) watchClose($(id));
+        });
         ["gSetup", "gPass", "gLobby", "gReveal", "gPlay", "gEnd"].forEach((id) => {
           $(id).hidden = id !== v;
         });
@@ -5526,6 +5836,7 @@
       }
       function gShow() {
         const st = G.queue[G.i];
+        watchClose($("gWatch"));
         G.help = 0;
         G.answered = false;
         $("gActs").classList.remove("sticky");
@@ -5590,6 +5901,7 @@
           pl = answerSpots(st.ri, st.phase),
           me = pl.find((o) => o.p === G.role),
           shown = G.answered && !G.mp && !G.online;
+        watchYield($("courtG"));
         if (G.rot) {
           $("courtG").innerHTML = drawRotate(
             G.rot,
@@ -5601,6 +5913,7 @@
               "beforeend",
               `<circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="2.3" fill="var(--net-label)" opacity=".8"/>`,
             );
+          glideRun($("courtG"));
           return;
         }
         let s = DEFS + courtBase(shown && !me);
@@ -5627,13 +5940,11 @@
         if (shown) {
           const a = st.phase === "ar" && players(st.ri, "rec").find((o) => o.p === G.role);
           if (a && G.tap) s += fromTap(a, G.tap);
-          if (G.tap && me)
-            s += `<line x1="${G.tap.x * W}" y1="${G.tap.y * H}" x2="${me.x * W}" y2="${me.y * H}" stroke="var(--net-label)" stroke-width="0.5" stroke-dasharray="1 1" opacity=".7"/>`;
-          if (G.tap) s += tapMark(G.tap);
-          if (me) s += chip(me, { me: true });
+          s += answerMe(me, G.tap);
         }
         if (shown && st.phase === "ar") s += momentBall(st.ri, st.phase, "g");
         $("courtG").innerHTML = s;
+        glideRun($("courtG"));
       }
       function gHint(level) {
         const st = G.queue[G.i],
@@ -5742,6 +6053,7 @@
       function gAnswer(q) {
         const st = G.queue[G.i];
         G.answered = true;
+        glideStart();
         // Sticky only after the answer: while answering it would cover the court and catch taps.
         $("gActs").classList.add("sticky");
         // Rotate asks several markers: each one after the first adds 2 s before the speed bonus drops.
@@ -5789,6 +6101,7 @@
             `<span class="pts">+${pts}</span><b>${title}</b><p class="bd" id="gBd"></p><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
           $("gScore").textContent = G.score;
           $("gStreak").textContent = G.streak;
+          watchMount("gWatch", "courtG", st.ri, st.phase, G.role, gDraw);
           if (G.rot) {
             $("gTitle").textContent = ROWS[st.ri].name;
             $("gFb").insertAdjacentHTML(
@@ -6259,6 +6572,11 @@
       function mpReveal(ps = G.mp.players) {
         const st = G.queue[G.i],
           pl = answerSpots(st.ri, st.phase);
+        G.revealPs = ps;
+        if (G.revealGlide !== G.i) {
+          G.revealGlide = G.i;
+          glideStart();
+        }
         let s = DEFS + courtBase();
         if (st.phase === "start") s += rotArrows();
         if (st.phase === "serve") s += serveLayer(st.ri, pl, null);
@@ -6282,7 +6600,7 @@
           if (!me) return;
           const owners = ps.filter((p) => p.role === r);
           s += `<circle cx="${me.x * W}" cy="${me.y * H}" r="8.3" fill="none" stroke="${owners[0].color}" stroke-width="1.4"/>`;
-          s += chip(me);
+          s += glideChip(me, owners.find((p) => p.taps[G.i]?.tap)?.taps[G.i].tap);
         });
         ps.forEach((p) => {
           const t = p.taps[G.i];
@@ -6290,7 +6608,20 @@
           s += `<circle cx="${t.tap.x * W}" cy="${t.tap.y * H}" r="3.2" fill="${p.color}" stroke="#fff" stroke-width="0.5"/><text x="${t.tap.x * W}" y="${t.tap.y * H + 1.3}" text-anchor="middle" font-size="3.8" font-weight="800" fill="#fff" font-family="Barlow,sans-serif">${esc(p.name.trim()[0] || "?").toUpperCase()}</text>`;
         });
         if (st.phase === "ar") s += momentBall(st.ri, st.phase, "r");
-        $("courtR").innerHTML = s;
+        // A live room re-renders the reveal on every change; a play on its court keeps running.
+        if (!(watch?.a && watch.svg === $("courtR"))) {
+          $("courtR").innerHTML = s;
+          glideRun($("courtR"));
+        }
+        watchMount(
+          "rWatch",
+          "courtR",
+          st.ri,
+          st.phase,
+          G.online ? G.role : roles.length === 1 ? roles[0] : null,
+          () => mpReveal(G.revealPs),
+          `${G.i}`,
+        );
         $("rTitle").textContent = `${ROWS[st.ri].name} · ${FULL[st.phase]}`;
         $("rSub").textContent = `Moment ${G.i + 1} of ${G.queue.length}`;
         const lab = { perfect: "Spot on", close: "Close enough", miss: "Not there" };
