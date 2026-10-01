@@ -117,7 +117,7 @@ def check_switch(page: Page) -> None:
         fail(f"back in Official the stored MB2 reads as {page.get_attribute('#roleChip', 'data-role')!r}")
     if "Official rules" not in (page.get_attribute("#roleChip", "aria-label") or ""):
         fail("role chip label does not name Official rules")
-    if " ".join(page.inner_text("#roleChip").split()) != "Middle 2 · Official":
+    if " ".join(page.inner_text("#roleChip").split()) != "MB2 · O":
         fail(f"role chip does not show the role and rules: {page.inner_text('#roleChip')!r}")
     pick(page, rules="simple")
     if picker(page) != SIMPLE_ROLES or page.get_attribute("#roleChip", "data-role") != "MB":

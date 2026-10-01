@@ -140,7 +140,8 @@ def check_header(pg: Page, tag: str) -> None:
         pg.get_attribute("#roleChip", "aria-label") or ""
     ):
         fail(f"{tag} role button does not show the role")
-    if " ".join(pg.inner_text("#roleChip").split()) != "Outside 1 · Simplified":
+    want = "OH1 · S" if pg.evaluate("innerWidth") < 480 else "Outside 1 · Simplified"
+    if " ".join(pg.inner_text("#roleChip").split()) != want:
         fail(f"{tag} role button text is {pg.inner_text('#roleChip')!r}")
     chip = pg.locator("#roleChip").bounding_box()
     assert chip is not None
@@ -161,9 +162,7 @@ def check_header(pg: Page, tag: str) -> None:
     if menu["x"] > chip["x"] + chip["width"] or menu["x"] < 0 or menu["x"] + menu["width"] > width:
         fail(f"{tag} the list is not under the button or leaves the screen: button {chip}, list {menu}")
     small = pg.eval_on_selector_all(
-        "#setup button",
-        "els => els.filter(e => e.offsetParent && e.getBoundingClientRect().height < 44)"
-        ".map(e => e.textContent.trim())",
+        "#setup button", "els => els.filter(e => e.getBoundingClientRect().height < 44).map(e => e.textContent.trim())"
     )
     if small:
         fail(f"{tag} list tap targets under 44 px: {small}")
@@ -200,7 +199,7 @@ def check_header(pg: Page, tag: str) -> None:
     if pg.is_visible("#setupPanel") or pg.evaluate("document.activeElement.id") != "roleChip":
         fail(f"{tag} Escape did not close the list and focus the button")
     pg.click("#roleChip")
-    pg.evaluate("[...document.querySelectorAll('#setupPanel button')].filter((b) => b.offsetParent).pop().focus()")
+    pg.focus('.rulesmode [data-rm="official"]')
     pg.keyboard.press("Tab")
     if pg.is_visible("#setupPanel") or pg.evaluate("document.activeElement.id") != "themeBtn":
         fail(f"{tag} Tab past the list did not close it and move on")

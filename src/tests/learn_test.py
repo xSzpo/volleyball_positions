@@ -464,27 +464,71 @@ def check_hint_below_next(page: Page) -> None:
 
 
 def check_title_ball(page: Page) -> None:
-    """A decorative volleyball sits beside the title, cap height, in one header row at 390 px."""
-    open_app(page, {"role": "OH1", "rulesMode": "simple"})
-    if page.get_attribute("#titleBall", "aria-hidden") != "true" or not page.locator("h1 #titleBall .ball").count():
-        fail("the title has no decorative volleyball")
-    geo: dict[str, Any] = page.evaluate(
-        "(() => { const r = s => document.querySelector(s).getBoundingClientRect();"
-        " const h1 = document.querySelector('h1'), size = parseFloat(getComputedStyle(h1).fontSize);"
-        " const with_ball = h1.offsetHeight; document.querySelector('#titleBall').style.display = 'none';"
-        " const without = h1.offsetHeight; document.querySelector('#titleBall').style.display = '';"
-        " return { ball: r('#titleBall').toJSON(), chip: r('#roleChip').toJSON(), theme: r('#themeBtn').toJSON(),"
-        " size, with_ball, without, scroll: document.documentElement.scrollWidth > innerWidth }; })()"
-    )
-    ball, chip, theme = geo["ball"], geo["chip"], geo["theme"]
-    if not 0.6 * geo["size"] <= ball["height"] <= 0.8 * geo["size"]:
-        fail(f"the title ball is not cap height: {ball['height']:.1f} px for a {geo['size']:.0f} px title")
-    if ball["right"] > chip["left"] or chip["right"] > theme["left"] or abs(chip["top"] - theme["top"]) > 1:
-        fail(f"the title, role button and theme button are not in one row: {geo}")
-    if geo["with_ball"] != geo["without"]:
-        fail(f"the title ball adds a line to the title: {geo}")
-    if geo["scroll"]:
-        fail("the header scrolls sideways at 390 px")
+    """A decorative volleyball sits beside the title, cap height, in one header row at 360 and 390 px.
+
+    The row holds the title, the role button, the theme button and the report icon, each button 44 px.
+    """
+    for width, height in ((390, 664), (360, 640)):
+        page.set_viewport_size({"width": width, "height": height})
+        for stored in ({"role": "OH1", "rulesMode": "simple"}, {"role": "MB1", "rulesMode": "official"}):
+            open_app(page, stored)
+            tag = f"{width} px, {stored['role']}"
+            if (
+                page.get_attribute("#titleBall", "aria-hidden") != "true"
+                or not page.locator("h1 #titleBall .ball").count()
+            ):
+                fail(f"{tag}: the title has no decorative volleyball")
+            geo: dict[str, Any] = page.evaluate(
+                "(() => { const r = s => document.querySelector(s).getBoundingClientRect();"
+                " const h1 = document.querySelector('h1'), size = parseFloat(getComputedStyle(h1).fontSize);"
+                " const with_ball = h1.offsetHeight; document.querySelector('#titleBall').style.display = 'none';"
+                " const without = h1.offsetHeight; document.querySelector('#titleBall').style.display = '';"
+                " return { ball: r('#titleBall').toJSON(), chip: r('#roleChip').toJSON(),"
+                " theme: r('#themeBtn').toJSON(), report: r('#reportBtn').toJSON(),"
+                " size, with_ball, without, scroll: document.documentElement.scrollWidth > innerWidth }; })()"
+            )
+            ball, chip, theme, report = geo["ball"], geo["chip"], geo["theme"], geo["report"]
+            if not 0.6 * geo["size"] <= ball["height"] <= 0.8 * geo["size"]:
+                fail(
+                    f"{tag}: the title ball is not cap height: {ball['height']:.1f} px for a {geo['size']:.0f} px title"
+                )
+            row = [chip, theme, report]
+            if (
+                ball["right"] > chip["left"]
+                or chip["right"] > theme["left"]
+                or theme["right"] > report["left"]
+                or report["right"] > width
+                or any(abs(b["top"] - chip["top"]) > 1 for b in row)
+            ):
+                fail(f"{tag}: the title, role button, theme button and report icon are not in one row: {geo}")
+            if any(b["height"] < 44 or b["width"] < 44 for b in row):
+                fail(f"{tag}: a header button is under 44 px: {row}")
+            if geo["with_ball"] != geo["without"]:
+                fail(f"{tag}: the title ball adds a line to the title: {geo}")
+            if geo["scroll"]:
+                fail(f"{tag}: the header scrolls sideways")
+    page.set_viewport_size({"width": 390, "height": 844})
+
+
+def check_role_text(page: Page) -> None:
+    """Below 480 px the role button shows the role code and the rules initial; from 480 px the full names."""
+    for width, rules, want in (
+        (479, "simple", "OP · S"),
+        (479, "official", "MB1 · O"),
+        (480, "simple", "Opposite · Simplified"),
+        (480, "official", "Middle 1 · Official"),
+    ):
+        page.set_viewport_size({"width": width, "height": 844})
+        role = "OP" if rules == "simple" else "MB1"
+        open_app(page, {"role": role, "rulesMode": rules})
+        text = " ".join(page.inner_text("#roleChip").split())
+        label = page.get_attribute("#roleChip", "aria-label") or ""
+        name = "Opposite" if role == "OP" else "Middle 1"
+        if text != want:
+            fail(f"{width} px: the role button reads {text!r}, expected {want!r}")
+        if name not in label or ("Simplified" if rules == "simple" else "Official") not in label:
+            fail(f"{width} px: the role button label does not name the role and rules: {label!r}")
+    page.set_viewport_size({"width": 390, "height": 844})
 
 
 def main() -> None:
@@ -506,6 +550,7 @@ def main() -> None:
         check_official_libero(page)
         check_hint_below_next(page)
         check_title_ball(page)
+        check_role_text(page)
         for error in errors:
             fail(f"page error: {error}")
         browser.close()

@@ -158,9 +158,11 @@ def serve() -> str:
     return f"http://127.0.0.1:{server.server_address[1]}"
 
 
-def phone(browser: Browser, url: str, errors: list[str], stub: bool = True, width: int = 390) -> tuple[Page, list[str]]:
-    """Opens the app on a phone 664 px high; returns the page and the html2canvas requests it makes."""
-    context = browser.new_context(viewport={"width": width, "height": 664}, is_mobile=True, has_touch=True)
+def phone(
+    browser: Browser, url: str, errors: list[str], stub: bool = True, width: int = 390, height: int = 664
+) -> tuple[Page, list[str]]:
+    """Opens the app on a phone; returns the page and the html2canvas requests it makes."""
+    context = browser.new_context(viewport={"width": width, "height": height}, is_mobile=True, has_touch=True)
     page = context.new_page()
     page.add_init_script(SEED)
     if stub:
@@ -174,12 +176,8 @@ def phone(browser: Browser, url: str, errors: list[str], stub: bool = True, widt
 
 
 def open_sheet(page: Page, timeout: int = 5000) -> None:
-    """Opens the sheet from the header icon, or from the role list below 480 px, and waits for the screenshot."""
-    if page.is_visible("#reportBtn"):
-        page.click("#reportBtn")
-    else:
-        page.click("#roleChip")
-        page.click("#reportItem")
+    """Opens the sheet from the header icon and waits for the screenshot."""
+    page.click("#reportBtn")
     page.wait_for_function(
         "document.getElementById('reportShotNote').textContent !== 'Taking a screenshot…'", timeout=timeout
     )
@@ -226,27 +224,38 @@ def db_call(page: Page, script: str) -> str:
     )
 
 
+def check_icon(page: Page, where: str) -> None:
+    """The icon is a 44 px target after the theme button, in the header row, and the role list has no report row."""
+    box = page.locator("#reportBtn").bounding_box()
+    theme = page.locator("#themeBtn").bounding_box()
+    if box is None or theme is None:
+        fail(f"no report icon in the header {where}")
+        return
+    if box["width"] < 44 or box["height"] < 44 or box["x"] < theme["x"] + theme["width"] or box["y"] != theme["y"]:
+        fail(f"the report icon is not a 44 px target after the theme button {where}: {box} {theme}")
+    if box["x"] + box["width"] > page.evaluate("innerWidth"):
+        fail(f"the report icon leaves the screen {where}: {box}")
+    if page.evaluate("document.documentElement.scrollWidth > innerWidth"):
+        fail(f"the header scrolls sideways with the report icon {where}")
+    page.click("#roleChip")
+    if "report" in page.inner_text("#setup").lower():
+        fail(f"the role list has a report row {where}")
+    page.click("#roleChip")
+
+
 def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str]) -> Page:
     """The icon, the sheet, the stubbed capture, the required comment and the sent report's shape."""
     page, requests = phone(browser, url, errors)
     if page.is_visible("#reportSheet"):
         fail("the sheet is open before a tap")
-    if page.is_visible("#reportBtn"):
-        fail("the report icon is in the 390 px header row")
     for tab in ("#tabDrill", "#tabGame", "#tabSets", "#tabLearn"):
         page.click(tab)
-        page.click("#roleChip")
-        box = page.locator("#reportItem").bounding_box()
-        if box is None or box["height"] < 44 or box["y"] + box["height"] > 664:
-            fail(f"the role list has no 44 px Report a problem row on {tab}: {box}")
-        page.click("#roleChip")
+        check_icon(page, f"at 390 px on {tab}")
     page.click('.rot[data-i="2"]')
     page.click('.ph[data-k="rec"]')
     open_sheet(page)
     if not page.evaluate("document.getElementById('reportSheet').open"):
-        fail("the role list row did not open the sheet")
-    if page.is_visible("#setup"):
-        fail("the role list stays open over the screenshot")
+        fail("the icon did not open the sheet")
     opts = page.evaluate("window.h2cOpts")
     if page.evaluate("window.h2cCalls") != 1 or opts["width"] != 390 or opts["height"] != 664 or not opts["ignores"]:
         fail(f"the capture is not the visible app without the sheet: {opts}")
@@ -272,7 +281,7 @@ def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str])
     page.wait_for_timeout(300)
     if "Write a few words" not in page.inner_text("#reportMsg") or reports(emulator_db):
         fail(f"an empty comment was sent or not asked for: {page.inner_text('#reportMsg')!r}")
-    if page.evaluate("document.activeElement.id") != "reportText":
+    if not focused(page, "reportText"):
         fail("an empty comment does not focus the comment box")
 
     send(page, "The ball is wrong in R3", "Thanks, sent.")
@@ -302,8 +311,8 @@ def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str])
         if secret in payload:
             fail(f"the report carries {secret!r}")
     wait_closed(page, "a good send")
-    if not focused(page, "roleChip"):
-        fail("the sheet closing after a send does not return focus to the role button")
+    if not focused(page, "reportBtn"):
+        fail("the sheet closing after a send does not return focus to the icon")
 
     open_sheet(page)
     if page.input_value("#reportText") or page.inner_text("#reportCancel").strip().lower() != "cancel":
@@ -315,8 +324,8 @@ def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str])
     page.keyboard.press("Escape")
     if page.evaluate("document.getElementById('reportSheet').open"):
         fail("Escape did not close the sheet")
-    if not focused(page, "roleChip"):
-        fail("closing the sheet does not return focus to the role button")
+    if not focused(page, "reportBtn"):
+        fail("closing the sheet does not return focus to the icon")
 
     page.click("#tabDrill")
     open_sheet(page)
@@ -501,31 +510,22 @@ def check_real_capture(browser: Browser, url: str, errors: list[str]) -> None:
     page.context.close()
 
 
-def check_wide(browser: Browser, url: str, errors: list[str]) -> None:
-    """From 480 px the icon sits after the theme button, in the header row, and opens the sheet."""
-    page, _ = phone(browser, url, errors, width=720)
-    box = page.locator("#reportBtn").bounding_box()
-    theme = page.locator("#themeBtn").bounding_box()
-    assert box is not None and theme is not None
-    if box["width"] < 44 or box["height"] < 44 or box["x"] < theme["x"] + theme["width"] or box["y"] != theme["y"]:
-        fail(f"the report icon is not a 44 px target after the theme button: {box} {theme}")
-    if page.evaluate("document.documentElement.scrollWidth > innerWidth"):
-        fail("the header scrolls sideways with the report icon")
-    page.click("#roleChip")
-    if page.is_visible("#reportItem"):
-        fail("the role list has a report row beside the icon")
-    page.click("#roleChip")
-    open_sheet(page)
-    page.keyboard.press("Escape")
-    if not focused(page, "reportBtn"):
-        fail("closing the sheet does not return focus to the icon")
-    page.context.close()
+def check_widths(browser: Browser, url: str, errors: list[str]) -> None:
+    """The icon is in the header row at 360 px and 720 px and opens the sheet."""
+    for width, height in ((360, 640), (720, 800)):
+        page, _ = phone(browser, url, errors, width=width, height=height)
+        check_icon(page, f"at {width} px")
+        open_sheet(page)
+        page.keyboard.press("Escape")
+        if not focused(page, "reportBtn"):
+            fail(f"closing the sheet at {width} px does not return focus to the icon")
+        page.context.close()
 
 
 def check_flag_off(browser: Browser, url: str, errors: list[str]) -> None:
     """With bug-report off neither the icon nor the sheet is in the page."""
     page, _ = phone(browser, url.replace("ff=all", "ff=all,-bug-report"), errors)
-    if page.locator("#reportBtn, #reportItem, #reportSheet").count():
+    if page.locator("#reportBtn, #reportSheet").count():
         fail("bug-report off leaves the icon or the sheet in the page")
     page.context.close()
 
@@ -545,7 +545,7 @@ def main() -> None:
         check_private(browser, url, errors)
         check_failure(browser, url, emulator_db, errors)
         check_real_capture(browser, url, errors)
-        check_wide(browser, url, errors)
+        check_widths(browser, url, errors)
         check_flag_off(browser, url, errors)
         browser.close()
     if errors:
