@@ -3,7 +3,8 @@
 Checks the built-in defaults, the ``?ff=`` preview override and its storage,
 that a feature that is off leaves no trace in the DOM, dependency propagation,
 the tab bar and the empty state, that the removed downloads leave no trace,
-and the PostHog override on the Pages host with a fake PostHog SDK.
+that a stored ``ksv51:flags`` is ignored and removed, and that a fake PostHog
+SDK on the Pages host that serves flags changes no feature.
 
 Usage: python src/tests/flags_test.py
 """
@@ -26,6 +27,7 @@ URL = (ROOT / "index.html").as_uri()
 PAGES_URL = "https://xszpo.github.io/volleyball_positions/"
 FAIL: list[str] = []
 PRIVACY = {
+    "advanced_disable_flags": True,
     "api_host": "https://us.i.posthog.com",
     "ui_host": "https://us.posthog.com",
     "persistence": "memory",
@@ -44,16 +46,38 @@ PRIVACY = {
     "mask_all_element_attributes": True,
     "respect_dnt": True,
 }
-DEFAULT_OFF = {"after-dig", "match-online", "bug-report"}
+DEFAULT_OFF = {"after-dig"}
+ALL_OFF = json.dumps(
+    {
+        key: False
+        for key in (
+            "learn-tab",
+            "drill-tab",
+            "match-solo",
+            "match-online",
+            "sets-tab",
+            "bug-report",
+            "rules-official",
+            "learn-animation",
+        )
+    }
+)
 FAKE_POSTHOG = """
-window.posthog = {
-  calls: { register: [] },
-  init(key, config) { this.config = config; return this; },
-  register(props) { this.calls.register.push(props); },
-  onFeatureFlags(callback) { this.callback = callback; },
-  capture() {},
-  fire(values) { this.callback(Object.keys(values).filter((k) => values[k]), values, { errorsLoading: false }); },
-};
+(() => {
+  const served = { "learn-tab": false, "drill-tab": false, "match-solo": false, "sets-tab": false };
+  window.posthog = {
+    calls: { register: [], flagListeners: 0 },
+    init(key, config) { this.config = config; return this; },
+    register(props) { this.calls.register.push(props); },
+    onFeatureFlags(callback) {
+      this.calls.flagListeners += 1;
+      callback([], served, { errorsLoading: false });
+    },
+    isFeatureEnabled(key) { return served[key] ?? false; },
+    getFeatureFlag(key) { return served[key] ?? false; },
+    capture() {},
+  };
+})();
 """
 
 
@@ -91,6 +115,19 @@ def check_defaults(page: Page) -> None:
         fail("default: override stored without ?ff=")
 
 
+def check_stored_flags_ignored(page: Page) -> None:
+    """A stored ``ksv51:flags`` with everything off changes nothing and is removed at start-up."""
+    page.evaluate("(v) => localStorage.setItem('ksv51:flags', v)", ALL_OFF)
+    open_app(page)
+    got = values(page)
+    if got != {key: key not in DEFAULT_OFF for key in got}:
+        fail(f"stored flags all off: features changed: {got}")
+    if not present(page, "drill") or not present(page, "reportBtn") or not present(page, "onBox"):
+        fail("stored flags all off: a feature element missing")
+    if page.evaluate("localStorage.getItem('ksv51:flags')") is not None:
+        fail("stored flags all off: ksv51:flags not removed")
+
+
 def check_off_leaves_no_trace(page: Page) -> None:
     open_app(page, "?ff=-drill-tab")
     html = page.evaluate(
@@ -119,17 +156,28 @@ def check_off_leaves_no_trace(page: Page) -> None:
 
 
 def check_zones_off(page: Page) -> None:
-    """With court-zones off, a stored zones on draws no button and no zone numbers."""
+    """With court-zones off, a stored zones on draws no toggle and no zone numbers on any court."""
     page.goto(URL)
     page.evaluate("localStorage.setItem('ksv51:zones', 'true')")
     open_app(page, "?ff=reset,-court-zones")
-    if present(page, "lZones") or page.locator("#courtL .zones").count():
-        fail("court-zones off: Zones button or zone numbers in the DOM")
+    for element_id in ("lZones", "dZonesCheck", "dZones", "gZonesCheck", "gZones"):
+        if present(page, element_id):
+            fail(f"court-zones off: #{element_id} still in the DOM")
+    if page.locator("#courtL .zones").count():
+        fail("court-zones off: zone numbers on the Learn court")
     if not page.is_visible("#lNext"):
         fail("court-zones off: Next missing")
+    page.click("#tabDrill")
+    if page.locator("#courtD .zones").count():
+        fail("court-zones off: zone numbers on the Drill court")
+    page.click("#tabGame")
+    page.click("#gStart")
+    page.wait_for_timeout(200)
+    if page.locator("#courtG .zones").count():
+        fail("court-zones off: zone numbers on the Match court")
     open_app(page, "?ff=reset,-learn-tab")
-    if values(page)["court-zones"]:
-        fail("learn-tab off: court-zones still on")
+    if not values(page)["court-zones"]:
+        fail("learn-tab off: court-zones switched off too")
     page.evaluate("localStorage.removeItem('ksv51:zones'); localStorage.removeItem('ksv51:ffOverride')")
 
 
@@ -226,7 +274,7 @@ def open_pages(browser: Browser, seed: dict[str, str], query: str = "") -> tuple
         ),
     )
     page.goto(PAGES_URL + query)
-    page.wait_for_function("!!(window.posthog && window.posthog.callback)")
+    page.wait_for_function("!!(window.posthog && window.posthog.config)")
     return context, page, errors
 
 
@@ -237,43 +285,42 @@ def check_bad_storage(browser: Browser, file_page: Page) -> None:
         if values(file_page) != {k: k not in DEFAULT_OFF for k in values(file_page)}:
             fail(f"file://: stored override {bad} not ignored")
         context, page, errors = open_pages(browser, {"ksv51:flags": bad, "ksv51:ffOverride": bad})
-        config: dict[str, Any] = page.evaluate("window.posthog.config")
-        if config.get("bootstrap") != {"featureFlags": {}}:
-            fail(f"pages: stored flags {bad} passed to bootstrap: {config.get('bootstrap')}")
         if not present(page, "learn") or errors:
             fail(f"pages: app did not start with stored {bad}: {errors}")
+        if page.evaluate("localStorage.getItem('ksv51:flags')") is not None:
+            fail(f"pages: stored flags {bad} not removed")
         context.close()
     open_app(file_page, "?ff=reset")
 
 
-def check_players_mode_restored(browser: Browser) -> None:
-    context, page, errors = open_pages(
-        browser, {"ksv51:flags": '{"match-online": false}', "ksv51:gPlayers": '"online"'}
-    )
+def check_players_mode_restored(page: Page) -> None:
+    """A stored Online room choice survives match-online off and is picked again when it comes back on."""
+    page.evaluate("localStorage.setItem('ksv51:gPlayers', JSON.stringify('online'))")
+    open_app(page, "?ff=reset,-match-online")
     if present(page, "gPlayersOnline") or page.evaluate("localStorage.getItem('ksv51:gPlayers')") != '"online"':
         fail("players mode: online shown, or the stored choice overwritten, while match-online is off")
-    page.evaluate(
-        "window.posthog.fire({'learn-tab': true, 'match-solo': true, 'match-same-device': true, 'match-online': true})"
-    )
+    open_app(page, "?ff=reset")
     checked = page.evaluate("document.querySelector('input[name=\"gPlayers\"]:checked')?.value")
     if checked != "online":
         fail(f"players mode: after match-online came on, {checked!r} is checked, not the stored online")
     page.click("#tabGame")
     if not page.is_visible("#onBox") or page.is_visible("#mpBox"):
         fail("players mode: the online setup is not shown")
-    if errors:
-        fail(f"players mode: page errors: {errors}")
-    context.close()
+    page.evaluate("localStorage.removeItem('ksv51:gPlayers')")
+    open_app(page)
 
 
-def check_rules_restored(browser: Browser) -> None:
+def check_rules_restored(page: Page) -> None:
     """A stored Official choice and same-device middles survive rules-official off, and return when it comes on."""
     mp = json.dumps([{"name": "Ann", "role": "MB2"}, {"name": "Bo", "role": "OP"}])
-    context, page, errors = open_pages(
-        browser,
-        {"ksv51:flags": "{}", "ksv51:rulesMode": '"official"', "ksv51:role": '"MB2"', "ksv51:mpPlayers": mp},
+    page.evaluate(
+        "(mp) => { localStorage.setItem('ksv51:rulesMode', JSON.stringify('official'));"
+        " localStorage.setItem('ksv51:role', JSON.stringify('MB2'));"
+        " localStorage.setItem('ksv51:mpPlayers', mp);"
+        " localStorage.setItem('ksv51:gPlayers', JSON.stringify('mp')); }",
+        mp,
     )
-    page.evaluate("window.posthog.fire({'learn-tab': true, 'match-solo': true, 'match-same-device': true})")
+    open_app(page, "?ff=reset,-rules-official")
     page.evaluate(
         "() => { const el = document.querySelector('#mpList input');"
         " el.value = 'Anna'; el.dispatchEvent(new Event('input')); }"
@@ -283,50 +330,42 @@ def check_rules_restored(browser: Browser) -> None:
     )
     if stored[0] != "official" or stored[1] != "MB2" or stored[2][0]["role"] != "MB2":
         fail(f"rules: stored choices overwritten while rules-official is off: {stored}")
-    page.evaluate(
-        "window.posthog.fire({'learn-tab': true, 'learn-animation': true, 'rules-official': true,"
-        " 'match-solo': true, 'match-same-device': true})"
-    )
+    open_app(page, "?ff=reset")
     checked = page.get_attribute('.rulesmode [aria-checked="true"]', "data-rm")
     shown = page.evaluate(
         "[document.getElementById('roleChip').dataset.role, document.querySelector('#mpList select').value]"
     )
     if checked != "official" or shown != ["MB2", "MB2"]:
         fail(f"rules: after rules-official came on, rules {checked!r}, role and player 1 {shown}")
-    if errors:
-        fail(f"rules: page errors: {errors}")
-    context.close()
+    page.evaluate(
+        "() => { ['rulesMode', 'mpPlayers', 'gPlayers'].forEach((k) => localStorage.removeItem('ksv51:' + k));"
+        " localStorage.setItem('ksv51:role', JSON.stringify('OH1')); }"
+    )
+    open_app(page)
 
 
 def check_posthog(browser: Browser) -> None:
-    context, page, errors = open_pages(browser, {"ksv51:flags": '{"drill-tab": false}'})
+    """PostHog analytics still load on the Pages host, and the flags it serves change no feature."""
+    context, page, errors = open_pages(browser, {"ksv51:flags": ALL_OFF})
     config: dict[str, Any] = page.evaluate("window.posthog.config")
-    expected = {**PRIVACY, "bootstrap": {"featureFlags": {"drill-tab": False}}}
-    if config != expected:
-        fail(f"posthog: init options {config}, expected {expected}")
+    if config != PRIVACY:
+        fail(f"posthog: init options {config}, expected {PRIVACY}")
     if page.evaluate("window.posthog.calls.register") != [{"app_version": "2"}]:
         fail("posthog: app_version not registered")
-    if present(page, "drill"):
-        fail("posthog: stored flags not applied at load")
-    page.evaluate("window.posthog.fire({'learn-tab': true, 'drill-tab': true})")
-    if not present(page, "drill") or present(page, "sets") or present(page, "game"):
-        fail("posthog: flags before the first touch not applied")
-    page.mouse.click(5, 5)
-    page.evaluate("window.posthog.fire({'learn-tab': true, 'sets-tab': true})")
-    if not present(page, "drill") or present(page, "sets"):
-        fail("posthog: flags applied after the first touch")
-    stored = json.loads(page.evaluate("localStorage.getItem('ksv51:flags')"))
-    if not stored["sets-tab"] or stored["drill-tab"] or len(stored) != len(values(page)):
-        fail(f"posthog: flags not stored: {stored}")
-    page.reload()
-    page.wait_for_function("!!(window.posthog && window.posthog.callback)")
-    if not present(page, "sets") or present(page, "drill"):
-        fail("posthog: stored flags not used on the next load")
-    page.goto(PAGES_URL + "?ff=all")
-    page.wait_for_function("!!(window.posthog && window.posthog.callback)")
-    page.evaluate("window.posthog.fire({})")
-    if not all(values(page).values()):
-        fail("posthog: ?ff=all does not win over PostHog")
+    if page.evaluate("window.posthog.calls.flagListeners"):
+        fail("posthog: the app still listens for PostHog flags")
+    page.wait_for_timeout(200)
+    got = values(page)
+    if got != {key: key not in DEFAULT_OFF for key in got}:
+        fail(f"posthog: features do not follow FEATURES: {got}")
+    if not all(present(page, element_id) for element_id in ("drill", "game", "sets", "onBox", "reportBtn")):
+        fail("posthog: a feature element missing")
+    if page.evaluate("localStorage.getItem('ksv51:flags')") is not None:
+        fail("posthog: stored ksv51:flags not removed")
+    page.goto(PAGES_URL + "?ff=reset,-sets-tab")
+    page.wait_for_function("!!(window.posthog && window.posthog.config)")
+    if values(page)["sets-tab"] or present(page, "sets"):
+        fail("posthog: ?ff= does not apply on the Pages host")
     if errors:
         fail(f"posthog: page errors: {errors}")
     context.close()
@@ -351,10 +390,8 @@ def check_downloads_removed(browser: Browser, file_page: Page) -> None:
         fail(f"downloads: section in the DOM or page errors: {errors}")
     open_app(file_page, "?ff=reset")
     context, page, page_errors = open_pages(browser, {"ksv51:flags": '{"downloads": true, "sets-tab": true}'})
-    page.evaluate("window.posthog.fire({'learn-tab': true, 'sets-tab': true, downloads: true})")
-    stored = json.loads(page.evaluate("localStorage.getItem('ksv51:flags')"))
-    if "downloads" in stored or "downloads" in values(page) or not present(page, "sets"):
-        fail(f"downloads: PostHog downloads flag not ignored: {stored}")
+    if "downloads" in values(page) or not present(page, "sets"):
+        fail("downloads: stored downloads flag not ignored")
     if page_errors:
         fail(f"downloads: page errors on the Pages host: {page_errors}")
     context.close()
@@ -379,18 +416,19 @@ def main() -> None:
         page.on("pageerror", lambda error: errors.append(str(error)))
         for check in (
             check_defaults,
+            check_stored_flags_ignored,
             check_off_leaves_no_trace,
             check_zones_off,
             check_answer_glide,
             check_override_storage,
             check_tabs,
+            check_players_mode_restored,
+            check_rules_restored,
         ):
             check(page)
         if errors:
             fail(f"page errors: {errors}")
         check_bad_storage(browser, page)
-        check_players_mode_restored(browser)
-        check_rules_restored(browser)
         check_posthog(browser)
         check_downloads_removed(browser, page)
         check_first_visit_sheet(browser)

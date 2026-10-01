@@ -2025,6 +2025,10 @@
                 ><input type="checkbox" id="nbDrill">
                 Neighbour check (who stands next to you) in reception</label
               >
+              <label class="check" id="dZonesCheck"
+                ><input type="checkbox" id="dZones">
+                Zone numbers on the court</label
+              >
               <div
                 class="vis"
                 id="dName"
@@ -2147,6 +2151,10 @@
               <label class="check" id="setGameCheck"
                 ><input type="checkbox" id="setGame">
                 Set call check after the pass, +30 points</label
+              >
+              <label class="check" id="gZonesCheck"
+                ><input type="checkbox" id="gZones">
+                Zone numbers on the court</label
               >
               <p class="hint" id="setGameHint" hidden>Needs the Attack step</p>
             </div>
@@ -2641,7 +2649,7 @@
         s += `<text x="${W / 2}" y="-5.5" text-anchor="middle" font-size="4.2" font-weight="600" letter-spacing="1.2" fill="var(--net-label)" font-family="Barlow,sans-serif">NET</text>`;
         s += `<rect class="offpill" x="2" y="103.5" width="${off ? 40 : 30}" height="7.5" rx="3.75" fill="none" stroke="var(--${off ? "ring" : "court-line"})" stroke-width="${off ? 1 : 0.5}"${off ? "" : ' stroke-dasharray="1.6 1.2"'}/>`;
         s += `<text x="${off ? 22 : 17}" y="108.6" text-anchor="middle" font-size="3.8" font-weight="${off ? 700 : 400}" fill="var(--net-label)" font-family="Barlow,sans-serif">${off ? "you: off court" : "off court"}</text>`;
-        return s;
+        return s + zonesSvg();
       }
       const ZONE_SPOTS = [
         [4, 1 / 6, 0.36],
@@ -3040,7 +3048,7 @@
           } catch (e) {}
         },
       };
-      let zonesOn = store.get("zones", false) === true;
+      let zonesOn = store.get("zones", true) !== false;
       // ---------- Analytics (PostHog, only on the Pages host) ----------
       const POSTHOG_KEY = "phc_REPLACE_ME";
       const POSTHOG_SDK = {
@@ -3078,11 +3086,10 @@
                 mask_all_text: true,
                 mask_all_element_attributes: true,
                 respect_dnt: true,
-                bootstrap: { featureFlags: storedObject("flags") || {} },
+                advanced_disable_flags: true,
               });
               posthog = window.posthog;
               posthog.register({ app_version: "2" });
-              posthog.onFeatureFlags(flagsFromPosthog);
             } catch (e) {}
           };
           el.onerror = () => el.remove();
@@ -3115,14 +3122,13 @@
         "answer-glide": true,
         "set-call-check": true,
         "match-same-device": true,
-        "match-online": false,
+        "match-online": true,
         "sets-tab": true,
         "sets-quiz": true,
         "after-dig": false,
-        "bug-report": false,
+        "bug-report": true,
       };
       const FEATURE_NEEDS = {
-        "court-zones": ["learn-tab"],
         "learn-animation": ["learn-tab"],
         "rules-official": ["learn-tab", "learn-animation"],
         "learn-guides": ["learn-tab"],
@@ -3143,7 +3149,7 @@
       };
       const FEATURE_ELEMENTS = {
         "learn-tab": ["tabLearn", "learn"],
-        "court-zones": ["lZones"],
+        "court-zones": ["lZones", "dZonesCheck", "gZonesCheck"],
         "learn-animation": ["lCap", "lAnim", "lDots"],
         "rules-official": ["rmOfficial"],
         "learn-guides": ["thumbsBox"],
@@ -3197,8 +3203,7 @@
         FEATURE_KEYS.forEach(on);
         return out;
       }
-      const flagsLive = analyticsOn(location.hostname, POSTHOG_KEY);
-      let flagsBase = flagsLive ? { ...FEATURES, ...storedObject("flags") } : FEATURES;
+      store.del("flags");
       let ffOverride = storedObject("ffOverride");
       const ffParam = new URLSearchParams(location.search).get("ff");
       if (ffParam !== null) {
@@ -3206,13 +3211,9 @@
         if (ffOverride) store.set("ffOverride", ffOverride);
         else store.del("ffOverride");
       }
-      let flags = featureValues(flagsBase, ffOverride);
+      const flags = featureValues(FEATURES, ffOverride);
       const feature = (key) => !!flags[key];
       const nbOn = (id) => feature("neighbour-check") && $(id).checked;
-      let touched = false;
-      ["pointerdown", "touchstart", "keydown", "wheel"].forEach((type) => {
-        document.addEventListener(type, () => (touched = true), { capture: true, passive: true });
-      });
       const SLOTS = new Map();
       function attach(el) {
         const slot = SLOTS.get(el);
@@ -3268,18 +3269,6 @@
         renderLearn();
         gRenderSetup();
         if (!$("game").hidden && gPlayersMode() === "online") onRejoinCheck();
-      }
-      function flagsFromPosthog(_enabled, variants, context) {
-        if (context?.errorsLoading) return;
-        const next = {};
-        FEATURE_KEYS.forEach((k) => {
-          next[k] = !!variants?.[k];
-        });
-        store.set("flags", next);
-        if (touched) return;
-        flagsBase = next;
-        flags = featureValues(flagsBase, ffOverride);
-        applyFeatures();
       }
       window.ksvLearn = {
         describe: (ri, phase, r) => describe(ri, phase, r),
@@ -3493,7 +3482,7 @@
         const pl = learnPlayers(ri, phase);
         learnTr = animPhase(phase) ? phaseStages(ri, phase) : { stages: [] };
         const me = pl.find((o) => o.p === role);
-        let s = DEFS + courtBase(!me) + zonesSvg();
+        let s = DEFS + courtBase(!me);
         if (phase === "start") s += rotArrows();
         if (phase === "serve") s += serveLayer(ri, pl, role);
         pl.filter((o) => o.p !== role).forEach((o) => {
@@ -4376,7 +4365,7 @@
         const tr = phaseStages(ri, phase);
         if (!tr.stages.length) return false;
         const { s, trails } = playMarkup(tr, role);
-        $("courtL").innerHTML = DEFS + courtBase(!tr.from[role]) + zonesSvg() + s;
+        $("courtL").innerHTML = DEFS + courtBase(!tr.from[role]) + s;
         anim = {
           tr,
           t: 0,
@@ -4516,14 +4505,20 @@
       $("lBack").onclick = () => animBack();
       function renderZones() {
         $("lZones").setAttribute("aria-pressed", String(zonesOn));
-        const g = $("courtL").querySelector(".zones");
-        if (g) g.setAttribute("visibility", zonesOn ? "visible" : "hidden");
+        $("dZones").checked = zonesOn;
+        $("gZones").checked = zonesOn;
+        for (const g of document.querySelectorAll("g.zones")) {
+          g.setAttribute("visibility", zonesOn ? "visible" : "hidden");
+        }
       }
-      $("lZones").onclick = () => {
-        zonesOn = !zonesOn;
+      function setZones(on) {
+        zonesOn = on;
         store.set("zones", zonesOn);
         renderZones();
-      };
+      }
+      $("lZones").onclick = () => setZones(!zonesOn);
+      $("dZones").onchange = () => setZones($("dZones").checked);
+      $("gZones").onchange = () => setZones($("gZones").checked);
       renderZones();
       $("lSpeed").onclick = () => {
         animSpeed = animSpeed === 1 ? 0.5 : 1;

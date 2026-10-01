@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 SHOTS = ROOT / "src" / "tests" / "_out"
 SHOTS.mkdir(exist_ok=True)
 VERDICT = re.compile(r"Spot on|Close enough|Not there|\+\d")
-CHIPS = "#courtG g[opacity]"
+CHIPS = "#courtG g[opacity]:not(.zones)"
 
 
 def press_next(page: Page) -> None:
@@ -34,6 +34,19 @@ def check_hidden(pg: Page, chips_before: int, how: str) -> None:
         f"{how}: court shows {chips_after} chips after the answer, {chips_before} before"
     )
     assert pg.is_visible("#gNext") and pg.is_enabled("#gNext"), f"{how}: next button not available"
+
+
+def zones_under(pg: Page, court: str) -> bool:
+    """The court draws the zone numbers, shown, before its first marker."""
+    return bool(
+        pg.evaluate(
+            """(id) => { const g = document.querySelector(`#${id} g.zones`);
+            const first = document.querySelector(`#${id} .mk`);
+            return !!g && getComputedStyle(g).visibility === 'visible'
+              && (!first || !!(g.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING)); }""",
+            court,
+        )
+    )
 
 
 def chip_scores(pg: Page, selector: str) -> dict[str, int]:
@@ -110,6 +123,7 @@ with sync_playwright() as p:
             assert strip == chip_scores(pg, "#pBoard"), f"strip {strip} differs from the pass screen"
             assert pg.locator("#gStrip .pchip.me").count() == 1, "own strip entry not highlighted"
             assert pg.evaluate("document.documentElement.scrollWidth") <= 390, "strip scrolls sideways"
+            assert zones_under(pg, "courtG"), "the turn court has no zone numbers under the markers"
             continue
         if pg.is_visible("#gReveal"):
             rows = pg.locator("#rList li").all_inner_texts()
@@ -121,6 +135,7 @@ with sync_playwright() as p:
                 parts, total = breakdown_total(row)
                 assert parts == total == int(found.group(1)), f"reveal breakdown does not add up: {row!r}"
             assert pg.locator("#rWhy li").count() >= 1, "reveal has no explanation"
+            assert zones_under(pg, "courtR"), "the reveal court has no zone numbers under the markers"
             if moment_seen and moment_seen.endswith("· Rotation"):
                 grades = pg.locator("#rList .rotgrades").all_inner_texts()
                 assert len(grades) == 3 and all(
