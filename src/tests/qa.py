@@ -435,8 +435,8 @@ def sweep_drill(pg: Page, tag: str, quick: bool) -> None:
             drill_steps(pg, tag + " after review", 4)
     else:
         fail(f"{tag} review button never appeared")
-    open_fold(pg, "#dOpts")
-    pg.click("#resetBtn")
+    pg.click("#dReset")
+    pg.click("#dReset")
     drill_steps(pg, tag + " after reset", 3)
 
 
@@ -908,6 +908,80 @@ DRILL_TEXT_JS = (
 )
 
 
+def check_drill_reset(browser: Browser, tag: str) -> None:
+    """Reset next to the Drill score: in view without a fold, 44 px, two taps to reset, back after a timeout."""
+    section("DRILL reset")
+    ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
+    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    pg = ctx.new_page()
+    errs: list[str] = []
+    pg.on("pageerror", collect_errors(errs))
+    pg.goto(URL)
+    wait_ready(pg)
+    pg.evaluate(
+        "localStorage.setItem('ksv51:stats2',"
+        " JSON.stringify({'OH1|0|rec': {ok: 0, miss: 2}, 'MB|2|serve': {ok: 1, miss: 0}}));"
+        " localStorage.setItem('ksv51:score2', JSON.stringify({ok: 1, n: 3}))"
+    )
+    pg.reload()
+    wait_ready(pg)
+    pg.click("#tabDrill")
+    pg.evaluate("window.scrollTo(0, 0)")
+    stored = "['stats2', 'score2'].map(k => localStorage.getItem('ksv51:' + k))"
+    before = pg.evaluate(stored)
+    if pg.get_attribute("#dOpts", "open") is not None or pg.locator("#dOpts #dReset").count():
+        fail(f"{tag} drill reset sits in Drill options, or the fold is open")
+    if pg.locator("#resetBtn").count():
+        fail(f"{tag} the old Reset my progress button is still there")
+    if not pg.is_visible("#dReset") or pg.inner_text("#dscore") != "1/3":
+        fail(f"{tag} drill reset hidden, or score {pg.inner_text('#dscore')!r} not the stored 1/3")
+
+    def fits(state: str) -> None:
+        box = pg.locator("#dReset").bounding_box()
+        score = pg.locator("#dscore").bounding_box()
+        court = pg.locator("#courtD").bounding_box()
+        assert box and score and court
+        if box["width"] < 44 or box["height"] < 44 or box["x"] < 0 or box["x"] + box["width"] > 390:
+            fail(f"{tag} drill reset {state} {box} under 44 px or off the 390 px screen")
+        if box["y"] + box["height"] > court["y"] or box["x"] + box["width"] > score["x"]:
+            fail(f"{tag} drill reset {state} {box} not left of the score {score} above the court {court}")
+        if pg.evaluate("document.documentElement.scrollWidth > innerWidth"):
+            fail(f"{tag} drill reset {state}: the page scrolls sideways")
+
+    fits("at rest")
+    question = pg.inner_text("#dq") + pg.inner_text("#dsub")
+    pg.tap("#dReset")
+    armed = pg.inner_text("#dReset").strip().lower()
+    if armed != "tap again to reset" or pg.inner_text("#dResetNote") != "Tap again to reset":
+        fail(f"{tag} drill reset after one tap reads {armed!r}, note {pg.inner_text('#dResetNote')!r}")
+    if pg.evaluate(stored) != before or pg.inner_text("#dscore") != "1/3":
+        fail(f"{tag} one tap on drill reset changed the progress")
+    fits("armed")
+    pg.wait_for_timeout(3300)
+    if pg.inner_text("#dReset").strip().lower() != "reset" or pg.evaluate(stored) != before:
+        fail(f"{tag} drill reset reads {pg.inner_text('#dReset')!r} 3.3 s after one tap, or progress changed")
+    if pg.inner_text("#dq") + pg.inner_text("#dsub") != question:
+        fail(f"{tag} one tap on drill reset changed the question")
+    pg.tap("#dReset")
+    pg.tap("#dReset")
+    after = pg.evaluate("['stats2', 'score2'].map(k => JSON.parse(localStorage.getItem('ksv51:' + k)))")
+    if after != [{}, {"ok": 0, "n": 0}]:
+        fail(f"{tag} two taps on drill reset left storage {after}")
+    if pg.inner_text("#dscore") != "0/0" or pg.inner_text("#dstreak") != "0" or pg.inner_text("#weak").strip():
+        fail(f"{tag} after drill reset the score reads {pg.inner_text('#dscore')!r}, weak {pg.inner_text('#weak')!r}")
+    if pg.inner_text("#dResetNote") != "Progress reset." or not pg.inner_text("#dq").strip():
+        fail(
+            f"{tag} after drill reset the note reads {pg.inner_text('#dResetNote')!r},"
+            f" question {pg.inner_text('#dq')!r}"
+        )
+    pg.wait_for_timeout(2300)
+    if pg.inner_text("#dReset").strip().lower() != "reset" or pg.inner_text("#dResetNote"):
+        fail(f"{tag} drill reset reads {pg.inner_text('#dReset')!r} 2.3 s after the reset")
+    if errs:
+        fail(f"{tag} drill reset JS errors: {errs[:3]}")
+    ctx.close()
+
+
 def check_drill_h_names(browser: Browser, tag: str) -> None:
     """Drill names every rotation H<n> only (question, feedback, weak spots, review); Learn and Match R<n> (H<n>)."""
     section("DRILL names by the setter")
@@ -1126,6 +1200,7 @@ def main() -> None:
         sweep_learn(pg, tag, args.quick)
         sweep_drill(pg, tag, args.quick)
         check_drill_steps(b, tag)
+        check_drill_reset(b, tag)
         check_learn_fit(b, tag, args.quick)
         check_zones(b, tag)
         check_drill_rotate(b, tag, args.quick)

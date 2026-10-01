@@ -945,3 +945,12 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `bug-report` is off in `FEATURES`. After the apply, the PostHog flag switches it on.
 - **Alternatives:** on by default, with every send denied until the apply.
 - **Reversible by:** `FEATURES` in `src/template.html`.
+
+
+### 125. Drill Reset takes two taps and has no flag
+
+- **Issue:** #124
+- **Problem:** The owner asked for a way to reset Drill progress at any time; Reset my progress sat in the closed Drill options fold.
+- **Decision:** Reset sits left of the Drill score, always shown and always enabled (with nothing to reset it only draws a new question). The first tap reads "Tap again to reset" for 3 s; a second tap clears stats for every role, score, streak and any review. `lastPractice` stays, because Match sets it too. The button moved, so it has no feature flag; it goes with `drill-tab`.
+- **Alternatives:** a `confirm()` dialog; hide or disable it when there is nothing to reset; a `drill-reset` flag that keeps the old button while off.
+- **Reversible by:** `#dReset` in `src/template.html`.

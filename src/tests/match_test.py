@@ -288,7 +288,7 @@ def check_our_serve(browser: Browser) -> None:
     for _ in range(100):
         if page.inner_text("#dq").endswith("· Our serve"):
             break
-        page.click("#resetBtn")
+        page.dblclick("#dReset")
     else:
         fail("drill: Our serve never came up")
     if court_picture(page, "courtD")["ball"]:
@@ -1509,7 +1509,7 @@ def check_receive_limits(browser: Browser) -> None:
                 break
             question = page.inner_text("#dq")
             if not question.endswith("· Reception"):
-                page.click("#resetBtn")
+                page.dblclick("#dReset")
                 continue
             ri = drill_ri(question)
             seen.add(ri)
@@ -1521,7 +1521,7 @@ def check_receive_limits(browser: Browser) -> None:
             want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
             if limit_lines(page, "courtD") != want or "Overlap: stay" not in page.inner_text("#fb"):
                 fail(f"{tag}: {limit_lines(page, 'courtD')} limit lines, Learn draws {want}")
-            page.click("#resetBtn")
+            page.dblclick("#dReset")
         if len(seen) < 6:
             fail(f"limits drill {rules}: Receive came up only in {sorted(seen)}")
         page.close()
@@ -1534,7 +1534,7 @@ def check_receive_limits(browser: Browser) -> None:
     for _ in range(400):
         if page.inner_text("#dq").endswith("· Reception"):
             break
-        page.click("#resetBtn")
+        page.dblclick("#dReset")
     else:
         fail("limits drill neighbour: Receive never came up")
     ri = drill_ri(page.inner_text("#dq"))
@@ -1601,7 +1601,7 @@ MIDDLE_ROLES = {"simple": ("MB",), "official": ("MB1", "MB2")}
 def check_attack_drill(browser: Browser) -> None:
     """Drill Attack: the reception picture in every rotation, both rule sets and every Show on court value.
 
-    Reset my progress draws each next question, so the weights stay even and every rotation comes up.
+    Two taps on Reset draw each next question, so the weights stay even and every rotation comes up.
     """
     for rules in RULES_MODES:
         rows = [lineup(ri, rules) for ri in range(6)]
@@ -1619,7 +1619,7 @@ def check_attack_drill(browser: Browser) -> None:
                     break
                 question = page.inner_text("#dq")
                 if not question.endswith("· Attack"):
-                    page.click("#resetBtn")
+                    page.dblclick("#dReset")
                     continue
                 ri = drill_ri(question)
                 tag = f"drill {rules} {vis} R{ri + 1}"
@@ -1633,7 +1633,7 @@ def check_attack_drill(browser: Browser) -> None:
                 check_tap_line(court_picture(page, "courtD"), rows[ri], "OH1", spot, tag)
                 picture = court_picture(page, "courtD")
                 check_ball_at_setter(picture, rows[ri], lands, f"{tag} feedback", page, ri, "OH1")
-                page.click("#resetBtn")
+                page.dblclick("#dReset")
             if len(seen) < 6:
                 fail(f"drill {rules} {vis}: Attack came up only in {sorted(seen)}")
         page.close()

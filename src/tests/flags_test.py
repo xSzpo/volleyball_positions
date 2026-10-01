@@ -100,10 +100,10 @@ def check_off_leaves_no_trace(page: Page) -> None:
             return body.innerHTML;
         }"""
     )
-    for element_id in ("tabDrill", "drill", "reviewBtn", "nbDrill", "nbGame", "dOpts"):
+    for element_id in ("tabDrill", "drill", "reviewBtn", "nbDrill", "nbGame", "dOpts", "dReset"):
         if present(page, element_id):
             fail(f"drill-tab off: #{element_id} still in the DOM")
-    for text in ("quick quiz", "Drill options", "Reset my progress", "Neighbour check (who stands"):
+    for text in ("quick quiz", "Drill options", "Neighbour check (who stands"):
         if text in html:
             fail(f"drill-tab off: {text!r} still in the DOM")
     got = values(page)
