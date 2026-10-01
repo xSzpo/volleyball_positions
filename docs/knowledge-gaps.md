@@ -953,3 +953,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Reset sits left of the Drill score, always shown and always enabled (with nothing to reset it only draws a new question). The first tap shows "Sure?" for 3 s (one line at a fixed width, so the header and the court do not move; screen readers hear "Tap again to reset"); a second tap clears stats for every role, score, streak and any review. `lastPractice` stays, because Match sets it too. The button moved, so it has no feature flag; it goes with `drill-tab`.
 - **Alternatives:** a `confirm()` dialog; hide or disable it when there is nothing to reset; a `drill-reset` flag that keeps the old button while off.
 - **Reversible by:** `#dReset` in `src/template.html`.
+
+### 126. Report a problem closes in the sheet after a good send
+
+- **Issue:** #126
+- **Problem:** The owner wants the sheet closed after a send, but the user still needs to see that it was sent.
+- **Decision:** "Thanks, sent." stays in the sheet for 1.2 s (`REPORT_DONE_MS`), with Send disabled, then the sheet closes by itself and focus returns to the opener. It reuses the sheet's own message line, so nothing new is drawn on the page.
+- **Alternatives:** close at once and show a 2.5 s status toast on the page.
+- **Reversible by:** `REPORT_DONE_MS` and `reportSend()` in `src/template.html`.

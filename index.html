@@ -7066,6 +7066,7 @@
       const SHOT_CHARS = 333000;
       const COMMENT_MAX = 1000;
       const SHOT_MS = 15000;
+      const REPORT_DONE_MS = 1200;
       // Everything that shows a player name or a room code.
       const SHOT_PRIVATE = [
         "#onName",
@@ -7092,6 +7093,7 @@
       let shotWait = null;
       let reportBusy = false;
       let reportKey = null;
+      let reportDone = null;
       function h2cSdk() {
         if (window.html2canvas) return Promise.resolve(window.html2canvas);
         if (!h2cInit)
@@ -7273,7 +7275,11 @@
           $("reportText").value = "";
           $("reportMsg").textContent = "Thanks, sent.";
           $("reportCancel").textContent = "Close";
-        } else $("reportMsg").textContent = "Could not send. Try again.";
+          reportBusy = false;
+          reportDone = setTimeout(() => $("reportSheet").close(), REPORT_DONE_MS);
+          return;
+        }
+        $("reportMsg").textContent = "Could not send. Try again.";
         reportBusy = false;
         $("reportSend").disabled = false;
       }
@@ -7286,6 +7292,9 @@
       $("reportSend").addEventListener("click", reportSend);
       $("reportCancel").addEventListener("click", () => $("reportSheet").close());
       $("reportSheet").addEventListener("close", () => {
+        clearTimeout(reportDone);
+        reportDone = null;
+        $("reportSend").disabled = false;
         shotRun++;
         shot = null;
         $("reportShot").removeAttribute("src");
