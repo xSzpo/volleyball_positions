@@ -6945,6 +6945,7 @@
         '<b>Answer saved</b><p style="margin:2px 0 0">Everyone sees the answers when all players have answered.</p>';
       let ON = null;
       let fbInit = null;
+      let fbLoad = null;
       const fbLoaded = new Set();
       function fail(msg) {
         return Object.assign(new Error(msg), { user: true });
@@ -6967,16 +6968,24 @@
           document.head.appendChild(el);
         });
       }
+      function fbScripts() {
+        if (!fbLoad)
+          fbLoad = (async () => {
+            for (const m of ["app", "auth", "database"])
+              await loadScript(`${FIREBASE_SDK}/firebase-${m}-compat.js`);
+            return window.firebase;
+          })().catch((e) => {
+            fbLoad = null;
+            throw e;
+          });
+        return fbLoad;
+      }
       function fbSdk() {
         if (!fbInit)
           fbInit = (async () => {
-            for (const m of ["app", "auth", "database"])
-              await loadScript(`${FIREBASE_SDK}/firebase-${m}-compat.js`);
-            const fb = window.firebase;
-            if (!fb.apps.length) {
-              const local = await fbLocal(fb);
-              fbSetup(fb.initializeApp(FIREBASE_CONFIG), local);
-            }
+            const fb = await fbScripts();
+            if (!fb.apps.some((app) => app.name === "[DEFAULT]"))
+              await fbApp(fb, undefined, await fbLocal(fb));
             return fb;
           })().catch((e) => {
             fbInit = null;
@@ -6999,20 +7008,31 @@
         }
         return app;
       }
+      async function fbApp(fb, name, persistence) {
+        const app = fb.initializeApp(FIREBASE_CONFIG, name);
+        try {
+          return fbSetup(app, persistence);
+        } catch (e) {
+          await app.delete().catch(() => {});
+          throw e;
+        }
+      }
       // Firebase's local persistence class, which the compat SDK does not export. Rejoin needs
-      // the same anonymous uid after a reload.
+      // the same anonymous uid after a reload. Its IndexedDB check can hang on some iOS versions.
+      const LOCAL_MS = 3000;
       async function fbLocal(fb) {
         let probe = null;
-        try {
-          probe = fbSetup(fb.initializeApp(FIREBASE_CONFIG, "persistence"));
+        const find = (async () => {
+          probe = await fbApp(fb, "persistence");
           const auth = probe.auth();
           await auth.setPersistence(fb.auth.Auth.Persistence.LOCAL);
           return auth._delegate.assertedPersistence.persistence.constructor;
-        } catch (e) {
-          return null;
-        } finally {
-          probe?.delete().catch(() => {});
-        }
+        })();
+        find.catch(() => {}).finally(() => probe?.delete().catch(() => {}));
+        return Promise.race([
+          find.catch(() => null),
+          new Promise((resolve) => setTimeout(() => resolve(null), LOCAL_MS)),
+        ]);
       }
       function withTimeout(p, ms = 10000) {
         return Promise.race([
@@ -7231,8 +7251,8 @@
       };
       let reportApp = null;
       async function reportReady() {
-        const fb = await withTimeout(fbSdk());
-        if (!reportApp) reportApp = fbSetup(fb.initializeApp(FIREBASE_CONFIG, "report"));
+        const fb = await withTimeout(fbScripts());
+        if (!reportApp) reportApp = await fbApp(fb, "report");
         const auth = reportApp.auth();
         if (!auth.currentUser) await withTimeout(auth.signInAnonymously());
         return { fb, db: reportApp.database() };

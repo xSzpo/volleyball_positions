@@ -55,6 +55,8 @@ EVIL_UID = "EvilEvilEvilEvilEvilEvil0000"
 OLD_UID = "OldOldOldOldOldOldOldOld0000"
 # The app sets up a short-lived app first, so any app is not yet the default one.
 DEFAULT_APP = "window.firebase?.apps?.some((app) => app.name === '[DEFAULT]')"
+# An IndexedDB open that never succeeds or fails, as on some iOS Safari versions.
+HANG_IDB = "indexedDB.open = () => new EventTarget();"
 IPHONE_UA = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "
     "CriOS/140.0.7339.122 Mobile/15E148 Safari/604.1"
@@ -144,7 +146,12 @@ def serve() -> str:
 
 
 def phone(
-    browser: Browser, url: str, errors: list[str], user_agent: str | None = None, hang: list[str] | None = None
+    browser: Browser,
+    url: str,
+    errors: list[str],
+    user_agent: str | None = None,
+    hang: list[str] | None = None,
+    script: str = "",
 ) -> Page:
     """Opens the app in a fresh browser context, like a separate phone.
 
@@ -155,11 +162,15 @@ def phone(
     )
     if hang is not None:
         context.route(
-            lambda request_url: any(part in request_url for part in ("apis.google.com", "/__/auth/")),
+            lambda request_url: any(
+                part in request_url for part in ("apis.google.com", "/__/auth/", "/emulator/auth/")
+            ),
             lambda route: hang.append(route.request.url),
         )
     page = context.new_page()
     page.add_init_script(SEED_ROLE)
+    if script:
+        page.add_init_script(script)
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(url)
     page.wait_for_timeout(300)
@@ -1035,6 +1046,17 @@ def iphone(browser: Browser, url: str, errors: list[str]) -> None:
         page.context.close()
 
 
+def hung_storage(browser: Browser, url: str, errors: list[str]) -> None:
+    """Create a room works when IndexedDB never opens, signed in without a stored uid."""
+    page = phone(browser, url, errors, script=HANG_IDB)
+    pick_role(page, "OH1")
+    open_online(page, "Anna", rec_only=True)
+    page.click("#onCreate")
+    page.wait_for_selector("#gLobby", state="visible", timeout=10000)
+    print("Create works when IndexedDB hangs")
+    page.context.close()
+
+
 def failed_join(browser: Browser, url: str, emulator_db: str, errors: list[str]) -> None:
     """A join that fails after the player node is written leaves no ghost online, and the match goes on."""
     host = phone(browser, url, errors)
@@ -1113,6 +1135,7 @@ def main() -> None:
         failed_join(browser, url, emulator_db, errors)
         version_guard(browser, url, emulator_db, errors)
         iphone(browser, url, errors)
+        hung_storage(browser, url, errors)
         browser.close()
     assert not errors, errors
     print(f"ONLINE TEST ({engine}): ok")
