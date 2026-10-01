@@ -823,3 +823,10 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Only the Learn court has the toggle and the numbers. Drill and Match courts are unchanged.
 - **Alternatives:** one toggle for every court; a Drill option that also lowers the score in Match like Show on court.
 - **Reversible by:** adding `zonesSvg()` after `courtBase()` in the Drill and Match court renders in `src/template.html`.
+### 110. Drill names rotations by the setter only
+
+- **Issue:** #116
+- **Problem:** The owner asked for Drill to show `H5`, not `R3 (H5)`. Drill also has the Rotate names option (H / R / Mixed), which asks the Rotate question by R on purpose, and its default was Mixed.
+- **Decision:** Every Drill screen says `H<n>`: the question title, the feedback, the weak spots and Review weak spots. The Rotate names option stays for the Rotate question only, now with H as its default; a stored R or Mixed is kept. After the answer the feedback says `H<n>` even when the question said `R<n>`. Learn and Match keep `R3 (H5)`.
+- **Alternatives:** remove the Rotate names option; keep Mixed as the default.
+- **Reversible by:** the `hName()` and `hOnly()` calls in the Drill code of `src/template.html`, and the `drillName` default.

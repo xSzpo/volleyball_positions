@@ -4930,9 +4930,9 @@
         else updateScore();
       });
       const DRILL_NAMES = ["h", "r", "mixed"];
-      let drillName = DRILL_NAMES.includes(store.get("drillName", "mixed"))
-        ? store.get("drillName", "mixed")
-        : "mixed";
+      let drillName = DRILL_NAMES.includes(store.get("drillName", "h"))
+        ? store.get("drillName", "h")
+        : "h";
       function renderDrillName() {
         $("dName")
           .querySelectorAll("button")
@@ -4951,6 +4951,9 @@
       // Rotate from the name alone: you place the setter, yourself, then each overlap partner.
       // Shared by Drill (`rot`) and Match (`G.rot`); `how` is "h" (setter's zone) or "r".
       let rot = null;
+      // Drill names a rotation by the setter only (owner, #116); Learn and Match keep "R3 (H5)".
+      const hName = (ri) => `H${ROWS[ri].setter}`;
+      const hOnly = (text) => text.replace(/R[1-6] \((H[1-6])\)/g, "$1");
       function rotStart(ri, role, how) {
         const order = role === "S" ? ["S"] : ["S", role];
         if (players(ri, "start").some((o) => o.p === role))
@@ -4960,7 +4963,7 @@
         return {
           ri,
           role,
-          name: how === "h" ? `H${ROWS[ri].setter}` : ROWS[ri].short,
+          name: how === "h" ? hName(ri) : ROWS[ri].short,
           order,
           spots: {},
           off: false,
@@ -5173,7 +5176,7 @@
         $("nextBtn").disabled = !!rot;
         $("offBtn").disabled = false;
         $("dq").textContent =
-          `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${rot ? rot.name : ROWS[cur.ri].name} · ${FULL[cur.phase]}`;
+          `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${rot ? rot.name : hName(cur.ri)} · ${FULL[cur.phase]}`;
         $("dsub").textContent =
           `${rot ? rotPrompt(rot) : cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? arQuestion(cur.ri, cur.role) : cur.phase === "serve" ? serveQuestion(cur.ri, cur.role) : "Where do you stand?"}`;
         $("fb").className = "fb";
@@ -5252,7 +5255,7 @@
         const d = describe(cur.ri, cur.phase, cur.role);
         watchMount("dWatch", "courtD", cur.ri, cur.phase, cur.role, () => drawDrill(lastTap));
         $("fb").className = `fb ${cls}`;
-        $("fb").innerHTML = `<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
+        $("fb").innerHTML = hOnly(`<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`);
         if (cur.phase === "rec" && nbOn("nbDrill")) {
           const nq = neighbourQ(cur.ri, cur.role);
           if (nq) {
@@ -5358,10 +5361,7 @@
         $("dstreak").textContent = streak;
         const weak = weakKeys().map((k) => {
           const [, i, ph] = k.split("|");
-          // The Rotate question names the rotation one way, so this list must not pair R with H.
-          const name =
-            ph === "start" && feature("drill-rotate-name") ? ROWS[i].short : ROWS[i].name;
-          return `${name} ${FULL[ph].toLowerCase()}`;
+          return `${hName(i)} ${FULL[ph].toLowerCase()}`;
         });
         const tried = Object.keys(stats).some((k) => k.split("|")[0] === role);
         const last = store.get("lastPractice", 0),

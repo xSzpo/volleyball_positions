@@ -833,8 +833,10 @@ def check_drill_rotate(browser: Browser, tag: str, quick: bool) -> None:
     wait_ready(pg)
     pg.click("#tabDrill")
     pg.click('.vis[data-vis="drill"] button[data-v="all"]')
-    if pg.get_attribute('#dName [data-n="mixed"]', "aria-checked") != "true":
-        fail(f"{tag} Rotate names do not default to Mixed")
+    if pg.get_attribute('#dName [data-n="h"]', "aria-checked") != "true":
+        fail(f"{tag} Rotate names do not default to H")
+    open_fold(pg, "#dOpts")
+    pg.click('#dName [data-n="mixed"]')
     seen: set[tuple[str, int]] = set()
     names: set[str] = set()
     for rm in RULES:
@@ -887,11 +889,71 @@ def check_drill_rotate(browser: Browser, tag: str, quick: bool) -> None:
     pg.evaluate("localStorage.setItem('ksv51:drillName', '\"x\"')")
     pg.reload()
     wait_ready(pg)
-    if pg.get_attribute('#dName [data-n="mixed"]', "aria-checked") != "true":
-        fail(f"{tag} a bad stored Rotate name did not read as Mixed")
+    if pg.get_attribute('#dName [data-n="h"]', "aria-checked") != "true":
+        fail(f"{tag} a bad stored Rotate name did not read as H")
     check_page(pg, f"{tag} drill rotate")
     if errs:
         fail(f"{tag} drill rotate JS errors: {errs[:3]}")
+    ctx.close()
+
+
+DRILL_R_NAME = re.compile(r"\bR[1-6]\b")
+DRILL_TEXT_JS = (
+    "() => { const d = document.getElementById('drill');"
+    " return [d.innerText, ...[...d.querySelectorAll('[aria-label]')].map(e => e.getAttribute('aria-label'))]"
+    ".join(' | '); }"
+)
+
+
+def check_drill_h_names(browser: Browser, tag: str) -> None:
+    """Drill names every rotation H<n> only (question, feedback, weak spots, review); Learn and Match R<n> (H<n>)."""
+    section("DRILL names by the setter")
+    ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
+    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    pg = ctx.new_page()
+    errs: list[str] = []
+    pg.on("pageerror", collect_errors(errs))
+    pg.goto(URL)
+    wait_ready(pg)
+    pg.click("#tabDrill")
+    pg.click('.vis[data-vis="drill"] button[data-v="all"]')
+    seen: set[str] = set()
+    for rm in RULES:
+        pick_rules(pg, rm)
+        for role in ("OH1", "L", "S"):
+            pick_role(pg, role)
+            for _ in range(16):
+                seen.add(pg.inner_text("#dq").split(" · ")[-1])
+                drill_steps(pg, f"{tag} h names {rm} {role}", 1)
+                text = pg.evaluate(DRILL_TEXT_JS)
+                if DRILL_R_NAME.search(text):
+                    fail(f"{tag} Drill {rm} {role} names a rotation by R: {text[:300]!r}")
+                    break
+    if len(seen) < 4:
+        fail(f"{tag} the H names sweep asked only {sorted(seen)}")
+    pick_rules(pg, "simple")
+    pick_role(pg, "OH2")
+    for _ in range(12):
+        drill_miss(pg)
+    weak = pg.inner_text("#weak")
+    if not re.search(r"\bH[1-6] ", weak) or DRILL_R_NAME.search(weak):
+        fail(f"{tag} the weak spots do not name rotations H<n> only: {weak!r}")
+    pg.click("#reviewBtn")
+    if not re.match(r"Review 1/\d · H[1-6] · ", pg.inner_text("#dq")):
+        fail(f"{tag} Review weak spots names {pg.inner_text('#dq')!r}, not H<n>")
+    pg.click("#tabLearn")
+    if not re.match(r"R[1-6] \(H[1-6]\) · ", pg.inner_text("#learnTag")):
+        fail(f"{tag} Learn lost the R<n> (H<n>) name: {pg.inner_text('#learnTag')!r}")
+    pg.click("#tabGame")
+    open_fold(pg, "#gOpts")
+    for step in STEPS:
+        if pg.is_checked(f"#gs-{step}") != (step == "serve"):
+            pg.click(f"#gs-{step}")
+    pg.click("#gStart")
+    if not re.fullmatch(r"R[1-6] \(H[1-6]\)", pg.inner_text("#gTitle")):
+        fail(f"{tag} Match lost the R<n> (H<n>) name: {pg.inner_text('#gTitle')!r}")
+    if errs:
+        fail(f"{tag} drill H names JS errors: {errs[:3]}")
     ctx.close()
 
 
@@ -1064,6 +1126,7 @@ def main() -> None:
         check_learn_fit(b, tag, args.quick)
         check_zones(b, tag)
         check_drill_rotate(b, tag, args.quick)
+        check_drill_h_names(b, tag)
         sweep_match(pg, tag, combos, args.quick)
         sweep_sets(pg, tag)
         check_persistence(pg, tag)
