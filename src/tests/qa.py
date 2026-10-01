@@ -1159,24 +1159,10 @@ def sweep_match(pg: Page, tag: str, combos: list[tuple[str, ...]], quick: bool) 
     pg.click("#tabSets")
     pg.click("#tabGame")
     play_match(pg, f"{tag} match after tab switch")
-    # change vis mid match; Rotate moments have nobody on court, so no picker
     pg.click("#gAgain")
-    for _ in range(40):
-        if pg.is_visible("#gVisPlay") or pg.is_visible("#gEnd"):
-            break
-        if not pg.inner_text("#gStepName").startswith("Rotation"):
-            fail(f"{tag} Show on court picker hidden at {pg.inner_text('#gStepName')}")
-            break
-        action = next_action(pg, "#gnb", "#gNext", "#gOff", "#gEnd")
-        if action == "next":
-            pg.click("#gNext")
-        elif action == "nb":
-            pg.locator("#gnb button:enabled").first.click()
-        else:
-            tap(pg, "#courtG")
-    if pg.is_visible("#gVisPlay"):
-        pg.click('.vis.compact button[data-v="all"]')
-    play_match(pg, f"{tag} match vis change")
+    if pg.locator('#gPlay .vis[data-vis="game"]').count():
+        fail(f"{tag} Show on court picker offered during a solo match")
+    play_match(pg, f"{tag} match again")
 
 
 def sweep_sets(pg: Page, tag: str) -> None:

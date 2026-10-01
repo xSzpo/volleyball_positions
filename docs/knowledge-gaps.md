@@ -510,7 +510,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** The owner: the Attack step ("Where do you go after the pass?") asks for a move from A to B, but the court did not show A. Teammates showed only as Show on court allowed, on their `ar` spots (the answers). Later addition: "also show where is the ball".
 - **Decision:** Before the answer, Drill and Match (solo, same device, online) draw everyone on their reception spot (place A) whatever Show on court is set to: teammates faded, you ringed with a "from" label, nobody on an `ar` spot. The picture is the moment of the pass: the ball is held by the passer, at `HELD` from their marker towards the set spot, with a dashed pass line to the setter's `ar` spot. The passer is the Learn Reception passer (`PASSER`, entry 42). The question names the passer ("OH1 passes to the setter. Where do you go?", or "You pass to the setter. Where do you go?"). A tap draws a thin line from A. Because A is part of the question, the Attack step scores ×1 for Show on court in every mode, a solo peek at it does not count as a peek, and the breakdown shows no multiplier. Show on court still applies to the other steps. The in-play picker stays visible at the Attack step. The help ring still hints at B.
 - **Alternatives:** keep Show on court for the teammates and show only your own A; hide the in-play picker at the Attack step; show the ball at the setter (the moment of the set).
-- **Reversible by:** `fromLayer()`, `arQuestion()`, the `ar` branch in `gVisMult()` and the peek count in `gAnswer()` in `src/template.html`.
+- **Reversible by:** `fromLayer()`, `arQuestion()`, the `ar` branch in `gVisMult()` and the peek count in `gAnswer()` in `src/template.html`. The peek is gone since #132.
 
 ### 62. "4" is the middle's low quick; "Po" and "Til" removed
 
@@ -1003,10 +1003,18 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** longer timeouts on the default app; the modular SDK for auth.
 - **Reversible by:** `reportReady()` and `REPORT_FAILURE` in `src/template.html`.
 
+### 132. Show on court is fixed at the start of a solo match
+
+- **Issue:** #134
+- **Problem:** Solo Match offered the Show on court picker during play as a peek, scored with the most revealing setting shown before the answer, with "Peeked: n moments" on the end screen. The owner decided on 2026-10-01 that the setting is chosen at the start and cannot change during the match, as in same-device and online play.
+- **Decision:** This replaces the solo peek. The in-play picker, the peek scoring and "Peeked: n moments" are gone, and `match_finished` drops `peeked`. Every moment scores with the setting chosen at Start. The best-score key stays `v8|`: a match without a peek scores as before, and a best from a match with a peek is lower than the same play scores now, so old bests stay fair to beat.
+- **Alternatives:** keep the peek but count it as a separate best; bump the key to `v9|` and drop every old best.
+- **Reversible by:** `gVis()`, `gVisMult()` and `gShownHtml()` in `src/template.html`.
+
 ### 133. Online room keeps its stored uid with no Google auth iframe
 
 - **Issue:** #140
 - **Problem:** Online room signs in on the default Firebase app, whose compat auth starts the popup/redirect resolver on iOS and waits for apis.google.com and the auth iframe, as reports did before #136. The fix of #131 also drops persistence, but Rejoin needs the same anonymous uid after a reload to find the player's node and score.
-- **Decision:** `fbSetup()` sets up the default app's auth, and the `report` app's, with no resolver. The default app keeps local persistence (IndexedDB, else localStorage), the same store as before, so a uid signed in before this change is kept. The compat SDK does not export that persistence class, so `fbLocal()` takes it from a short-lived app named `persistence` after `setPersistence(LOCAL)`. If that ever fails, sign-in still works in memory and only Rejoin after a reload joins as a new player.
+- **Decision:** `fbSetup()` sets up the default app's auth, and the `report` app's, with no resolver. The default app keeps local persistence (IndexedDB, else localStorage), the same store as before, so a uid signed in before this change is kept. The compat SDK does not export that persistence class, so `fbLocal()` takes it from a short-lived app named `persistence` after `setPersistence(LOCAL)`. If that fails or takes more than 3 s (the IndexedDB check can hang on some iOS versions), sign-in goes on in memory and only Rejoin after a reload joins as a new player. Reports only wait for the scripts, never for that check.
 - **Alternatives:** in-memory persistence, losing Rejoin after a reload; an own localStorage persistence class; the modular SDK for auth.
 - **Reversible by:** `fbSetup()` and `fbLocal()` in `src/template.html`.
