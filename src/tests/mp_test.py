@@ -178,7 +178,7 @@ with sync_playwright() as p:
             press_next(pg)
             continue
         if pg.is_enabled("#gOff"):
-            assert pg.is_hidden("#gVisPlay"), "Show on court can be changed during a multiplayer match"
+            assert not pg.locator('#gPlay .vis[data-vis="game"]').count(), "Show on court picker in a multiplayer match"
             if pg.inner_text("#gStepName").startswith("Rotation"):
                 asked = pg.inner_text("#gTitle")
                 assert re.fullmatch(r"(H|R)[1-6]", asked), f"Rotate turn titled {asked!r}"

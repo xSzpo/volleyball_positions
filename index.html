@@ -1398,9 +1398,6 @@
       font-size: 14px;
       margin-top: 8px;
     }
-    .vis.compact {
-      margin: 10px 0 0;
-    }
     .vis[hidden] {
       display: none;
     }
@@ -2254,21 +2251,6 @@
           <div class="progress" aria-hidden="true"><i id="gBar"></i></div>
           <div class="strip" id="gStrip" hidden></div>
           <div class="steptrack" id="gTrack"></div>
-          <div
-            class="vis compact"
-            id="gVisPlay"
-            role="radiogroup"
-            aria-label="Who to show on court"
-            data-vis="game"
-          >
-            <span class="vislabel">Show on court</span>
-            <button type="button" role="radio" aria-checked="false" data-v="none">Nobody</button
-            ><button type="button" role="radio" aria-checked="false" data-v="ref" class="refbtn">
-              Setter
-            </button><button type="button" role="radio" aria-checked="false" data-v="all">
-              Everyone
-            </button>
-          </div>
           <p class="story" id="gStory"></p>
           <svg
             class="court"
@@ -4940,14 +4922,12 @@
       function visName(v, r) {
         return { none: "Nobody", ref: r === "S" ? "Opposite" : "Setter", all: "Everyone" }[v];
       }
-      const VIS_ORDER = ["none", "ref", "all"];
       function gVis() {
-        return G?.online ? G.online.meta.vis : G?.mp ? G.vis0 : visGame;
+        return G?.online ? G.online.meta.vis : G ? G.vis0 : visGame;
       }
-      // Solo scores each moment with the most revealing setting shown before the answer.
       function gVisMult() {
         if (G?.queue[G.i]?.phase === "ar" || G?.rot) return 1;
-        return VIS_MULT[G && !G.mp && !G.online ? G.visMax : gVis()] ?? 1;
+        return VIS_MULT[gVis()] ?? 1;
       }
       function gVisText() {
         const ref = role === "S" ? "the opposite" : "the setter";
@@ -4973,10 +4953,6 @@
         store.set("visGame", v);
         drawVis("game", v);
         gVisText();
-        if (G && !G.mp && !G.online && !G.answered) {
-          if (VIS_ORDER.indexOf(v) > VIS_ORDER.indexOf(G.visMax)) G.visMax = v;
-          gDraw();
-        }
       }
       document.querySelectorAll(".vis[data-vis]").forEach((g) => {
         g.addEventListener("click", (e) => {
@@ -5921,8 +5897,6 @@
           key: gKey(),
           mixed: gOrder() === "mixed",
           vis0: visGame,
-          visMax: visGame,
-          peeks: 0,
           nbOk: 0,
           nbN: 0,
           nb: null,
@@ -6052,8 +6026,6 @@
           st.phase === "start" && feature("match-rotate-name")
             ? rotStart(st.ri, G.role, gRotHow(G.i))
             : null;
-        G.visMax = gVis();
-        $("gVisPlay").hidden = !!(G.mp || G.online || G.rot);
         $("gWait").hidden = true;
         $("gNbBox").innerHTML = "";
         delete $("gNext").dataset.label;
@@ -6277,14 +6249,6 @@
         else G.streak = 0;
         const streakB = G.streak > 1 ? Math.min(G.streak - 1, 5) * 10 : 0;
         const vm = gVisMult();
-        if (
-          !G.mp &&
-          !G.online &&
-          st.phase !== "ar" &&
-          !G.rot &&
-          VIS_ORDER.indexOf(G.visMax) > VIS_ORDER.indexOf(G.vis0)
-        )
-          G.peeks++;
         const pts = Math.round((Math.round(base * mult) + speed + streakB) * vm);
         G.score += pts;
         if (q === "perfect") G.perfect++;
@@ -6480,11 +6444,7 @@
       function gShownHtml(r) {
         const v = G.online ? G.online.meta.vis : G.vis0;
         const m = VIS_MULT[v] ?? 1;
-        const peeks =
-          !G.mp && !G.online && G.peeks
-            ? ` · Peeked: ${G.peeks} moment${G.peeks > 1 ? "s" : ""}`
-            : "";
-        return `<p class="hint" id="gShown" style="grid-column:1/-1;margin:0">Shown: ${visName(v, r)} (${m < 1 ? `${Math.round(m * 100)}% points` : "full points"})${peeks}</p>`;
+        return `<p class="hint" id="gShown" style="grid-column:1/-1;margin:0">Shown: ${visName(v, r)} (${m < 1 ? `${Math.round(m * 100)}% points` : "full points"})</p>`;
       }
       function gTrackFinish() {
         const list = G.online ? onList(G.online.room, G.i) : G.mp ? G.mp.players : null;
@@ -6501,7 +6461,6 @@
           score: p.score,
           moments: G.queue.length,
           perfect: p.perfect,
-          peeked: G.mp || G.online ? 0 : G.peeks,
           set_ok: p.setOk,
           set_n: p.setN,
         });
@@ -6542,7 +6501,7 @@
               })
               .join("")}</ul>`
           : "<p>No mistakes. " +
-            (G.vis0 !== "none" || G.peeks || !G.mixed
+            (G.vis0 !== "none" || !G.mixed
               ? "Next step: mixed order and show nobody."
               : "You know your spots. Keep it fresh with a short match every few days.") +
             "</p>";

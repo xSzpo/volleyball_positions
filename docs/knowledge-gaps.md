@@ -994,3 +994,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `feature()` reads only `FEATURES` and `FEATURE_NEEDS` and the `?ff=` override (`ksv51:ffOverride`). The PostHog flag reading (`flagsFromPosthog()`, `bootstrap.featureFlags`, the first-input gate) is gone, and a stored `ksv51:flags` is removed at start-up. PostHog analytics events are unchanged. `match-online` and `bug-report` go on in `FEATURES`; only `after-dig` stays off (#35). This replaces the "PostHog flag on" step of #128.
 - **Alternatives:** keep PostHog flags and accept the split; bootstrap the flags from the built-in defaults so blocked phones match only until the first change.
 - **Reversible by:** `featureValues(FEATURES, …)` and `analyticsLoad()` in `src/template.html`.
+
+### 131. Show on court is fixed at the start of a solo match
+
+- **Issue:** #134
+- **Problem:** Solo Match offered the Show on court picker during play as a peek, scored with the most revealing setting shown before the answer, with "Peeked: n moments" on the end screen. The owner decided on 2026-10-01 that the setting is chosen at the start and cannot change during the match, as in same-device and online play.
+- **Decision:** This replaces the solo peek. The in-play picker, the peek scoring and "Peeked: n moments" are gone, and `match_finished` drops `peeked`. Every moment scores with the setting chosen at Start. The best-score key stays `v8|`: a match without a peek scores as before, and a best from a match with a peek is lower than the same play scores now, so old bests stay fair to beat.
+- **Alternatives:** keep the peek but count it as a separate best; bump the key to `v9|` and drop every old best.
+- **Reversible by:** `gVis()`, `gVisMult()` and `gShownHtml()` in `src/template.html`.
