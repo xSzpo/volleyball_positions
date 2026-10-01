@@ -2329,7 +2329,7 @@
         "The serving team may stand anywhere: the overlap rule is only for the receiving team (FIVB 7.4). You stay in your row for play: a back-row player may not block, or attack from the front zone above the net.";
       function describe(ri, phase, role) {
         const r = ROWS[ri];
-        const pl = answerSpots(ri, phase);
+        const pl = answerSpots(ri, phase, role);
         const me = pl.find((o) => o.p === role);
         const z = zoneOf(ri, role);
         if (!me && role === "SUB")
@@ -2410,7 +2410,7 @@
           const moved = rp && Math.hypot(rp[1] - me.x, rp[2] - me.y) > 0.07;
           if (me.cover)
             return {
-              t: role === "L" ? "Close cover" : "Deep cover",
+              t: `${role === "L" ? "Close" : "Deep"} cover spot as ${passPlan(ri)?.hitter} spikes`,
               d: `${me.cover}${role === "L" && rulesMode === "official" ? ` ${FINGER_SET}` : ""}`,
             };
           if (me.kind === "set")
@@ -2430,7 +2430,7 @@
           if (me.turn)
             return {
               t: "Quick in the middle",
-              d: `${rp && rp[2] < me.turn.y - 0.03 ? "Step off the net to the middle of the front zone" : "Get to the middle of the front zone"}, not the 3 m line: that is the back-row hitter's lane. Then run in (dashed line) and take off in front of the setter as the pass arrives.`,
+              d: `${rp && rp[2] < me.turn.y - 0.03 ? "Step off the net to the middle of the front zone" : "Get to the middle of the front zone"}, not the 3 m line: that is the back-row hitter's lane. Then run in (dashed line) and take off left of the setter as the pass arrives.`,
             };
           if (me.kind === "front") {
             const lane = me.x < 0.34 ? "left (zone 4)" : me.x < 0.67 ? "middle" : "right (zone 2)";
@@ -2569,12 +2569,18 @@
           const [a, b, c, d] = shorten(r[0] * W, r[1] * H, o.x * W, o.y * H);
           s += route(a, b, c, d, o.p, { mine, dot: true });
         });
+        const plan = passPlan(ri);
         pl.forEach((o) => {
-          if (o.turn || o.cover || (o.kind !== "front" && o.kind !== "back")) return;
-          const y1 = o.y * H - MARKER_R - 0.5,
-            y2 = o.kind === "back" ? H * AL + 2.5 : 3;
-          if (y1 - y2 < 2) return;
-          s += route(o.x * W, y1, o.x * W, y2, o.p, { mine: o.p === role, dash: "1.8 1.4" });
+          if (o.spike || o.turn || o.cover || (o.kind !== "front" && o.kind !== "back")) return;
+          const y2 = o.kind === "back" ? H * AL + 2.5 : 3,
+            x2 = (o.p === plan?.hitter ? plan.hit.x : o.x) * W,
+            far = Math.hypot(x2 - o.x * W, y2 - o.y * H) || 1;
+          if (far - MARKER_R - 0.5 < 2) return;
+          const r = (MARKER_R + 0.5) / far;
+          s += route(o.x * W + (x2 - o.x * W) * r, o.y * H + (y2 - o.y * H) * r, x2, y2, o.p, {
+            mine: o.p === role,
+            dash: "1.8 1.4",
+          });
         });
         return s;
       }
@@ -2608,7 +2614,8 @@
           .filter((o) => o?.kind === "front")
           .reduce((a, o) => (a == null || o.x < a.x ? o : a), null);
         if (!set || !hitter) return null;
-        const hit = { x: hitter.x, y: HIT_Y };
+        // The zone 4 hitter approaches outside-in, from the sideline towards the antenna's inside.
+        const hit = { x: hitter.x + HIT_IN, y: HIT_Y };
         const middle = order
           .filter((p) => ar[p] && isFront(ri, p) && p !== hitter.p && ar[p].kind !== "set")
           .reduce(
@@ -2622,28 +2629,38 @@
         };
         return { set, hitter: hitter.p, hit, quick };
       }
-      // The spots Drill and Match grade. At Attack that is where the Learn Reception play has everyone as the pass lands; the quick middle's route turns at its `ar` spot.
-      function answerSpots(ri, phase) {
+      // A cover (L, the deep OH, a back-row opposite) is asked about the spike, everyone else about the pass landing.
+      function coversAttack(ri, phase, role) {
+        return phase === "ar" && !!role && !!phaseStages(ri, "rec").covers?.[role];
+      }
+      // The spots Drill and Match grade. At Attack that is where the Learn Reception play has everyone at the moment
+      // `role` is asked about (`coversAttack()`); the quick middle's route turns at its `ar` spot.
+      function answerSpots(ri, phase, role) {
         const pl = players(ri, phase);
         const tr = phase === "ar" && phaseStages(ri, "rec"),
           pass = tr && tr.stages[1];
         if (!pass?.ball) return pl;
-        const t = pass.start + pass.ball.ms,
-          quick = passPlan(ri)?.quick;
+        const spike = coversAttack(ri, phase, role) && tr.spike,
+          t = pass.start + pass.ball.ms,
+          quick = !spike && passPlan(ri)?.quick;
         return pl.map((o) => {
-          const at = posAt(tr, o.p, t);
+          const at = spike ? spike.at[o.p] || o : posAt(tr, o.p, t);
           return {
             ...o,
             x: at.x,
             y: at.y,
+            ...(spike ? { spike: true } : {}),
             ...(o.p === quick?.p ? { turn: { x: o.x, y: o.y } } : {}),
             ...(tr.covers?.[o.p] ? { cover: tr.covers[o.p] } : {}),
           };
         });
       }
-      // The ball in the setter's hands when the pass lands; Our serve draws none (owner, #102).
-      function momentBall(ri, phase, clip) {
-        const at = phase === "ar" && setterBall(ri);
+      // The ball at the moment asked: in the setter's hands as the pass lands, or at the hitter's spike. Our serve
+      // draws none (owner, #102).
+      function momentBall(ri, phase, clip, role) {
+        const at =
+          phase === "ar" &&
+          (coversAttack(ri, phase, role) ? phaseStages(ri, "rec").spike?.ball : setterBall(ri));
         return at ? ballSvg(at).replaceAll("ballClip", `ballClip-${clip}`) : "";
       }
       // The ball held by the setter on the first side clear of every other marker and its ring: from the passer, right, or below right.
@@ -2727,6 +2744,10 @@
         return `<line class="fromtap" x1="${a.x * W}" y1="${a.y * H}" x2="${tap.x * W}" y2="${tap.y * H}" stroke="var(--net-label)" stroke-width="0.5" opacity=".8"/>`;
       }
       function arQuestion(ri, role) {
+        if (coversAttack(ri, "ar", role)) {
+          const hitter = passPlan(ri)?.hitter;
+          return `The setter sets ${hitter} in zone 4. Where is your cover spot as ${hitter} spikes?`;
+        }
         if (PASSER[ri] === role) return "You pass to the setter. Where are you as it arrives?";
         if (ROWS[ri].ar.some(([p, , , k]) => p === role && k === "set"))
           return `${PASSER[ri]} passes to you. Where do you take it?`;
@@ -3426,6 +3447,7 @@
         `Wait at the sideline while ${sv} serves: the libero may not serve.`;
       const SPIKE_BALL = { x: 0.62, y: -0.09 };
       const HIT_Y = 0.08,
+        HIT_IN = 0.08,
         APPROACH_Y = 0.17;
       // Where front-row players who switch sides pass behind the middle: the one going left runs deeper.
       const SWITCH_VIA = { right: { x: 0.45, y: 0.4 }, left: { x: 0.55, y: 0.53 } };
@@ -3457,7 +3479,7 @@
         ],
         deepFront: "Come in to the middle and cover deep: a ball off the block can fly far.",
         deepBack: "Cover deep in the middle: a ball off the block can fly far.",
-        quick: "Run in from mid front zone for the quick in front of the setter.",
+        quick: "Run in from mid front zone for the quick, left of the setter.",
         cupFront: (hitter) =>
           `Fake the quick, then cover ${hitter} close, between the setter and L.`,
         cupSet: (hitter) =>
@@ -3677,9 +3699,11 @@
         }
         return { n, met: [...met.values()] };
       }
-      // Paths that step round one of the players met, on either side of that part of the path, behind first.
+      // Paths that step round one of the players met, on either side of that part of the path, behind first, inside the
+      // sidelines and no deeper than the end line or the run's own ends.
       function detours(path, met) {
         const out = [];
+        const back = Math.max(1, path[0].y, path[path.length - 1].y);
         met.forEach(({ b, seg }) => {
           const i = Math.min(seg, path.length - 1),
             u = path[i - 1],
@@ -3688,10 +3712,12 @@
           [1.3, 1.7].forEach((wide) => {
             const r = GAP * wide;
             [1, -1]
-              .map((k) => ({
-                x: Math.min(1.04, Math.max(-0.04, b.x - ((v.y - u.y) / d) * r * k)),
-                y: Math.max(0.03, b.y + ((v.x - u.x) / d) * r * k),
-              }))
+              .map((k) => {
+                const x = b.x - ((v.y - u.y) / d) * r * k,
+                  y = Math.min(back, Math.max(0.03, b.y + ((v.x - u.x) / d) * r * k));
+                // Squeezed against a sideline, the detour passes level with the player met.
+                return x < 0 || x > 1 ? { x: Math.min(1, Math.max(0, x)), y: b.y } : { x, y };
+              })
               .sort((w1, w2) => w2.y - w1.y)
               .forEach((w, k) => {
                 out.push({ path: [...path.slice(0, i), w, ...path.slice(i)], netSide: k === 1 });
@@ -3801,28 +3827,12 @@
         const hit = plan?.hit ?? null;
         const cupFront = plan?.quick?.p ?? null;
         const takeOff = cupFront && { x: plan.quick.x, y: plan.quick.y };
-        // Movement is free from the server's first movement: everyone who does not receive leaves at once.
-        const released = [...setter, ...attackers.filter((p) => !receivers.includes(p))];
-        stages.push({
-          moves: pick(released, (p) => to[p]),
-          noWait: true,
-          notes: {
-            ...notes,
-            ...pick(released, (p) => arNotes[p]),
-            ...(passer ? { [passer]: SERVE_TO } : {}),
-          },
-          ball: passer && {
-            from: THEIR_SERVE,
-            to: touch(from[passer], setSpot || SERVE_BALL),
-            ms: SERVE_MS,
-          },
-        });
-        const second = passer ? [passer, ...order.filter((p) => p !== passer)] : order;
         const cover = ({ dx, dy }) => hit && { x: Math.min(0.9, hit.x + dx), y: hit.y + dy };
         const deep = order.filter((p) => !kind[p] && p !== "L" && !isFront(ri, p));
         const side = attackers.filter((p) => p !== hitter && p !== cupFront);
         const backSide = side.filter((p) => kind[p] === "back");
-        // L, the deep OH and a back-row side cover run straight on during the pass, so they get there with the set.
+        // L, the deep OH and a back-row side cover run straight to their cover during the pass, so they get there with
+        // the set; the back-row side cover does not attack, so it waits out of the passing lanes until the pass.
         const onCover =
           setSpot && hit
             ? {
@@ -3839,9 +3849,29 @@
                 ...pick(backSide, () => ATTACK_NOTES.deepBack),
               }
             : {};
+        // Movement is free from the server's first movement: the setter and the attackers who do not receive leave at once.
+        const released = [
+          ...setter,
+          ...attackers.filter((p) => !receivers.includes(p) && !onCover[p]),
+        ];
+        stages.push({
+          moves: pick(released, (p) => to[p]),
+          noWait: true,
+          notes: {
+            ...notes,
+            ...pick(released, (p) => arNotes[p]),
+            ...(passer ? { [passer]: SERVE_TO } : {}),
+          },
+          ball: passer && {
+            from: THEIR_SERVE,
+            to: touch(from[passer], setSpot || SERVE_BALL),
+            ms: SERVE_MS,
+          },
+        });
+        const second = passer ? [passer, ...order.filter((p) => p !== passer)] : order;
         stages.push({
           moves: pick(second, (p) => (p === cupFront ? takeOff : { ...(onCover[p] || to[p]) })),
-          first: ["L"],
+          first: ["L", ...backSide],
           notes: {
             ...pick(
               receivers.filter((p) => p !== passer),
@@ -3965,6 +3995,8 @@
               planStage(st, at, carry);
             }
           }
+          // The team at the spike: the covers are graded there, on the spot their Attack caption names.
+          if (st.base) tr.spike = { at: { ...at }, ball: ball?.from };
           Object.entries(st.moves).forEach(([p, end]) => {
             st.src[p] = at[p];
             at[p] = { x: end.x, y: end.y };
@@ -5191,7 +5223,7 @@
           glideRun($("courtD"));
           return;
         }
-        const pl = answerSpots(cur.ri, cur.phase);
+        const pl = answerSpots(cur.ri, cur.phase, cur.role);
         let s = DEFS + courtBase(answered && !pl.some((o) => o.p === cur.role));
         if (answered && cur.phase === "start") s += rotArrows();
         if (answered && cur.phase === "ar") s += arLayer(cur.ri, pl, cur.role);
@@ -5219,7 +5251,7 @@
             pl.find((o) => o.p === cur.role),
             tap,
           );
-        if (answered && cur.phase === "ar") s += momentBall(cur.ri, cur.phase, "d");
+        if (answered && cur.phase === "ar") s += momentBall(cur.ri, cur.phase, "d", cur.role);
         $("courtD").innerHTML = s;
         glideRun($("courtD"));
       }
@@ -5301,7 +5333,7 @@
           return rotRefresh();
         }
         lastTap = tap;
-        const me = answerSpots(cur.ri, cur.phase).find((o) => o.p === cur.role);
+        const me = answerSpots(cur.ri, cur.phase, cur.role).find((o) => o.p === cur.role);
         if (!me) {
           record(false);
           drawDrill(tap);
@@ -5335,7 +5367,7 @@
           rotOff(rot);
           return rotRefresh();
         }
-        const me = answerSpots(cur.ri, cur.phase).find((o) => o.p === cur.role);
+        const me = answerSpots(cur.ri, cur.phase, cur.role).find((o) => o.p === cur.role);
         if (!me) {
           record(true);
           drawDrill();
@@ -5538,14 +5570,15 @@
       }
       function setQ(ri, r) {
         const me = players(ri, "ar").find((o) => o.p === r);
-        const who =
-          me?.kind === "front" || me?.kind === "back"
+        const who = coversAttack(ri, "ar", r)
+          ? "other"
+          : me?.kind === "front" || me?.kind === "back"
             ? "hitter"
             : me?.kind === "set"
               ? "setter"
               : "other";
         const pool =
-          me?.kind === "back"
+          who === "hitter" && me?.kind === "back"
             ? MATCH_SETS.filter((s) => s[3] === "back" && third(s[1]) === third(me.x))
             : who === "hitter"
               ? MATCH_SETS.filter((s) => setLane(s) === third(me.x))
@@ -5643,7 +5676,7 @@
       }
       function gKey() {
         return (
-          (feature("match-rotate-name") ? "v6|" : "v5|") +
+          (feature("match-rotate-name") ? "v8|" : "v7|") +
           role +
           "|" +
           gSteps().join(",") +
@@ -5898,7 +5931,7 @@
       }
       function gDraw() {
         const st = G.queue[G.i],
-          pl = answerSpots(st.ri, st.phase),
+          pl = answerSpots(st.ri, st.phase, G.role),
           me = pl.find((o) => o.p === G.role),
           shown = G.answered && !G.mp && !G.online;
         watchYield($("courtG"));
@@ -5942,13 +5975,13 @@
           if (a && G.tap) s += fromTap(a, G.tap);
           s += answerMe(me, G.tap);
         }
-        if (shown && st.phase === "ar") s += momentBall(st.ri, st.phase, "g");
+        if (shown && st.phase === "ar") s += momentBall(st.ri, st.phase, "g", G.role);
         $("courtG").innerHTML = s;
         glideRun($("courtG"));
       }
       function gHint(level) {
         const st = G.queue[G.i],
-          pl = answerSpots(st.ri, st.phase),
+          pl = answerSpots(st.ri, st.phase, G.role),
           me = pl.find((o) => o.p === G.role),
           z = zoneOf(st.ri, G.role);
         if (level === 2) {
@@ -5984,18 +6017,23 @@
         }
         if (st.phase === "ar") {
           if (me.kind === "set") return "You are the setter: where do you set from?";
-          if (me.kind === "back")
-            return `You are the back-row opposite. ${thumbRef("opposite", "come in to cover deep, right of the middle: the setter sets zone 4")}`;
-          if (me.turn) return "You are the front-row middle: you run the quick as the pass comes.";
-          if (me.kind === "front")
-            return G.role.startsWith("MB")
-              ? "You are front-row middle: you attack. Which lane?"
-              : `You attack. ${thumbRef("outside-left", "the front-row outside starts left, except when the setter is in 1")}`;
-          return G.role === "L"
-            ? `You don't attack: cover the hitter close behind, then take your defensive spot. ${thumbRef("back-cover", "the libero finishes in zone 5 after the attack")}`
-            : "You are back row and don't attack now: cover deep in the middle, behind the close cover.";
+          if (coversAttack(st.ri, "ar", G.role))
+            return `Cover spot as ${passPlan(st.ri)?.hitter} spikes: ${gHintAttack(me)}`;
+          return gHintAttack(me);
         }
         return `When we serve there is no overlap rule, so everyone except the server stands in base defence before the serve: the front row in the middle of its zones, the back row deep. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;
+      }
+      function gHintAttack(me) {
+        if (me.kind === "back")
+          return `You are the back-row opposite. ${thumbRef("opposite", "come in to cover deep, right of the middle: the setter sets zone 4")}`;
+        if (me.turn) return "You are the front-row middle: you run the quick as the pass comes.";
+        if (me.kind === "front")
+          return G.role.startsWith("MB")
+            ? "You are front-row middle: you attack. Which lane?"
+            : `You attack. ${thumbRef("outside-left", "the front-row outside starts left, except when the setter is in 1")}`;
+        return G.role === "L"
+          ? `You don't attack: cover the hitter close behind, then take your defensive spot. ${thumbRef("back-cover", "the libero finishes in zone 5 after the attack")}`
+          : "You are back row and don't attack now: cover deep in the middle, behind the close cover.";
       }
       $("gHelp").onclick = () => {
         if (!G || G.answered || G.help >= 2) return;
@@ -6230,7 +6268,7 @@
       function gCheck() {
         if (G.rot) return gRotCheck();
         const st = G.queue[G.i];
-        const me = answerSpots(st.ri, st.phase).find((o) => o.p === G.role);
+        const me = answerSpots(st.ri, st.phase, G.role).find((o) => o.p === G.role);
         if (!G.tap) return gAnswer(me ? "miss" : "perfect");
         if (!me) return gAnswer("miss");
         let dist = Math.hypot(G.tap.x - me.x, (G.tap.y - me.y) * 0.67);
@@ -6571,7 +6609,16 @@
       }
       function mpReveal(ps = G.mp.players) {
         const st = G.queue[G.i],
-          pl = answerSpots(st.ri, st.phase);
+          roles = [...new Set(ps.map((p) => p.role))],
+          covers = roles.filter((r) => coversAttack(st.ri, st.phase, r)),
+          // All covers: the spike picture. Mixed roles: the pass picture, each role on its own graded spot.
+          shared = covers.length && covers.length === roles.length ? covers[0] : undefined,
+          base = answerSpots(st.ri, st.phase, shared),
+          pl = base.map((o) =>
+            roles.includes(o.p)
+              ? answerSpots(st.ri, st.phase, o.p).find((q) => q.p === o.p) || o
+              : o,
+          );
         G.revealPs = ps;
         if (G.revealGlide !== G.i) {
           G.revealGlide = G.i;
@@ -6580,7 +6627,6 @@
         let s = DEFS + courtBase();
         if (st.phase === "start") s += rotArrows();
         if (st.phase === "serve") s += serveLayer(st.ri, pl, null);
-        const roles = [...new Set(ps.map((p) => p.role))];
         pl.filter((o) => !roles.includes(o.p)).forEach((o) => {
           s += chip(o, { dim: true });
         });
@@ -6607,7 +6653,7 @@
           if (!t?.tap) return;
           s += `<circle cx="${t.tap.x * W}" cy="${t.tap.y * H}" r="3.2" fill="${p.color}" stroke="#fff" stroke-width="0.5"/><text x="${t.tap.x * W}" y="${t.tap.y * H + 1.3}" text-anchor="middle" font-size="3.8" font-weight="800" fill="#fff" font-family="Barlow,sans-serif">${esc(p.name.trim()[0] || "?").toUpperCase()}</text>`;
         });
-        if (st.phase === "ar") s += momentBall(st.ri, st.phase, "r");
+        if (st.phase === "ar") s += momentBall(st.ri, st.phase, "r", shared);
         // A live room re-renders the reveal on every change; a play on its court keeps running.
         if (!(watch?.a && watch.svg === $("courtR"))) {
           $("courtR").innerHTML = s;

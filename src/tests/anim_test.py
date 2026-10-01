@@ -470,7 +470,7 @@ COVER_MIN = 0.11
 COVER_BEHIND = 0.05
 DEEP_COVER = {"back": (0.44, 0.56), "side": (0.62, 0.44)}
 SET_MAX_MS = 1100
-COVER_L = (0.22, 0.39)  # R1: the hitter at (0.07, 0.08)
+COVER_L = (0.30, 0.39)  # R1: the hit at (0.15, 0.08)
 TRAILS = """() => [...document.querySelectorAll('#courtL .trail')]
   .filter((l) => l.getAttribute('visibility') === 'visible').map((l) => l.dataset.p)"""
 TRAIL_LENGTHS = """() => Object.fromEntries([...document.querySelectorAll('#courtL .trail')]
@@ -495,7 +495,7 @@ def base_zone(p: str, front: bool) -> int:
 
 
 def reception_plan(ri: int, mode: str) -> tuple[list[str], dict[str, tuple[float, float]], str]:
-    """Who leaves at the serve contact (setter and the attackers who do not receive), base defence, the hitter."""
+    """Who leaves at the serve contact (setter and the front attackers who do not receive), base defence, the hitter."""
     row = lineup(ri, mode)  # type: ignore[arg-type]
     ar = {p: (x, y) for p, x, y, _ in row["ar"]}
     rec = {p: (x, y) for p, x, y in row["rec"]}
@@ -503,7 +503,8 @@ def reception_plan(ri: int, mode: str) -> tuple[list[str], dict[str, tuple[float
     order = list(rec)
     attackers = [p for p in order if kind[p] in ("front", "back")]
     hitter = min((p for p in attackers if kind[p] == "front"), key=lambda p: ar[p][0])
-    release = [p for p in order if kind[p] == "set" or (p in attackers and p not in RECEIVERS)]
+    # A back-row attacker who does not hit covers instead, and waits out of the passing lanes until the pass.
+    release = [p for p in order if kind[p] == "set" or (kind[p] == "front" and p not in RECEIVERS)]
     release = [p for p in release if math.dist(rec[p], ar[p]) >= MIN_MOVE]
     end = {p: BASE_DEF[base_zone(p, p in row["front"])][:2] for p in order}
     return release, end, hitter
@@ -754,6 +755,49 @@ def check_quick_in_front(page: Page) -> None:
             if deepest >= ATTACK_LINE - 0.05:
                 fail(f"{mode} R{ri + 1}: {middle} goes back to y {deepest:.2f} between the pass and the set")
     print("quick: the front middle stays in front of the 3 m line from the pass to the set", flush=True)
+
+
+def check_cover_runs(page: Page) -> None:
+    """Every rotation, both rule sets: no detour leaves the court, and the back-row opposite runs straight to cover.
+
+    A detour waypoint stays between the sidelines and no deeper than the end line or its run's own ends. A back-row
+    opposite who neither receives nor attacks waits for the pass, then runs to its deep cover, not via its `ar` spot.
+    The front middle's quick caption says where it takes off: left of the setter. The zone 4 hitter approaches
+    outside-in, ending at least 0.05 inside where it starts.
+    """
+    for mode, roles in MODES.items():
+        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        for ri in range(6):
+            tag = f"{mode} R{ri + 1} Reception"
+            row = lineup(ri, mode)  # type: ignore[arg-type]
+            stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")
+            for n, stage in enumerate(stages):
+                for p, raw in stage["paths"].items():
+                    path = [(q["x"], q["y"]) for q in raw]
+                    deepest = max(1.0, path[0][1], path[-1][1])
+                    out = [q for q in path[1:-1] if not 0 <= q[0] <= 1 or q[1] > deepest + 1e-9]
+                    if out:
+                        fail(f"{tag} stage {n + 1}: {p} detours off the court through {out}")
+            kind = {p: k for p, _, _, k in row["ar"]}
+            for p in (p for p in row["back"] if kind.get(p) == "back"):
+                run = stages[1]["paths"].get(p)
+                end = (run[-1]["x"], run[-1]["y"]) if run else None
+                if p in stages[0]["moves"] or end is None or math.dist(end, DEEP_COVER["side"]) > 0.05:
+                    fail(
+                        f"{tag}: {p} runs {stages[0]['paths'].get(p)} then {run}, not straight to {DEEP_COVER['side']}"
+                    )
+            middle = next(p for p in row["front"] if p.startswith("MB"))
+            captions = " ".join(page.evaluate("(a) => window.ksvLearn.captions(...a)", [ri, "rec", middle]))
+            if "in front of the setter" in captions or "left of the setter" not in captions:
+                fail(f"{tag}: {middle}'s quick caption does not say left of the setter: {captions!r}")
+            hitter = min((s for s in row["ar"] if s[3] == "front"), key=lambda s: s[1])[0]
+            approach = stages[2]["paths"].get(hitter)
+            if not approach or approach[-1]["x"] - approach[0]["x"] < 0.05:
+                fail(f"{tag}: the zone 4 hitter {hitter} approaches {approach}, not outside-in")
+    print(
+        "covers: detours inside the court, the back-row opposite straight to cover, the quick left of the setter, "
+        "the zone 4 hitter outside-in"
+    )
 
 
 def check_ball_moving(page: Page) -> None:
@@ -1560,6 +1604,7 @@ def main() -> None:
         check_reception_ends(page)
         check_quick_in_front(page)
         check_ball_moving(page)
+        check_cover_runs(page)
         check_caption_timing(page)
         check_rest_list(page)
         check_path_shapes(page)

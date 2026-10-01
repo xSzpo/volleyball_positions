@@ -104,15 +104,28 @@ def tap_spot(page: Page, role: str, ri: int, phase: str, check: bool = True) -> 
 
 
 def pass_lands(page: Page, ri: int) -> dict[str, tuple[float, float]]:
-    """Where Learn's Reception play has everyone at the moment the pass reaches the setter."""
-    spots = page.evaluate(
+    """The Attack spots: everyone as the pass reaches the setter in Learn's play, the covers on their cover spot.
+
+    L, the deep OH and the back OP are graded on the spot they stand on at the spike.
+    """
+    found = page.evaluate(
         """(ri) => {
-            const pass = window.ksvLearn.stages(ri, 'rec')[1];
-            return window.ksvLearn.at(ri, 'rec', pass.start + pass.ball.ms);
+            const stages = window.ksvLearn.stages(ri, 'rec');
+            const pass = stages[1];
+            return {
+                lands: window.ksvLearn.at(ri, 'rec', pass.start + pass.ball.ms),
+                spike: stages[stages.length - 1].from,
+                rules: String(localStorage.getItem('ksv51:rulesMode')).includes('official') ? 'official' : 'simple',
+            };
         }""",
         ri,
     )
-    return {p: (at["x"], at["y"]) for p, at in spots.items()}
+    row = lineup(ri, found["rules"])
+    spots = {p: (at["x"], at["y"]) for p, at in found["lands"].items()}
+    for p, at in found["spike"].items():
+        if cover_job(row, p):
+            spots[p] = (at["x"], at["y"])
+    return spots
 
 
 def breakdown_total(line: str) -> tuple[int, int]:
@@ -201,14 +214,14 @@ def check_peek(browser: Browser) -> None:
     if shown != "Shown: Nobody (full points) · Peeked: 1 moment":
         fail(f"end screen after one peek reads {shown!r}")
     best = page.evaluate("JSON.parse(localStorage.getItem('ksv51:gameBest'))")
-    if list(best) != ["v6|OH1|rec"]:
+    if list(best) != ["v8|OH1|rec"]:
         fail(f"best score saved under {list(best)}, expected the starting settings only")
     page.close()
 
 
 def check_best_key(browser: Browser) -> None:
     """Bests from another scoring are ignored, and the neighbour check has its own best."""
-    bests = '{"v4|OH1|rec": 9999, "v5|OH1|rec": 500, "v6|OH1|rec": 700}'
+    bests = '{"v5|OH1|rec": 9999, "v6|OH1|rec": 9999, "v7|OH1|rec": 500, "v8|OH1|rec": 700}'
     seed = f"localStorage.setItem('ksv51:gameBest', JSON.stringify({bests}))"
     page = new_page(browser, query="?ff=all,-match-rotate-name&anim=0")
     page.evaluate(seed)
@@ -217,7 +230,7 @@ def check_best_key(browser: Browser) -> None:
     setup_match(page, "OH1", ("rec",))
     text = page.inner_text("#gBest")
     if "500" not in text:
-        fail(f"best line with match-rotate-name off reads {text!r}, expected the v5 best of 500")
+        fail(f"best line with match-rotate-name off reads {text!r}, expected the v7 best of 500")
     page.close()
     page = new_page(browser)
     page.evaluate(seed)
@@ -226,7 +239,7 @@ def check_best_key(browser: Browser) -> None:
     setup_match(page, "OH1", ("rec",))
     text = page.inner_text("#gBest")
     if "700" not in text:
-        fail(f"best line reads {text!r}, expected the v6 best of 700")
+        fail(f"best line reads {text!r}, expected the v8 best of 700")
     page.check("#nbGame")
     text = page.inner_text("#gBest")
     if text:
@@ -549,6 +562,8 @@ def third(x: float) -> str:
 def expected_sets(ri: int, role: str) -> set[str]:
     """The calls a set question may ask ``role`` after reception in rotation ``ri``."""
     spot = next((s for s in ROWS[ri]["ar"] if s[0] == role), None)
+    if cover_job(ROWS[ri], role):
+        return {s[0] for s in MATCH_SETS}
     if spot is not None and spot[3] == "front":
         return LANES[third(spot[1])]
     if spot is not None and spot[3] == "back":
@@ -561,7 +576,7 @@ def set_prompt(ri: int, role: str) -> str:
     kind = next((s[3] for s in ROWS[ri]["ar"] if s[0] == role), None)
     if kind == "set":
         return "You set this ball. What is the call?"
-    if kind in ("front", "back"):
+    if kind in ("front", "back") and not cover_job(ROWS[ri], role):
         return "The setter sets this ball for you. What is the call?"
     return "The setter sets this ball. What is the call?"
 
@@ -653,7 +668,10 @@ def check_set_calls(browser: Browser) -> None:
         if page.get_attribute("#tabSets", "aria-selected") != "true":
             fail(f"{role}: Practise in Sets does not open the Sets tab")
         page.close()
-    print("set call check: front row, back-row OP and setter asked their own sets, +30 for a right call", flush=True)
+    print(
+        "set call check: front row and setter asked their own sets, a covering OP any set, +30 for a right call",
+        flush=True,
+    )
     page = play_set_calls(browser, "L", ("ar",))
     if "1/2 set calls right" not in page.inner_text("#gStats").replace("\n", " "):
         fail(f"libero: end screen stats read {page.inner_text('#gStats')!r}")
@@ -1056,7 +1074,10 @@ PASSER = ["L", "OH2", "OH1", "L", "OH1", "OH2"]
 HELD = 6 + 1 + 6 * 0.65  # marker radius, its edge and the ball radius, in court units
 
 
-def attack_question(ri: int, role: str) -> str:
+def attack_question(ri: int, role: str, row: Row) -> str:
+    if cover_job(row, role):
+        hitter = zone4_hitter(row)
+        return f"The setter sets {hitter} in zone 4. Where is your cover spot as {hitter} spikes?"
     if PASSER[ri] == role:
         return "You pass to the setter. Where are you as it arrives?"
     if role == "S":
@@ -1064,7 +1085,29 @@ def attack_question(ri: int, role: str) -> str:
     return f"{PASSER[ri]} passes to the setter. Where are you as it arrives?"
 
 
-def check_ball_at_setter(pic: dict[str, Any], row: Row, lands: dict[str, tuple[float, float]], tag: str) -> None:
+def zone4_hitter(row: Row) -> str:
+    """The front-row attacker farthest left, whom the setter sets in the Reception play."""
+    return min((x, p) for p, x, _, kind in row["ar"] if kind == "front")[1]
+
+
+def spike_picture(page: Page, ri: int) -> tuple[dict[str, tuple[float, float]], tuple[float, float]]:
+    """Everyone and the ball at the spike in Learn's Reception play, in court units."""
+    found = page.evaluate(
+        "(ri) => { const st = window.ksvLearn.stages(ri, 'rec').at(-1); return {at: st.from, ball: st.ball.from}; }",
+        ri,
+    )
+    team = {p: (at["x"] * 100, at["y"] * 100) for p, at in found["at"].items()}
+    return team, (found["ball"]["x"] * 100, found["ball"]["y"] * 100)
+
+
+def check_ball_at_setter(
+    pic: dict[str, Any], row: Row, lands: dict[str, tuple[float, float]], tag: str, page: Page, ri: int, role: str
+) -> None:
+    if cover_job(row, role):
+        _, ball = spike_picture(page, ri)
+        if not pic["ball"] or dist(pic["ball"], ball) > 0.02:
+            fail(f"{tag}: ball at {pic['ball']}, not at the spike {ball}")
+        return
     setter = next(p for p, _, _, kind in row["ar"] if kind == "set")
     set_spot = (lands[setter][0] * 100, lands[setter][1] * 100)
     if not pic["ball"] or abs(dist(pic["ball"], set_spot) - HELD) > 0.02:
@@ -1147,7 +1190,7 @@ def check_attack_match(browser: Browser) -> None:
                     page.click('#gVisPlay [data-v="all"]')
                 check_from_picture(court_picture(page, "courtG"), rows[ri], ri, "OH1", tag)
                 story = page.inner_text("#gStory")
-                if not story.endswith(attack_question(ri, "OH1")):
+                if not story.endswith(attack_question(ri, "OH1", rows[ri])):
                     fail(f"{tag}: question reads {story!r}")
                 lands = pass_lands(page, ri)
                 spot = lands["OH1"]
@@ -1155,7 +1198,8 @@ def check_attack_match(browser: Browser) -> None:
                 check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, tag)
                 press_next(page)
                 check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, f"{tag} feedback")
-                check_ball_at_setter(court_picture(page, "courtG"), rows[ri], lands, f"{tag} feedback")
+                picture = court_picture(page, "courtG")
+                check_ball_at_setter(picture, rows[ri], lands, f"{tag} feedback", page, ri, "OH1")
                 line = page.inner_text("#gBd")
                 parts, total = breakdown_total(line)
                 if "%" in line or not parts == total == points(page) or total < 100:
@@ -1169,7 +1213,7 @@ def check_attack_match(browser: Browser) -> None:
 
 
 def check_attack_grading(browser: Browser) -> None:
-    """Attack grades everyone where Learn's Reception play has them as the pass lands, and rings them there."""
+    """Attack grades everyone where Learn has them as the pass lands, the covers on cover, and rings them there."""
     checked = 0
     for rules in RULES_MODES:
         for role in MODE_ROLES[rules]:
@@ -1197,11 +1241,14 @@ def check_attack_grading(browser: Browser) -> None:
                 me = next(m for m in pic["markers"] if m["me"])
                 if dist((me["x"], me["y"]), (spot[0] * 100, spot[1] * 100)) > 0.5:
                     fail(f"{tag}: feedback rings you at ({me['x']}, {me['y']}), not at {spot}")
-                check_ball_at_setter(pic, row, lands, tag)
+                check_ball_at_setter(pic, row, lands, tag, page, ri, role)
                 checked += 1
                 press_next(page)
             page.close()
-    print(f"Attack: graded where Learn has everyone as the pass lands on {checked} courts", flush=True)
+    print(
+        f"Attack: graded where Learn has everyone as the pass lands, the covers on cover, on {checked} courts",
+        flush=True,
+    )
 
 
 MODE_ROLES = {"simple": ("MB", "OH1", "OH2", "OP", "S", "L"), "official": ("MB1", "MB2", "OH1", "OH2", "OP", "S", "L")}
@@ -1266,6 +1313,104 @@ def check_attack_texts(browser: Browser) -> None:
                 press_next(page)
             page.close()
     print(f"Attack texts: the cover graded named in hint, feedback and caption on {checked} courts", flush=True)
+
+
+def check_cover_moment(browser: Browser) -> None:
+    """A cover is asked about its cover spot at the spike, and the feedback shows everyone and the ball at the spike."""
+    checked = 0
+    for rules in RULES_MODES:
+        for role in MODE_ROLES[rules]:
+            page = new_page(browser, rules)
+            setup_match(page, role, ("ar",), "all", sets=False)
+            page.click("#gStart")
+            for ri in range(6):
+                tag = f"cover moment {rules} {role} R{ri + 1}"
+                row = lineup(ri, rules)
+                page.wait_for_selector("#gOff:enabled")
+                if not cover_job(row, role):
+                    page.click("#gOff")
+                    press_next(page)
+                    press_next(page)
+                    continue
+                story = page.inner_text("#gStory")
+                hitter = zone4_hitter(row)
+                if "as it arrives" in story or not story.endswith(attack_question(ri, role, row)):
+                    fail(f"{tag}: question reads {story!r}")
+                tap_at(page, *pass_lands(page, ri)[role])
+                press_next(page)
+                if f"cover spot as {hitter} spikes" not in page.inner_text("#gFb"):
+                    fail(f"{tag}: feedback {page.inner_text('#gFb')!r} does not name the cover spot at the spike")
+                team, _ = spike_picture(page, ri)
+                pic = court_picture(page, "courtG")
+                for m in pic["markers"]:
+                    if m["p"] in team and dist((m["x"], m["y"]), team[m["p"]]) > 0.5:
+                        fail(f"{tag}: {m['p']} drawn at ({m['x']}, {m['y']}), not where it is at the spike")
+                check_ball_at_setter(pic, row, {}, tag, page, ri, role)
+                checked += 1
+                press_next(page)
+            page.close()
+    print(f"Attack covers: asked and shown at the spike on {checked} courts", flush=True)
+
+
+def check_cover_set_call(browser: Browser) -> None:
+    """A back-row opposite who covers is asked the set call as a watcher, not a back-row set for itself."""
+    checked = 0
+    for rules in RULES_MODES:
+        page = new_page(browser, rules)
+        setup_match(page, "OP", ("ar",))
+        page.click("#gStart")
+        for ri in range(6):
+            row = lineup(ri, rules)
+            page.wait_for_selector("#gOff:enabled")
+            tap_at(page, *pass_lands(page, ri)["OP"])
+            press_next(page)
+            ask = page.inner_text("#gsc p") if page.locator("#gsc").count() else ""
+            if cover_job(row, "OP"):
+                if ask != "The setter sets this ball. What is the call?":
+                    fail(f"set call {rules} OP R{ri + 1}: a covering opposite is asked {ask!r}")
+                checked += 1
+            press_next(page)
+        page.close()
+    if not checked:
+        fail("set call: no rotation with a covering opposite")
+    print(f"set call: a covering opposite asked as a watcher on {checked} courts", flush=True)
+
+
+# How far inside its start the zone 4 hitter takes off, as Learn's HIT_IN.
+HIT_IN = 0.08
+
+
+def check_hitter_approach(browser: Browser) -> None:
+    """The zone 4 hitter's dashed approach ends inside its start, where Learn's outside-in run hits."""
+    checked = 0
+    for rules in RULES_MODES:
+        for role in MODE_ROLES[rules]:
+            page = new_page(browser, rules)
+            setup_match(page, role, ("ar",), sets=False)
+            page.click("#gStart")
+            for ri in range(6):
+                row = lineup(ri, rules)
+                page.wait_for_selector("#gOff:enabled")
+                if zone4_hitter(row) != role:
+                    page.click("#gOff")
+                    press_next(page)
+                    press_next(page)
+                    continue
+                tap_at(page, *pass_lands(page, ri)[role])
+                press_next(page)
+                ends: list[float] = page.eval_on_selector_all(
+                    f'#courtG g.rt[data-p="{role}"] line.route[stroke-dasharray]',
+                    "els => els.map(l => l.x2.baseVal.value)",
+                )
+                start = next(x for p, x, _, _ in row["ar"] if p == role)
+                if len(ends) != 1 or abs(ends[0] - (start + HIT_IN) * 100) > 0.01:
+                    fail(
+                        f"hitter approach {rules} {role} R{ri + 1}: ends at x {ends}, not {(start + HIT_IN) * 100:.1f}"
+                    )
+                checked += 1
+                press_next(page)
+            page.close()
+    print(f"Attack: the zone 4 hitter's approach ends outside-in on {checked} courts", flush=True)
 
 
 def check_from_label(browser: Browser) -> None:
@@ -1480,13 +1625,14 @@ def check_attack_drill(browser: Browser) -> None:
                 tag = f"drill {rules} {vis} R{ri + 1}"
                 seen.add(ri)
                 check_from_picture(court_picture(page, "courtD"), rows[ri], ri, "OH1", tag)
-                if page.inner_text("#dsub") != attack_question(ri, "OH1"):
+                if page.inner_text("#dsub") != attack_question(ri, "OH1", rows[ri]):
                     fail(f"{tag}: question reads {page.inner_text('#dsub')!r}")
                 lands = pass_lands(page, ri)
                 spot = lands["OH1"]
                 tap_at(page, *spot, court="courtD")
                 check_tap_line(court_picture(page, "courtD"), rows[ri], "OH1", spot, tag)
-                check_ball_at_setter(court_picture(page, "courtD"), rows[ri], lands, f"{tag} feedback")
+                picture = court_picture(page, "courtD")
+                check_ball_at_setter(picture, rows[ri], lands, f"{tag} feedback", page, ri, "OH1")
                 page.click("#resetBtn")
             if len(seen) < 6:
                 fail(f"drill {rules} {vis}: Attack came up only in {sorted(seen)}")
@@ -1838,6 +1984,9 @@ def main() -> None:
         check_attack_match(browser)
         check_attack_grading(browser)
         check_attack_texts(browser)
+        check_cover_moment(browser)
+        check_cover_set_call(browser)
+        check_hitter_approach(browser)
         check_middle_route(browser)
         check_from_label(browser)
         check_attack_drill(browser)

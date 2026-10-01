@@ -567,6 +567,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** A 3-2 cover. During the set the setter, the middle and L stand about 3 m (0.34) from the hitter, behind and inside it, in an arc, each at least a marker width (0.14) inside the hitter's lane: the setter nearest the net (hitter + 0.33 across, + 0.07 back), the middle (+ 0.26, + 0.21), L (+ 0.15, + 0.31). Two deep covers stand behind the gaps: the back-row outside hitter at (0.44, 0.56), and the attacker who neither hits nor fakes the quick at (0.62, 0.44): in R1 to R3 the front-row right-side attacker comes in from the sideline, in R4 to R6 the back-row opposite does not approach. L, the deep OH and the back-row opposite run straight on to their cover during the pass, so L does not stop at the guide's zone 5 spot. The set flies until the close cover stands, at most 1.1 s (0.85 to 0.9 s in every rotation), and lands as the hitter's planned run ends; a late cover covers from where it is. The setter sets from the set spot, so the setter's cover is up to 3 m from it. Captions: the setter "then follow in to cover X close on the right", the middle "cover X close, between the setter and L", L "Cover X close behind", the deep covers "Cover deep …". The coach question stays #16 Q9/Q10.
 - **Alternatives:** L goes to the guide's zone 5 spot first and turns to the cover (an L-shaped run, and the set waits up to 1.6 s for it); the right-side attacker keeps its approach, a 3-1 cover; the deep outside hitter in the close cover instead of L where L passes from the right.
 - **Reversible by:** `COVER`, `DEEP_COVER`, `SET_MAX_MS`, the pass stage's `onCover` and the set ball's `cover` list in `buildReception()` in `src/template.html`.
+- **Amended in #119:** the back-row opposite waits for the pass before its run, see [#111](#111-the-back-row-opposite-waits-for-the-pass-then-runs-straight-to-cover); the close cover sits round the outside-in hit point, see [#114](#114-the-zone-4-hitter-approaches-outside-in).
 
 ### 69. Attack is graded where Learn has everyone as the pass lands
 
@@ -575,6 +576,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Drill and Match grade every player at their position in the Learn Reception play at the moment the pass lands (stage 2 start plus the pass flight), one source for all roles. The feedback draws the run from the reception spot to that position; for the front middle, the run to the 3 m line, then the dashed approach to the take-off. `ROWS[].ar` is unchanged. The graded spots of the covers follow any change to the cover runs.
 - **Alternatives:** grade the `ar` spots and move only the middle (disagrees with Learn for L); move the spots in the data (it would no longer match the guide's drawing); ask about the moment the setter sets.
 - **Reversible by:** `answerSpots()` in `src/template.html`.
+- **Amended in #119:** L, the deep outside hitter and the back-row opposite are graded on their cover spot, see [#112](#112-the-covers-are-graded-on-their-cover-spot).
 
 ### 70. The ball after an Attack answer is at the setter
 
@@ -823,6 +825,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Only the Learn court has the toggle and the numbers. Drill and Match courts are unchanged.
 - **Alternatives:** one toggle for every court; a Drill option that also lowers the score in Match like Show on court.
 - **Reversible by:** adding `zonesSvg()` after `courtBase()` in the Drill and Match court renders in `src/template.html`.
+
 ### 110. Drill names rotations by the setter only
 
 - **Issue:** #116
@@ -830,3 +833,43 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Every Drill screen says `H<n>`: the question title, the feedback, the weak spots and Review weak spots. The Rotate names option stays for the Rotate question only, now with H as its default; a stored R or Mixed is kept. After the answer the feedback says `H<n>` even when the question said `R<n>`. Learn and Match keep `R3 (H5)`.
 - **Alternatives:** remove the Rotate names option; keep Mixed as the default.
 - **Reversible by:** the `hName()` and `hOnly()` calls in the Drill code of `src/template.html`, and the `drillName` default.
+
+### 111. The back-row opposite waits for the pass, then runs straight to cover
+
+- **Issue:** #119
+- **Problem:** In R4 to R6 the back-row opposite does not attack (the set goes to zone 4), but it left at the serve contact for its `ar` spot and only then turned to its deep cover, a run with a corner in it (#68 says it runs straight on).
+- **Decision:** A back-row attacker who covers is not released at the serve contact. It waits out of the passing lanes until the pass, then runs in one line to the side deep cover (`DEEP_COVER.side`, 0.62, 0.44), placed just after L so the two runs stay `GAP` apart.
+- **Alternatives:** leave at the contact straight for the cover (in R6 it then waits up to 0.8 s for the passer's lane to clear); keep the corner via the `ar` spot.
+- **Reversible by:** `released` and the pass stage's `first` in `buildReception()` in `src/template.html`.
+
+### 112. The covers are graded on their cover spot
+
+- **Issue:** #119
+- **Problem:** Drill and Match graded L, the deep outside hitter and the back-row opposite where the Learn play had them as the pass lands (#69), a point mid-run, while their hint and feedback (#79) name the cover spot. A tap on the spot the text names read "Not there".
+- **Decision:** These three are graded on the cover spot they stand on at the spike (the start of Reception's base stage, `tr.spike`). Everyone else is still graded as the pass lands (#69). This amends #69 for the covers. A cover's question asks for its cover spot as the zone 4 hitter spikes, and its feedback and hint say "cover spot as … spikes". The picture after its answer shows one moment, the spike: everyone where they are then and the ball at the hitter. On a same-device reveal where every player covers, the reveal shows the spike too; with mixed roles it shows the pass landing, with each player's own role ringed on the spot it is graded on.
+- **Alternatives:** keep grading mid-run and change the texts to "on the way to …"; ask about the moment of the spike for everyone.
+- **Reversible by:** `tr.spike` in `buildReception()`, `coversAttack()`, `answerSpots()`, `momentBall()`, `arQuestion()` and `mpReveal()` in `src/template.html`.
+
+### 113. Detours stay inside the court
+
+- **Issue:** #119
+- **Problem:** A detour round a player went through one waypoint a fixed distance to the side, which could lie past a sideline (the R1 setter's run went through x 1.03) or behind the end line.
+- **Decision:** A detour waypoint stays between the sidelines and no deeper than the end line or the run's own start or end. A waypoint that would pass a sideline goes level with the player met, on the sideline.
+- **Alternatives:** wider detours on the inside only (the R1 setter then waits 0.8 s and the pass flies 1.8 s); let the run wait instead of detouring.
+- **Reversible by:** `detours()` in `src/template.html`.
+
+### 114. The zone 4 hitter approaches outside-in
+
+- **Issue:** #119
+- **Problem:** The zone 4 hitter started at its `ar` spot by the left sideline (x 0.07) and ran straight along the sideline to the net, which is not the outside-in angle hitters are taught.
+- **Decision:** The hit point is 0.08 (about 0.7 m) inside the start (`HIT_IN`), so the approach angles in from the sideline. The 3-2 close cover (#68) is placed round the hit point, so it moves in by the same amount. Every Learn animation check still holds. The `ar` spots are unchanged. Coach question #16 may give a better angle.
+- **Alternatives:** start the hitter outside the sideline (off the guide's spot); a curved approach.
+- **Reversible by:** `HIT_IN` in `src/template.html`.
+
+### 115. The set call question for a covering back-row opposite
+
+- **Issue:** #119
+- **Problem:** In R4 to R6 the back-row opposite is graded as a deep cover (#112), but the set call check asked it the back-row set of its third "for you", as if it attacked from zone 1.
+- **Decision:** A player who covers at the Attack step is asked the set call as a watcher: "The setter sets this ball. What is the call?", from every match set, like the libero and the other back row. A back-row opposite who attacks is still asked its own back set.
+- **Alternatives:** keep asking the zone 1 set (A) for a later back-row attack; skip the set call check for covers.
+- **Reversible by:** `setQ()` in `src/template.html`.
