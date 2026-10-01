@@ -21,6 +21,7 @@ src/
   data.py             ALL rotation data + set calls (single source of truth)
   template.html       the app: HTML + CSS + JS, with placeholders filled by build.py
   build.py            data.py + template.html  ->  index.html
+  reports.py          triage Report a problem submissions in the live database (list, mark, clean)
   tests/audit.py      data consistency checks under both rule sets (rotation order, middle-pair reset, overlap legality, serve lineups, docs/v2.md walk-through tables)
   tests/qa.py         Playwright end-to-end sweep (arg: m = phone/light, d = desktop/dark; --quick, --all-combos, --seed N); `check_drill_steps()` covers the Drill steps picker (only picked steps asked, weak spots and review from them, the last step kept on, a tapped chip with no focus ring, storage and a bad stored value, one row of 44 px chips above the court at 390 × 664); `check_drill_reset()` covers Reset beside the Drill score at 390 × 664 (in view with no fold open, 44 px, one tap only arms it without moving the court and reverts after 3 s, two taps clear stats, score and storage); `check_drill_rotate()` covers Rotate from the name (no teammates before the answer, H or R only, the placement order and prompts per role in both rule sets incl. Official R3/R6, the same prompts for everyone up to your own step, moving a marker and your own locked, grading (the setter one zone off is wrong), one stats item, storage of `ksv51:drillName`); `check_drill_h_names()` covers Drill naming rotations `H<n>` only (question, feedback, aria-labels, weak spots, Review weak spots) while Learn and Match keep `R<n> (H<n>)`; `check_learn_fit()` opens every Learn screen at 390 × 664 (every role and both rule sets, one role with --quick) and checks every marker above the sticky `.lctl` row, and measures the 44 px tap targets (Show on court, Rotate names also 44 px wide, the Drill and Match option rows, How scoring works, the Sets chips) at 390 × 664 and 1280 × 800; `check_zones()` covers the zone numbers (on by default and not stored until a tap, the Learn toggle 44 px in the sticky Next row with Next's label whole, the numbers 4 3 2 / 5 6 1 under the markers on every Learn step, the Drill court and its answers and the Match court, the 44 px Zones rows in Drill and Match options, one `ksv51:zones` for all three kept across Next, tabs, reloads and a Reception play it does not stop)
   tests/fast.sh       iteration loop: build, audit, theme_test, analytics_test, flags_test, rules_test, learn_test, anim_test, qa.py m --quick (~70 s)
@@ -41,6 +42,16 @@ infra/                Terraform for Firebase (project, web app, Realtime Databas
   firebase.json       Firebase CLI config: rules file and emulator ports (auth 9099, database 9000)
   README.md           how to run it (free Spark path vs fully automated Blaze path)
 ```
+
+## User reports
+
+At the start of every session, and at least once a day, run `python src/reports.py --shots <scratchpad>/reports` (personal gcloud account) and triage each unmarked report:
+
+- A real problem or request: open a GitHub issue in your own words (the repo is public: never quote the comment or attach the screenshot; cite the report id), then `mark <id> issue --issue <n>`.
+- Already filed: `mark <id> duplicate --issue <n>`.
+- A test, empty or spam: `mark <id> noise`.
+
+Then `python src/reports.py clean` deletes noise and reports marked over 30 days ago. Tell the owner what came in.
 
 ## Build and test
 
