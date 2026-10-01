@@ -983,6 +983,6 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #130
 - **Problem:** #105 and #106 put the zone numbers only on the Learn court, off until the Zones toggle is pressed. The owner decided on 2026-10-01 that they belong "everywhere".
-- **Decision:** This amends the off-by-default choice of #105 and replaces #106. Every court draws the numbers (Learn, every Drill and Match court, Rotate, the Attack picture, the glide, Watch the move, the same-device and online reveal). An unset `ksv51:zones` reads as on; a stored value is kept, so a player who switched them off keeps them off. One setting for every view: the Learn Zones toggle, and a "Zone numbers on the court" row in Drill options and in Match options. Zones never changes Match scoring.
+- **Decision:** This amends the off-by-default choice of #105 and replaces #106. Every court draws the numbers (Learn, every Drill and Match court, Rotate, the Attack picture, the glide, Watch the move, the same-device and online reveal). An unset `ksv51:zones` reads as on; a stored value is kept, so a player who switched them off keeps them off. One setting for every view: the Learn Zones toggle, and a "Zone numbers on the court" row in Drill options and in Match options. Zones never changes Match scoring. `court-zones` no longer needs `learn-tab`.
 - **Alternatives:** a separate key per tab; zones lowering the Match score like Show on court; resetting stored values to on.
 - **Reversible by:** the `zonesSvg()` call in `courtBase()` and the `zones` default in `src/template.html`.

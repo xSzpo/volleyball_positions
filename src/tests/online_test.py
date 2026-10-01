@@ -476,6 +476,14 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
         assert guest.is_hidden("#rNext") and guest.is_visible("#rWait"), "guest can advance the match"
         if i == 0:
             host.locator("#gReveal").screenshot(path=str(SHOTS / "online1.png"))
+            for page in (host, guest):
+                assert page.evaluate(
+                    """() => { const g = document.querySelector('#courtR g.zones');
+                    const first = document.querySelector('#courtR .mk');
+                    return !!g && getComputedStyle(g).visibility === 'visible'
+                      && g.querySelectorAll('text').length === 6
+                      && (!first || !!(g.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING)); }"""
+                ), "the online reveal court has no zone numbers under the markers"
         if i == 2:
             rejoin(guest, code)
             check_reveal(guest, expected)

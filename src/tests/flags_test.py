@@ -139,8 +139,8 @@ def check_zones_off(page: Page) -> None:
     if page.locator("#courtG .zones").count():
         fail("court-zones off: zone numbers on the Match court")
     open_app(page, "?ff=reset,-learn-tab")
-    if values(page)["court-zones"]:
-        fail("learn-tab off: court-zones still on")
+    if not values(page)["court-zones"]:
+        fail("learn-tab off: court-zones switched off too")
     page.evaluate("localStorage.removeItem('ksv51:zones'); localStorage.removeItem('ksv51:ffOverride')")
 
 
