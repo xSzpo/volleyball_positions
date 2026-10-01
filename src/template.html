@@ -172,10 +172,13 @@
       height: 0.7em;
       margin-left: 0.18em;
     }
-    h1 span[hidden] {
+    .lastword {
+      white-space: nowrap;
+    }
+    #subtitle[hidden] {
       display: none;
     }
-    h1 span {
+    #subtitle {
       display: block;
       font-size: 0.5em;
       font-weight: 600;
@@ -331,6 +334,17 @@
     .rolechip .rcrules {
       font-weight: 600;
     }
+    .rolechip .rcshort {
+      display: none;
+    }
+    @media (max-width: 479px) {
+      .rolechip .rclong {
+        display: none;
+      }
+      .rolechip .rcshort {
+        display: inline;
+      }
+    }
     @media (max-width: 359px) {
       .rolechip {
         gap: 4px;
@@ -354,40 +368,6 @@
     }
     .menu[hidden] {
       display: none;
-    }
-    .reportitem {
-      display: none;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      min-height: 44px;
-      margin-top: 12px;
-      padding: 0 12px;
-      border: 2px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--panel);
-      color: var(--ink);
-      font:
-        700 16px Barlow,
-        sans-serif;
-      text-align: left;
-      cursor: pointer;
-    }
-    .reportitem svg {
-      flex: 0 0 auto;
-      width: 20px;
-      height: 20px;
-    }
-    @media (max-width: 479px) {
-      #reportBtn {
-        display: none;
-      }
-      .reportitem {
-        display: flex;
-      }
-      .reportitem[hidden] {
-        display: none;
-      }
     }
     .sheet {
       width: min(440px, calc(100vw - 32px));
@@ -1824,13 +1804,16 @@
     <div class="wrap">
       <div class="top">
         <h1>
-          Where do I stand?<svg
-            class="titleball"
-            id="titleBall"
-            viewBox="-1.1 -1.1 2.2 2.2"
-            aria-hidden="true"
-            focusable="false"
-          ></svg><span id="subtitle">KSV 5-1 system · receiving positions, movements and sets</span>
+          Where do I
+          <span class="lastword"
+            >stand?<svg
+              class="titleball"
+              id="titleBall"
+              viewBox="-1.1 -1.1 2.2 2.2"
+              aria-hidden="true"
+              focusable="false"
+            ></svg></span
+          ><span id="subtitle">KSV 5-1 system · receiving positions, movements and sets</span>
         </h1>
         <div class="topbtns">
           <button
@@ -1862,21 +1845,6 @@
                 </button>
                 <small id="rmSub"></small>
               </div>
-              <button type="button" class="reportitem" id="reportItem" aria-haspopup="dialog">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M4 4h16v12H9l-5 4z" />
-                  <path d="M12 7.5v4M12 13.8v.2" />
-                </svg
-                >Report a problem
-              </button>
             </div>
           </div>
           <button type="button" class="themebtn" id="themeBtn" aria-label="Switch to dark mode">
@@ -3192,7 +3160,7 @@
         "match-online": ["gPlayersOnline", "onBox"],
         "sets-tab": ["tabSets", "sets"],
         "sets-quiz": ["setsQuiz"],
-        "bug-report": ["reportBtn", "reportItem", "reportSheet"],
+        "bug-report": ["reportBtn", "reportSheet"],
       };
       const TABS = [
         ["learn", "learn-tab"],
@@ -3422,7 +3390,7 @@
       function renderSetupSummary() {
         const chip = $("roleChip");
         chip.dataset.role = role;
-        chip.innerHTML = `<span>${NAMES[role]}</span><span aria-hidden="true">·</span><span class="rcrules">${RULES_NAME[rulesMode]}</span>`;
+        chip.innerHTML = `<span class="rclong">${NAMES[role]}</span><span class="rcshort">${role}</span><span aria-hidden="true">·</span><span class="rcrules"><span class="rclong">${RULES_NAME[rulesMode]}</span><span class="rcshort">${RULES_NAME[rulesMode][0]}</span></span>`;
         chip.setAttribute(
           "aria-label",
           `Playing as ${NAMES[role]}, ${RULES_NAME[rulesMode]} rules. Change`,
@@ -3434,7 +3402,6 @@
         const first = !$("setupNudge").hidden;
         $("setupTitle").textContent = first ? "Pick your role" : "Your role";
         document.querySelector(".rulesmode").hidden = first;
-        $("reportItem").hidden = first;
         $("setup").hidden = !open;
         $("roleChip").setAttribute("aria-expanded", open);
         if (!focus) return;
@@ -7284,10 +7251,6 @@
         $("reportSend").disabled = false;
       }
       $("reportBtn").addEventListener("click", reportOpen);
-      $("reportItem").addEventListener("click", () => {
-        setSetupOpen(false, false);
-        reportOpen();
-      });
       $("reportIncl").addEventListener("change", reportShow);
       $("reportSend").addEventListener("click", reportSend);
       $("reportCancel").addEventListener("click", () => $("reportSheet").close());
@@ -7300,7 +7263,7 @@
         $("reportShot").removeAttribute("src");
         $("reportCancel").textContent = "Cancel";
         if ($("reportMsg").textContent === "Thanks, sent.") $("reportMsg").textContent = "";
-        ($("reportBtn").offsetParent ? $("reportBtn") : $("roleChip")).focus();
+        $("reportBtn").focus();
       });
       window.ksvReport = { context: reportContext, sdk: HTML2CANVAS };
 

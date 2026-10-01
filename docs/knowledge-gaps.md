@@ -889,6 +889,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** From 480 px the sheet opens from its own icon (`#reportBtn`, a speech bubble with "!") after the theme button. Below 480 px the icon is hidden and the role list ends with a 44 px "Report a problem" row (`#reportItem`, not on the first-visit "Pick your role" list), which closes the list and opens the sheet. The header is unchanged on phones.
 - **Alternatives:** a shorter role button text on phones ("OH1 · Simplified"); a smaller icon (under 44 px); the icon in the tab bar; the icon stacked under the theme button.
 - **Reversible by:** `#reportBtn`, `#reportItem` and the `max-width: 479px` block for them in `src/template.html`.
+- **Owner, 2026-10-01 (#127):** the owner chose the icon in the phone header. `#reportBtn` shows at every width and `#reportItem` is gone. Below 480 px the role button reads the role code and the rules initial ("OP · S ▾", "MB1 · O ▾"; its aria-label keeps the full names), which makes room at 360 and 390 px with the title unchanged.
 
 ### 118. The report sheet is a native modal dialog
 
