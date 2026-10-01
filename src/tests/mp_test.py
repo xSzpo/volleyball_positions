@@ -87,7 +87,9 @@ with sync_playwright() as p:
     moment_board = None
     moment_seen = None
     attack_turns = 0
-    while n < 400:
+    rotate_turns = 0
+    rotate_reveals = 0
+    while n < 600:
         n += 1
         if pg.is_visible("#gEnd"):
             break
@@ -97,6 +99,9 @@ with sync_playwright() as p:
             board = pg.inner_text("#pBoard")
             if moment != moment_seen:
                 moment_seen, moment_board = moment, board
+            if moment.endswith("· Rotation"):
+                asked = moment.split(" · ")[1]
+                assert re.fullmatch(r"(H|R)[1-6]", asked), f"pass screen names the Rotate moment {asked!r}"
             assert board == moment_board, f"pass screen leaks a score change: {moment_board!r} -> {board!r}"
             if shots == 0:
                 pg.locator("#gPass").screenshot(path=str(SHOTS / "mp1.png"))
@@ -116,6 +121,12 @@ with sync_playwright() as p:
                 parts, total = breakdown_total(row)
                 assert parts == total == int(found.group(1)), f"reveal breakdown does not add up: {row!r}"
             assert pg.locator("#rWhy li").count() >= 1, "reveal has no explanation"
+            if moment_seen and moment_seen.endswith("· Rotation"):
+                grades = pg.locator("#rList .rotgrades").all_inner_texts()
+                assert len(grades) == 3 and all(
+                    re.fullmatch(r"\w+: (right|wrong)( · \w+: (right|wrong))*", g) for g in grades
+                ), f"Rotate reveal grades: {grades}"
+                rotate_reveals += 1
             for row in rows:
                 if "Set call:" in row:
                     assert re.search(r"Set call: \S+ (✓ \+30|✗, it is \S+ \+0)", row), (
@@ -153,6 +164,30 @@ with sync_playwright() as p:
             continue
         if pg.is_enabled("#gOff"):
             assert pg.is_hidden("#gVisPlay"), "Show on court can be changed during a multiplayer match"
+            if pg.inner_text("#gStepName").startswith("Rotation"):
+                asked = pg.inner_text("#gTitle")
+                assert re.fullmatch(r"(H|R)[1-6]", asked), f"Rotate turn titled {asked!r}"
+                assert pg.locator("#courtG g.mk").count() == 0, "teammates shown at Rotate"
+                box = pg.locator("#courtG").bounding_box()
+                assert box is not None
+                for x, y in ((0.17, 0.21), (0.5, 0.21), (0.83, 0.21), (0.17, 0.71), (0.5, 0.71), (0.83, 0.71)):
+                    if pg.is_enabled("#gNext"):
+                        break
+                    assert pg.inner_text("#gAsk").startswith("Tap where"), f"Rotate prompt {pg.inner_text('#gAsk')!r}"
+                    pg.mouse.click(
+                        box["x"] + box["width"] * (4 + 100 * x) / 108, box["y"] + box["height"] * (14 + 100 * y) / 127
+                    )
+                if not pg.is_enabled("#gNext"):
+                    pg.click("#gOff")
+                assert pg.inner_text("#gAsk").startswith("All placed"), f"Rotate not ready: {pg.inner_text('#gAsk')!r}"
+                press_next(pg)
+                assert not VERDICT.search(pg.inner_text("#gFb")), "a Rotate turn leaks the verdict"
+                assert pg.locator("#gFb .rotgrades").count() == 0, "a Rotate turn leaks the grades"
+                saved = pg.locator('#courtG circle[r="2.3"]').count()
+                off = pg.get_attribute("#gOff", "aria-pressed") == "true"
+                assert saved == (0 if off else 1), f"Rotate answer saved {saved} tap marks, off court {off}"
+                rotate_turns += 1
+                continue
             if pg.inner_text("#gStepName").startswith("Attack"):
                 picture = pg.evaluate(
                     "() => ['g.mk', '.me-ring', 'g.ball', 'g.pass', 'text.from']"
@@ -194,6 +229,8 @@ with sync_playwright() as p:
         break
     print("ended:", pg.is_visible("#gEnd"), "actions", n)
     assert attack_turns, "no Attack turn was played"
+    assert rotate_turns and rotate_reveals, f"Rotate turns {rotate_turns}, reveals {rotate_reveals}"
+    print("Rotate turns:", rotate_turns, "reveals with grades:", rotate_reveals)
     print("Attack turns with the reception picture:", attack_turns)
     print("answers checked:", answered_by)
     assert all(answered_by.values()), f"not every answer path was checked: {answered_by}"

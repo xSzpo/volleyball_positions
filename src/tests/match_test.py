@@ -192,21 +192,32 @@ def check_peek(browser: Browser) -> None:
     if shown != "Shown: Nobody (full points) · Peeked: 1 moment":
         fail(f"end screen after one peek reads {shown!r}")
     best = page.evaluate("JSON.parse(localStorage.getItem('ksv51:gameBest'))")
-    if list(best) != ["v5|OH1|rec"]:
+    if list(best) != ["v6|OH1|rec"]:
         fail(f"best score saved under {list(best)}, expected the starting settings only")
     page.close()
 
 
 def check_best_key(browser: Browser) -> None:
-    """Bests from before the scoring change are ignored, and the neighbour check has its own best."""
-    page = new_page(browser)
-    page.evaluate("""localStorage.setItem('ksv51:gameBest', JSON.stringify({"v4|OH1|rec": 9999, "v5|OH1|rec": 500}))""")
+    """Bests from another scoring are ignored, and the neighbour check has its own best."""
+    bests = '{"v4|OH1|rec": 9999, "v5|OH1|rec": 500, "v6|OH1|rec": 700}'
+    seed = f"localStorage.setItem('ksv51:gameBest', JSON.stringify({bests}))"
+    page = new_page(browser, query="?ff=all,-match-rotate-name&anim=0")
+    page.evaluate(seed)
     page.reload()
     page.wait_for_timeout(300)
     setup_match(page, "OH1", ("rec",))
     text = page.inner_text("#gBest")
     if "500" not in text:
-        fail(f"best line reads {text!r}, expected the v5 best of 500")
+        fail(f"best line with match-rotate-name off reads {text!r}, expected the v5 best of 500")
+    page.close()
+    page = new_page(browser)
+    page.evaluate(seed)
+    page.reload()
+    page.wait_for_timeout(300)
+    setup_match(page, "OH1", ("rec",))
+    text = page.inner_text("#gBest")
+    if "700" not in text:
+        fail(f"best line reads {text!r}, expected the v6 best of 700")
     page.check("#nbGame")
     text = page.inner_text("#gBest")
     if text:
@@ -371,6 +382,123 @@ def check_hints_without_guides(browser: Browser) -> None:
     print("hints without Rules of thumb: advice only, no rule cited", flush=True)
 
 
+ZONE_SPOTS = [(0.17, 0.21), (0.5, 0.21), (0.83, 0.21), (0.17, 0.71), (0.5, 0.71), (0.83, 0.71)]
+
+
+def fill_rotate(page: Page) -> None:
+    """Places the Rotate markers on distinct zones, whatever the order, until Continue is enabled."""
+    for x, y in ZONE_SPOTS:
+        if page.locator("#gNext").is_enabled():
+            return
+        tap_at(page, x, y)
+    if not page.locator("#gNext").is_enabled():
+        page.click("#gOff")
+
+
+def rotate_lineup(page: Page, ri: int, role: str) -> tuple[list[str], dict[str, tuple[float, float]]]:
+    """The markers Rotate asks for in order (setter, you, your overlap partners) and each right spot."""
+    spots = {
+        str(o["p"]): (float(o["x"]), float(o["y"])) for o in page.evaluate(f"window.ksvLearn.players({ri}, 'start')")
+    }
+    order = [] if role == "S" else ["S"]
+    order.append(role)
+    if role not in spots:
+        return order, spots
+    grid = {(round(x * 3 - 0.5), y > 0.42): p for p, (x, y) in spots.items()}
+    col, back = round(spots[role][0] * 3 - 0.5), spots[role][1] > 0.42
+    for key in [(col, not back), (col - 1, back), (col + 1, back)]:
+        mate = grid.get(key)
+        if mate and mate not in order:
+            order.append(mate)
+    return order, spots
+
+
+def setter_zone(spots: dict[str, tuple[float, float]]) -> int:
+    x, y = spots["S"]
+    return {(0, False): 4, (1, False): 3, (2, False): 2, (0, True): 5, (1, True): 6, (2, True): 1}[
+        (round(x * 3 - 0.5), y > 0.42)
+    ]
+
+
+def answer_match_rotate(page: Page, ctx: str, ri: int, role: str, wrong: bool = False) -> str:
+    """Places every Match Rotate marker in the asked order and presses Continue; returns the asked name."""
+    order, spots = rotate_lineup(page, ri, role)
+    name = page.inner_text("#gTitle")
+    if name not in (f"R{ri + 1}", f"H{setter_zone(spots)}"):
+        fail(f"{ctx}: Rotate title {name!r}, expected R{ri + 1} or H{setter_zone(spots)} alone")
+    if page.locator("#courtG g.mk").count():
+        fail(f"{ctx}: teammates shown before the answer with Show on court Everyone")
+    if page.is_visible("#gVisPlay"):
+        fail(f"{ctx}: the Show on court peek is offered at Rotate")
+    for k, mate in enumerate(order):
+        who = "you stand" if mate == role else "the setter (S) stands" if mate == "S" else f"{mate} stands"
+        if page.inner_text("#gAsk") != f"Tap where {who}.":
+            fail(f"{ctx}: prompt {page.inner_text('#gAsk')!r}, expected 'Tap where {who}.'")
+        if page.locator("#gNext").is_enabled():
+            fail(f"{ctx}: Continue enabled before every marker is placed")
+        x, y = spots[mate]
+        if wrong and k == 0:
+            x, y = next(
+                (cx, cy)
+                for cx, cy in ((0.17, 0.95), (0.5, 0.95), (0.83, 0.95), (0.17, 0.45), (0.83, 0.45))
+                if abs(cx - x) > 0.2 and all(abs(cx - ox) + abs(cy - oy) > 0.2 for ox, oy in spots.values())
+            )
+        tap_at(page, x, y)
+    if not page.inner_text("#gAsk").startswith("All placed") or not page.locator("#gNext").is_enabled():
+        fail(f"{ctx}: Continue not ready after placing {order}: {page.inner_text('#gAsk')!r}")
+    press_next(page)
+    grades = page.inner_text("#gFb .rotgrades")
+    right = " · ".join(f"{'You' if m == role else m}: right" for m in order)
+    if not wrong and grades != right:
+        fail(f"{ctx}: grades {grades!r}, expected {right!r}")
+    if wrong and not grades.startswith(f"{order[0]}: wrong"):
+        fail(f"{ctx}: the setter one zone off graded {grades!r}")
+    full = f"R{ri + 1} (H{setter_zone(spots)})"
+    if page.inner_text("#gTitle") != full:
+        fail(f"{ctx}: title after the answer {page.inner_text('#gTitle')!r}, expected {full!r}")
+    if page.inner_text("#gAsk"):
+        fail(f"{ctx}: the prompt stays after the answer: {page.inner_text('#gAsk')!r}")
+    return name
+
+
+def check_match_rotate(browser: Browser) -> None:
+    """Match Rotate names the rotation as H or R alone, asks every marker, grades each one and scores at x1."""
+    names: set[str] = set()
+    for match in range(4):
+        page = new_page(browser)
+        setup_match(page, "OH1", ("start",), vis="all")
+        page.click("#gStart")
+        for ri in range(6):
+            ctx = f"match {match} R{ri + 1}"
+            page.wait_for_selector("#gOff:enabled")
+            wrong = ri == 5
+            names.add(answer_match_rotate(page, ctx, ri, "OH1", wrong)[0])
+            line = page.inner_text("#gBd")
+            parts, total = breakdown_total(line)
+            if parts != total or "%" in line:
+                fail(f"{ctx}: breakdown {line!r} does not add up at x1")
+            want = "Position: wrong 0" if wrong else "Position: exact 100"
+            if not line.startswith(want):
+                fail(f"{ctx}: breakdown {line!r}, expected {want!r}")
+            press_next(page)
+        page.close()
+        if names == {"H", "R"}:
+            break
+    if names != {"H", "R"}:
+        fail(f"Match Rotate named every rotation the same way ({names}) in four matches")
+    page = new_page(browser, query="?ff=all,-match-rotate-name&anim=0")
+    setup_match(page, "OH1", ("start",))
+    page.click("#gStart")
+    page.wait_for_selector("#gOff:enabled")
+    if page.inner_text("#gTitle") != "R1 (H1)" or page.locator("#gAsk").count():
+        fail(f"flag off: Rotate title {page.inner_text('#gTitle')!r} or a marker prompt")
+    tap_at(page, 0.5, 0.5)
+    if not page.locator("#gNext").is_enabled():
+        fail("flag off: one tap does not enable Continue at Rotate")
+    page.close()
+    print("match rotate: H or R name, every marker asked and graded, x1 scoring, flag off", flush=True)
+
+
 def check_match_order(browser: Browser) -> None:
     """In order, one rotation runs Rotate, Our serve, Receive, Attack, with a story for each."""
     page = new_page(browser)
@@ -384,7 +512,10 @@ def check_match_order(browser: Browser) -> None:
     for _ in range(4):
         page.wait_for_selector("#gOff:enabled")
         stories.append(page.inner_text("#gStory"))
-        tap_at(page, 0.5, 0.5)
+        if "Rotation" in page.inner_text("#gStepName"):
+            fill_rotate(page)
+        else:
+            tap_at(page, 0.5, 0.5)
         press_next(page)
         press_next(page)
     if "We serve in" not in stories[1]:
@@ -1379,6 +1510,7 @@ def main() -> None:
         check_our_serve(browser)
         check_off_court_pill(browser)
         check_match_order(browser)
+        check_match_rotate(browser)
         check_libero_hint(browser)
         check_hint_rule_numbers(browser)
         check_hints_without_guides(browser)

@@ -712,6 +712,30 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** y 0.21 (the exact middle of the front zone, as `BASE_DEF`), which leaves almost no approach before take-off; a take-off closer to the net.
 - **Reversible by:** `QUICK_START_Y` in `src/data.py`.
 
+### 93. How Match names a Rotate moment
+
+- **Issue:** #106
+- **Problem:** Drill has a picker for H, R or Mixed names (#87). Match has no such setting, and on the same device and online every player of a moment must be asked the same name.
+- **Decision:** Match names each Rotate moment H or R at random, as Drill's Mixed. The choice comes from a seed fixed at Start and the moment number, so all players of a moment get the same name; online the seed is the room's `meta.createdAt`, so no new room field is needed. The title shows the full name ("R4 (H4)") after the answer in solo; the pass screen shows only the asked name.
+- **Alternatives:** follow the Drill picker (`ksv51:drillName`); add a Match option.
+- **Reversible by:** `gRotHow()` in `src/template.html`.
+
+### 94. Match Rotate scoring
+
+- **Issue:** #106
+- **Problem:** Match scores one spot per moment (exact 100, close 60, wrong 0), scaled by Show on court. Rotate now asks several markers with nobody on court.
+- **Decision:** A Rotate moment is exact (100) only when every marker is in its right zone, else wrong (0), as in Drill (#85); there is no close grade. Show on court does not apply: the multiplier is ×1, the in-play peek is hidden and no peek is counted, as at Attack. The speed bonus allows 2 s more for each marker after the first. Help works as before: the hint text, and at level 2 the area around your own spot.
+- **Alternatives:** points per right marker; grade only your own marker and show the others as help.
+- **Reversible by:** `gRotCheck()`, `gAnswer()` and `gVisMult()` in `src/template.html`.
+
+### 95. Match Rotate on the same device and online
+
+- **Issue:** #106
+- **Problem:** The reveal shows one tap per player. Rotate has several markers per player, and the online database rules accept no new answer fields.
+- **Decision:** Same device: the reveal shows each player's own tap and verdict as before, plus a line of per-marker grades ("S: right · OH1: wrong"). Online (flag `match-online` is off): each player's own tap and verdict are written as before, with no per-marker grades on the reveal, so the database rules stay as they are.
+- **Alternatives:** draw every player's markers on the reveal; add a grades field to the online answer and its rules.
+- **Reversible by:** `swapOut()` and `mpReveal()` in `src/template.html`.
+
 ### 96. Side switch captions after the spike
 
 - **Issue:** #73
