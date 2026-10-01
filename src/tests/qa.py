@@ -421,7 +421,8 @@ def sweep_drill(pg: Page, tag: str, quick: bool) -> None:
         if vis_en(pg, "#nextBtn") is False and vis_en(pg, "#dnb button:enabled"):
             pg.locator("#dnb button").last.click()
         pg.click("#reviewBtn")
-        for _ in range(40):
+        # A random tap can pick up a placed Rotate marker, so one Rotate item can take a dozen steps.
+        for _ in range(200):
             if pg.inner_text("#dq") == "Review done":
                 break
             drill_steps(pg, tag + " review", 1)
