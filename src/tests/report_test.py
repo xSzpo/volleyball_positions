@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from playwright.sync_api import Browser, Page, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT = "ksv-volleyball-xszpo"
@@ -194,6 +195,23 @@ def send(page: Page, text: str, expect: str) -> None:
     page.wait_for_function(f"document.getElementById('reportMsg').textContent === {json.dumps(expect)}", timeout=20000)
 
 
+def wait_closed(page: Page, what: str) -> None:
+    """Fails unless the sheet closes by itself within 2.5 s of the "Thanks, sent." line."""
+    try:
+        page.wait_for_function("!document.getElementById('reportSheet').open", timeout=2500)
+    except PlaywrightTimeoutError:
+        fail(f"the sheet stays open after {what}")
+
+
+def focused(page: Page, element_id: str) -> bool:
+    """Waits up to 1 s for focus on ``element_id``; the dialog's close event, which moves it, is a queued task."""
+    try:
+        page.wait_for_function(f"document.activeElement.id === {json.dumps(element_id)}", timeout=1000)
+    except PlaywrightTimeoutError:
+        return False
+    return True
+
+
 def db_call(page: Page, script: str) -> str:
     """Runs ``script`` with ``db`` and a valid ``report()`` bound in the page; returns "ok" or the error code."""
     return str(
@@ -258,6 +276,10 @@ def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str])
         fail("an empty comment does not focus the comment box")
 
     send(page, "The ball is wrong in R3", "Thanks, sent.")
+    if not page.evaluate("document.getElementById('reportSheet').open") or not page.is_visible("#reportMsg"):
+        fail("the sheet closes before Thanks, sent. is shown")
+    if page.input_value("#reportText") or not page.is_disabled("#reportSend"):
+        fail("after a send the comment is not cleared or Send is not disabled")
     sent = reports(emulator_db)
     if len(sent) != 1:
         fail(f"expected one report, got {len(sent)}")
@@ -279,13 +301,21 @@ def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str])
     for secret in (uid, NAME, "Secretname", CODE):
         if secret in payload:
             fail(f"the report carries {secret!r}")
-    if page.input_value("#reportText") or page.inner_text("#reportCancel").strip().lower() != "close":
-        fail("after a send the comment is not cleared or Cancel does not read Close")
+    wait_closed(page, "a good send")
+    if not focused(page, "roleChip"):
+        fail("the sheet closing after a send does not return focus to the role button")
 
+    open_sheet(page)
+    if page.input_value("#reportText") or page.inner_text("#reportCancel").strip().lower() != "cancel":
+        fail("the sheet after a send does not open with an empty comment and Cancel")
+    if page.inner_text("#reportMsg").strip() or page.is_disabled("#reportSend"):
+        fail("the sheet after a send opens with a message or Send disabled")
+    if page.evaluate("window.h2cCalls") != 2 or not page.is_visible("#reportShot"):
+        fail("the sheet after a send does not take a fresh screenshot")
     page.keyboard.press("Escape")
     if page.evaluate("document.getElementById('reportSheet').open"):
         fail("Escape did not close the sheet")
-    if page.evaluate("document.activeElement.id") != "roleChip":
+    if not focused(page, "roleChip"):
         fail("closing the sheet does not return focus to the role button")
 
     page.click("#tabDrill")
@@ -297,10 +327,15 @@ def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str])
     plain = [r for r in reports(emulator_db).values() if r["comment"] == "No picture please"]
     if len(plain) != 1 or "image" in plain[0] or plain[0]["tab"] != "drill" or not plain[0]["view"].startswith("R"):
         fail(f"the report without a screenshot is wrong: {plain}")
-    page.click("#reportCancel")
+    page.keyboard.press("Escape")
+    if page.evaluate("document.getElementById('reportSheet').open"):
+        fail("Escape after a send did not close the sheet")
 
     page.evaluate("window.h2cMode = 'throw'")
     open_sheet(page)
+    page.wait_for_timeout(1500)
+    if not page.evaluate("document.getElementById('reportSheet').open"):
+        fail("a sheet reopened after closing during the Thanks, sent. delay closed by itself")
     if not page.inner_text("#reportShotNote").startswith("No screenshot") or page.is_visible("#reportShot"):
         fail("a failed capture does not say the report goes without a screenshot")
     if not page.is_disabled("#reportIncl"):
@@ -309,7 +344,7 @@ def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str])
     broke = [r for r in reports(emulator_db).values() if r["comment"] == "Capture broke"]
     if len(broke) != 1 or "image" in broke[0]:
         fail(f"a failed capture did not send without an image: {broke}")
-    page.click("#reportCancel")
+    wait_closed(page, "a send without a screenshot")
 
     page.evaluate("window.h2cMode = 'noise'")
     open_sheet(page)
@@ -327,6 +362,9 @@ def check_failure(browser: Browser, url: str, emulator_db: str, errors: list[str
     page.route("**/firebasejs/**", lambda route: route.abort())
     open_sheet(page)
     send(page, "Offline report", "Could not send. Try again.")
+    page.wait_for_timeout(1500)
+    if not page.evaluate("document.getElementById('reportSheet').open"):
+        fail("a failed send closed the sheet")
     if page.input_value("#reportText") != "Offline report":
         fail("a failed send lost the comment")
     if any(r["comment"] == "Offline report" for r in reports(emulator_db).values()):
@@ -334,6 +372,7 @@ def check_failure(browser: Browser, url: str, emulator_db: str, errors: list[str
     page.unroute("**/firebasejs/**")
     page.click("#reportSend")
     page.wait_for_function("document.getElementById('reportMsg').textContent === 'Thanks, sent.'", timeout=20000)
+    wait_closed(page, "a send after a failed one")
     page.context.close()
 
 
@@ -357,7 +396,7 @@ def check_retry(page: Page, emulator_db: str) -> None:
     copies = [r for r in reports(emulator_db).values() if r["comment"] == "Retry after a timeout"]
     if len(copies) != 1:
         fail(f"a retry after a timeout gave {len(copies)} reports")
-    page.click("#reportCancel")
+    wait_closed(page, "a retry that landed")
 
 
 def check_private(browser: Browser, url: str, errors: list[str]) -> None:
@@ -478,7 +517,7 @@ def check_wide(browser: Browser, url: str, errors: list[str]) -> None:
     page.click("#roleChip")
     open_sheet(page)
     page.keyboard.press("Escape")
-    if page.evaluate("document.activeElement.id") != "reportBtn":
+    if not focused(page, "reportBtn"):
         fail("closing the sheet does not return focus to the icon")
     page.context.close()
 
