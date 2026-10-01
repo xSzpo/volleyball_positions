@@ -27,6 +27,7 @@ URL = (ROOT / "index.html").as_uri()
 PAGES_URL = "https://xszpo.github.io/volleyball_positions/"
 FAIL: list[str] = []
 PRIVACY = {
+    "advanced_disable_flags": True,
     "api_host": "https://us.i.posthog.com",
     "ui_host": "https://us.posthog.com",
     "persistence": "memory",
