@@ -2,7 +2,8 @@
 
 Runs against the Firebase Realtime Database and Auth emulators:
 
-    python src/tests/report_test.py
+    python src/tests/report_test.py            # Chromium
+    python src/tests/report_test.py --webkit   # WebKit, as on an iPhone
 
 Without the emulators running, the script restarts itself under
 ``firebase emulators:exec --only auth,database`` (config in infra/firebase.json;
@@ -90,6 +91,11 @@ window.html2canvas = async (el, opts) => {
 """
 KEYS = {"comment", "createdAt", "tab", "role", "rules", "view", "theme", "viewport", "ua", "version", "flags"}
 SHOT_CHARS = 333000
+IPHONE_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+    "CriOS/140.0.7339.122 Mobile/15E148 Safari/604.1"
+)
+REPORT_APP = "firebase.app('report')"
 FAIL: list[str] = []
 
 
@@ -114,7 +120,7 @@ def run_under_emulators() -> None:
     env["PATH"] = "/opt/homebrew/opt/openjdk/bin:" + env.get("PATH", "")
     firebase = shutil.which("firebase", path=env["PATH"])
     assert firebase, "Firebase CLI not found; install it with npm install -g firebase-tools"
-    command = f'"{sys.executable}" "{Path(__file__).resolve()}"'
+    command = " ".join(f'"{arg}"' for arg in (sys.executable, Path(__file__).resolve(), *sys.argv[1:]))
     process = subprocess.Popen(
         [firebase, "emulators:exec", "--only", "auth,database", "--project", PROJECT, command],
         cwd=ROOT / "infra",
@@ -159,10 +165,18 @@ def serve() -> str:
 
 
 def phone(
-    browser: Browser, url: str, errors: list[str], stub: bool = True, width: int = 390, height: int = 664
+    browser: Browser,
+    url: str,
+    errors: list[str],
+    stub: bool = True,
+    width: int = 390,
+    height: int = 664,
+    user_agent: str | None = None,
 ) -> tuple[Page, list[str]]:
     """Opens the app on a phone; returns the page and the html2canvas requests it makes."""
-    context = browser.new_context(viewport={"width": width, "height": height}, is_mobile=True, has_touch=True)
+    context = browser.new_context(
+        viewport={"width": width, "height": height}, is_mobile=True, has_touch=True, user_agent=user_agent
+    )
     page = context.new_page()
     page.add_init_script(SEED)
     if stub:
@@ -215,7 +229,7 @@ def db_call(page: Page, script: str) -> str:
     return str(
         page.evaluate(
             f"""async () => {{
-                const db = firebase.database();
+                const db = {REPORT_APP}.database();
                 const report = (extra) => ({{ ...window.ksvReport.context(), comment: "x",
                     createdAt: firebase.database.ServerValue.TIMESTAMP, ...extra }});
                 try {{ {script}; return "ok"; }} catch (e) {{ return e.code || String(e); }}
@@ -305,7 +319,7 @@ def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str])
         fail(f"report flags or createdAt are wrong: {report['flags']} {report['createdAt']}")
     if report["image"] != src:
         fail("the sent image is not the preview")
-    uid = str(page.evaluate("firebase.auth().currentUser.uid"))
+    uid = str(page.evaluate(f"{REPORT_APP}.auth().currentUser.uid"))
     payload = json.dumps(report)
     for secret in (uid, NAME, "Secretname", CODE):
         if secret in payload:
@@ -366,22 +380,36 @@ def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str])
 
 
 def check_failure(browser: Browser, url: str, emulator_db: str, errors: list[str]) -> None:
-    """Without a connection the sheet says so and keeps the comment; Send again works."""
+    """A send that cannot sign in says so and keeps the comment; Send again works."""
     page, _ = phone(browser, url, errors)
-    page.route("**/firebasejs/**", lambda route: route.abort())
     open_sheet(page)
-    send(page, "Offline report", "Could not send. Try again.")
-    page.wait_for_timeout(1500)
-    if not page.evaluate("document.getElementById('reportSheet').open"):
-        fail("a failed send closed the sheet")
-    if page.input_value("#reportText") != "Offline report":
-        fail("a failed send lost the comment")
-    if any(r["comment"] == "Offline report" for r in reports(emulator_db).values()):
-        fail("a failed send still wrote a report")
-    page.unroute("**/firebasejs/**")
+    for pattern, what in (("**/firebasejs/**", "the SDK"), ("**/accounts:signUp*", "sign-in")):
+        page.route(pattern, lambda route: route.abort())
+        comment = f"Offline report, no {what}"
+        send(page, comment, "Could not sign in. Check your connection.")
+        page.wait_for_timeout(1500)
+        if not page.evaluate("document.getElementById('reportSheet').open"):
+            fail(f"a send without {what} closed the sheet")
+        if page.input_value("#reportText") != comment:
+            fail(f"a send without {what} lost the comment")
+        if any(r["comment"] == comment for r in reports(emulator_db).values()):
+            fail(f"a send without {what} still wrote a report")
+        page.unroute(pattern)
     page.click("#reportSend")
     page.wait_for_function("document.getElementById('reportMsg').textContent === 'Thanks, sent.'", timeout=20000)
     wait_closed(page, "a send after a failed one")
+    page.context.close()
+
+
+def check_iphone(browser: Browser, url: str, emulator_db: str, errors: list[str]) -> None:
+    """On an iPhone a send does not wait for apis.google.com or the auth iframe, which never answer here."""
+    page, _ = phone(browser, url, errors, user_agent=IPHONE_UA)
+    for pattern in ("**/apis.google.com/**", "**/__/auth/**"):
+        page.route(pattern, lambda route: None)
+    open_sheet(page)
+    send(page, "From an iPhone", "Thanks, sent.")
+    if not any(r["comment"] == "From an iPhone" and "iPhone" in r["ua"] for r in reports(emulator_db).values()):
+        fail("the iPhone report did not land")
     page.context.close()
 
 
@@ -389,9 +417,9 @@ def check_retry(page: Page, emulator_db: str) -> None:
     """A retry after a write that timed out but landed says sent and leaves one report."""
     page.click("#tabLearn")
     open_sheet(page)
-    page.evaluate("firebase.database().goOffline()")
-    send(page, "Retry after a timeout", "Could not send. Try again.")
-    page.evaluate("firebase.database().goOnline()")
+    page.evaluate(f"{REPORT_APP}.database().goOffline()")
+    send(page, "Retry after a timeout", "Could not reach the server.")
+    page.evaluate(f"{REPORT_APP}.database().goOnline()")
     landed = []
     for _ in range(50):
         landed = [r for r in reports(emulator_db).values() if r["comment"] == "Retry after a timeout"]
@@ -406,6 +434,28 @@ def check_retry(page: Page, emulator_db: str) -> None:
     if len(copies) != 1:
         fail(f"a retry after a timeout gave {len(copies)} reports")
     wait_closed(page, "a retry that landed")
+
+
+def check_refused(page: Page, emulator_db: str) -> None:
+    """A write the rules deny says the report was refused and keeps the comment; Send again works."""
+    taken = next(iter(reports(emulator_db)))
+    open_sheet(page)
+    page.evaluate(
+        f"""() => {{
+            const ref = firebase.database.Reference.prototype;
+            window.realPush = ref.push;
+            ref.push = function () {{ return this.child({json.dumps(taken)}); }};
+        }}"""
+    )
+    send(page, "Refused report", "The report was refused.")
+    page.evaluate("() => { firebase.database.Reference.prototype.push = window.realPush; }")
+    if page.input_value("#reportText") != "Refused report" or page.is_disabled("#reportSend"):
+        fail("a refused report lost the comment or left Send disabled")
+    page.click("#reportSend")
+    page.wait_for_function("document.getElementById('reportMsg').textContent === 'Thanks, sent.'", timeout=20000)
+    if sum(r["comment"] == "Refused report" for r in reports(emulator_db).values()) != 1:
+        fail("Send after a refused report did not write it once")
+    wait_closed(page, "a send after a refused one")
 
 
 def check_private(browser: Browser, url: str, errors: list[str]) -> None:
@@ -531,26 +581,29 @@ def check_flag_off(browser: Browser, url: str, errors: list[str]) -> None:
 
 
 def main() -> None:
-    """Runs the report scenarios against the emulators."""
+    """Runs the report scenarios against the emulators, in WebKit with --webkit, else in Chromium."""
     signal.alarm(500)
+    engine = "webkit" if "--webkit" in sys.argv[1:] else "chromium"
     emulator_db = os.environ["FIREBASE_DATABASE_EMULATOR_HOST"]
     emulator_auth = os.environ["FIREBASE_AUTH_EMULATOR_HOST"]
     url = f"{serve()}/index.html?emu={emulator_db},{emulator_auth}&ff=all&anim=0"
     errors: list[str] = []
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = getattr(p, engine).launch()
         page = check_sheet(browser, url, emulator_db, errors)
         check_retry(page, emulator_db)
+        check_refused(page, emulator_db)
         check_rules(page, emulator_db)
         check_private(browser, url, errors)
         check_failure(browser, url, emulator_db, errors)
+        check_iphone(browser, url, emulator_db, errors)
         check_real_capture(browser, url, errors)
         check_widths(browser, url, errors)
         check_flag_off(browser, url, errors)
         browser.close()
     if errors:
         fail(f"page errors: {errors}")
-    print(f"REPORT TEST: {'ok' if not FAIL else f'{len(FAIL)} failures'}")
+    print(f"REPORT TEST ({engine}): {'ok' if not FAIL else f'{len(FAIL)} failures'}")
     sys.exit(1 if FAIL else 0)
 
 

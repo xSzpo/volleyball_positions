@@ -510,7 +510,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** The owner: the Attack step ("Where do you go after the pass?") asks for a move from A to B, but the court did not show A. Teammates showed only as Show on court allowed, on their `ar` spots (the answers). Later addition: "also show where is the ball".
 - **Decision:** Before the answer, Drill and Match (solo, same device, online) draw everyone on their reception spot (place A) whatever Show on court is set to: teammates faded, you ringed with a "from" label, nobody on an `ar` spot. The picture is the moment of the pass: the ball is held by the passer, at `HELD` from their marker towards the set spot, with a dashed pass line to the setter's `ar` spot. The passer is the Learn Reception passer (`PASSER`, entry 42). The question names the passer ("OH1 passes to the setter. Where do you go?", or "You pass to the setter. Where do you go?"). A tap draws a thin line from A. Because A is part of the question, the Attack step scores ×1 for Show on court in every mode, a solo peek at it does not count as a peek, and the breakdown shows no multiplier. Show on court still applies to the other steps. The in-play picker stays visible at the Attack step. The help ring still hints at B.
 - **Alternatives:** keep Show on court for the teammates and show only your own A; hide the in-play picker at the Attack step; show the ball at the setter (the moment of the set).
-- **Reversible by:** `fromLayer()`, `arQuestion()`, the `ar` branch in `gVisMult()` and the peek count in `gAnswer()` in `src/template.html`.
+- **Reversible by:** `fromLayer()`, `arQuestion()`, the `ar` branch in `gVisMult()` and the peek count in `gAnswer()` in `src/template.html`. The peek is gone since #132.
 
 ### 62. "4" is the middle's low quick; "Po" and "Til" removed
 
@@ -995,7 +995,15 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** keep PostHog flags and accept the split; bootstrap the flags from the built-in defaults so blocked phones match only until the first change.
 - **Reversible by:** `featureValues(FEATURES, …)` and `analyticsLoad()` in `src/template.html`.
 
-### 131. Show on court is fixed at the start of a solo match
+### 131. A report signs in as a new anonymous user on its own Firebase app
+
+- **Issue:** #136
+- **Problem:** On iOS, Firebase Auth's popup/redirect resolver loads apis.google.com and the auth iframe before any sign-in. If either is slow or never answers, the report's 10 s sign-in timeout fires. The compat SDK has no option to leave the resolver out of the default app.
+- **Decision:** Report a problem uses a second app named `report`, whose auth is set up with no resolver and in-memory persistence. Every page load that sends a report signs in as a new anonymous user; reports carry no uid, and anonymous auth clean-up removes the old users. Online room keeps the default app and its stored uid. A failed send now names its cause: sign-in, the server, or a refusal.
+- **Alternatives:** longer timeouts on the default app; the modular SDK for auth.
+- **Reversible by:** `reportReady()` and `REPORT_FAILURE` in `src/template.html`.
+
+### 132. Show on court is fixed at the start of a solo match
 
 - **Issue:** #134
 - **Problem:** Solo Match offered the Show on court picker during play as a peek, scored with the most revealing setting shown before the answer, with "Peeked: n moments" on the end screen. The owner decided on 2026-10-01 that the setting is chosen at the start and cannot change during the match, as in same-device and online play.
