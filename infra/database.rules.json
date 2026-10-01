@@ -9,7 +9,8 @@
         ".validate": "$code.matches(/^[0-9]{6}$/)",
         "meta": {
           ".write": "auth != null && (!data.exists() || data.child('host').val() == auth.uid)",
-          ".validate": "newData.hasChildren(['host', 'createdAt', 'state', 'i'])",
+          ".validate": "newData.hasChildren(['v', 'host', 'createdAt', 'state', 'i'])",
+          "v": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 1000" },
           "host": {
             ".write": "auth != null && newData.val() == auth.uid && data.parent().parent().child('players').child(auth.uid).exists() && data.parent().parent().child('players').child(data.val() + '').child('online').val() != true",
             ".validate": "newData.isString() && newData.val().length <= 40"
@@ -39,7 +40,8 @@
         "players": {
           "$uid": {
             ".write": "auth != null && auth.uid == $uid",
-            ".validate": "$uid.length <= 40 && newData.parent().parent().child('meta').exists() && newData.hasChildren(['name', 'role', 'color', 'joinedAt'])",
+            ".validate": "$uid.length <= 40 && newData.parent().parent().child('meta').exists() && newData.hasChildren(['name', 'role', 'color', 'joinedAt']) && (data.exists() || newData.hasChild('v'))",
+            "v": { ".validate": "newData.val() == newData.parent().parent().parent().child('meta/v').val()" },
             "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 16" },
             "role": { ".validate": "newData.isString() && newData.val().matches(/^(MB|MB1|MB2|OH1|OH2|OP|S|L)$/)" },
             "color": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" },

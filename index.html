@@ -6939,6 +6939,8 @@
         const [db, auth] = v.split(",");
         return { db, auth };
       })();
+      // Bump when the room data changes: a client on another version cannot join that room.
+      const ROOM_V = 2;
       const WEEK = 7 * 24 * 60 * 60 * 1000;
       const HOST_GRACE = 10000;
       const NB_GRACE =
@@ -7463,6 +7465,7 @@
           await withTimeout(
             ref.update({
               meta: {
+                v: ROOM_V,
                 host: uid,
                 createdAt: now,
                 activeAt: now,
@@ -7476,6 +7479,7 @@
                 rulesMode,
               },
               [`players/${uid}`]: {
+                v: ROOM_V,
                 name: onName(),
                 role,
                 color: PCOL[0],
@@ -7509,6 +7513,13 @@
             ref.remove().catch(() => {});
             throw fail("That room has expired. Ask the host for a new one.");
           }
+          const v = room.meta.v;
+          if (typeof v === "number" && v > ROOM_V) throw fail("Reload the app to join this room.");
+          if (v !== ROOM_V) {
+            store.del("room");
+            onRejoinShow(null);
+            throw fail("This room is from an older version. Ask the host to make a new room.");
+          }
           const now = fb.database.ServerValue.TIMESTAMP;
           const lobby = room.meta.state === "lobby";
           const pick = (ps) => {
@@ -7524,8 +7535,8 @@
           const joined = await withTimeout(
             mine.transaction((current) =>
               isObj(current)
-                ? { ...current, name: onName(), ...(lobby ? { role } : {}) }
-                : { name: onName(), role, color: pick(ps), score: 0, joinedAt: now },
+                ? { ...current, v: ROOM_V, name: onName(), ...(lobby ? { role } : {}) }
+                : { v: ROOM_V, name: onName(), role, color: pick(ps), score: 0, joinedAt: now },
             ),
           );
           if (!joined.committed) throw fail("Could not join the room. Try again.");
@@ -8031,6 +8042,7 @@
         onMeta(
           { i: ON.meta.i, state: "lobby" },
           {
+            v: ROOM_V,
             steps: gSteps(),
             order: gOrder(),
             vis: visGame,

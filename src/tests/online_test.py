@@ -46,6 +46,10 @@ NB_GRACE_MS = 5000
 # Longer than set_calls takes under load, so only a player's answer can open its reveal.
 SET_CALLS_GRACE_MS = 120000
 LIVE, STALE, FRESH = "111111", "000042", "000043"
+UNVERSIONED, OLDER_VERSION, NEWER_VERSION, RULES_ROOM = "000044", "000045", "000047", "000046"
+ROOM_V = int(re.findall(r"const ROOM_V = (\d+);", (ROOT / "src" / "template.html").read_text())[0])
+RELOAD = "Reload the app to join this room."
+OLDER = "This room is from an older version. Ask the host to make a new room."
 EVIL_UID = "EvilEvilEvilEvilEvilEvil0000"
 OLD_UID = "OldOldOldOldOldOldOldOld0000"
 LABELS = {"perfect": "Spot on", "close": "Close enough", "miss": "Not there", "none": "No answer"}
@@ -307,7 +311,9 @@ def check_permissions(browser: Browser, url: str, host: Page, code: str, errors:
     room = f"rooms/{code}"
     assert db_call(eve, "await firebase.auth().signInAnonymously()") == "ok"
     anna, ben = uid_of(host), uid_of(eve)
-    player = '{name: "Eve", role: "S", color: "#123456", joinedAt: firebase.database.ServerValue.TIMESTAMP}'
+    player = (
+        f'{{v: {ROOM_V}, name: "Eve", role: "S", color: "#123456", joinedAt: firebase.database.ServerValue.TIMESTAMP}}'
+    )
     assert db_call(eve, f'await db.ref("{room}/players/{ben}").set({player})') == "ok", "a player cannot join"
     fake = '{q: "miss", pts: 0, done: true}'
     attempts = {
@@ -326,7 +332,7 @@ def check_permissions(browser: Browser, url: str, host: Page, code: str, errors:
         "store an unknown breakdown field": f'await db.ref("{room}/answers/0/{ben}").set('
         '{q: "miss", pts: 0, done: true, bd: {bonus: 1}})',
         "delete the whole room": f'await db.ref("{room}").remove()',
-        "create a room with letters in the code": 'await db.ref("rooms/ABC123/meta").set({host: "x", '
+        "create a room with letters in the code": f'await db.ref("rooms/ABC123/meta").set({{v: {ROOM_V}, host: "x", '
         'createdAt: firebase.database.ServerValue.TIMESTAMP, state: "lobby", i: 0})',
     }
     for what, script in attempts.items():
@@ -351,6 +357,7 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
     assert re.fullmatch(r"[0-9]{3} [0-9]{3}", shown), f"bad room code {shown!r}"
     code = shown.replace(" ", "")
     assert host.is_visible("#lStart"), "host has no Start button"
+    assert admin(emulator_db, "GET", f"rooms/{code}/meta/v") == ROOM_V, "create does not write meta.v"
     denied = db_call(host, 'await db.ref("rooms/000000/players/someone/online").set(true)')
     assert "PERMISSION_DENIED" in denied.upper(), f"presence write into a missing room: {denied}"
     print("room created:", code)
@@ -405,8 +412,10 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
 
     check_permissions(browser, url, host, code, errors)
 
+    admin(emulator_db, "PUT", f"rooms/{code}/meta/v", ROOM_V + 1)
     host.click("#lStart")
     guest.wait_for_selector("#gPlay", state="visible")
+    assert admin(emulator_db, "GET", f"rooms/{code}/meta/v") == ROOM_V, "Start does not write meta.v"
     assert guest.is_disabled('.rulesmode [data-rm="official"]'), "rules can change during an online match"
     assert "Set by the host" in guest.inner_text("#rmSub"), "locked rules switch not explained"
 
@@ -557,7 +566,7 @@ def persistent_room(host: Page, guest: Page, emulator_db: str, code: str) -> Non
     assert room["meta"]["activeAt"] > before["activeAt"], "reset does not refresh activeAt"
     assert "answers" not in room, "answers kept after the reset"
     for player in room["players"].values():
-        kept = {k for k in player if k not in ("name", "role", "color", "joinedAt", "online")}
+        kept = {k for k in player if k not in ("v", "name", "role", "color", "joinedAt", "online")}
         assert not kept, f"per-match fields kept after the reset: {kept}"
     ben = uid_of(guest)
     denied = db_call(host, f'await db.ref("rooms/{code}/players/{ben}/score").set(999)')
@@ -666,7 +675,7 @@ def inject(emulator_db: str, code: str) -> None:
 
 def takeover(host: Page, guest: Page, browser: Browser, url: str, emulator_db: str, errors: list[str]) -> None:
     """Stale rooms, concurrent joins and a host that drops out mid-match and comes back."""
-    old_meta = {"host": "x", "createdAt": 1000, "state": "lobby", "i": 0}
+    old_meta = {"v": ROOM_V, "host": "x", "createdAt": 1000, "state": "lobby", "i": 0}
     admin(emulator_db, "PUT", f"rooms/{STALE}", {"meta": old_meta})
     for page in (host, guest):
         page.check('input[name="gPlayers"][value="online"]')
@@ -882,6 +891,94 @@ def set_calls(browser: Browser, url: str, emulator_db: str, errors: list[str]) -
         page.context.close()
 
 
+def version_guard(browser: Browser, url: str, emulator_db: str, errors: list[str]) -> None:
+    """Rooms and players of another version are refused by the client and the rules."""
+    page = phone(browser, url, errors)
+    now = int(time.time() * 1000)
+    meta = {"host": "x", "createdAt": now, "activeAt": now, "state": "lobby", "i": 0}
+    rooms = {UNVERSIONED: meta, OLDER_VERSION: {**meta, "v": ROOM_V - 1}, NEWER_VERSION: {**meta, "v": ROOM_V + 1}}
+    for code, room_meta in rooms.items():
+        admin(emulator_db, "PUT", f"rooms/{code}", {"meta": room_meta})
+    open_online(page, "Dan")
+    for code, message in ((UNVERSIONED, OLDER), (OLDER_VERSION, OLDER), (NEWER_VERSION, RELOAD)):
+        page.evaluate("document.getElementById('onErr').textContent = ''")
+        page.fill("#onCode", code)
+        page.click("#onJoin")
+        page.wait_for_function("document.getElementById('onErr').textContent.length > 0", timeout=20000)
+        error = page.inner_text("#onErr")
+        assert error == message, f"room {code}: join shows {error!r}"
+        assert page.is_hidden("#gLobby"), f"room {code}: joined a room of another version"
+        players = admin(emulator_db, "GET", f"rooms/{code}/players")
+        assert players is None, f"room {code}: a refused join wrote {players}"
+    print("join refuses an older room (ask for a new room) and a newer one (reload)")
+
+    for code, message in ((NEWER_VERSION, RELOAD), (OLDER_VERSION, OLDER)):
+        page.evaluate(f"localStorage.setItem('ksv51:room', JSON.stringify('{code}'))")
+        page.reload()
+        page.wait_for_timeout(300)
+        page.click("#tabGame")
+        page.wait_for_selector("#onRejoin", state="visible", timeout=20000)
+        page.fill("#onName", "Dan")
+        page.click("#onRejoin")
+        page.wait_for_function("document.getElementById('onErr').textContent.length > 0", timeout=20000)
+        error = page.inner_text("#onErr")
+        assert error == message, f"rejoin {code} shows {error!r}"
+        assert page.is_hidden("#gLobby"), f"rejoined room {code} of another version"
+    assert page.evaluate("localStorage.getItem('ksv51:room')") is None, "an older room is still remembered"
+    assert page.is_hidden("#onRejoinRow"), "Rejoin still offered for an older room"
+    print("rejoin refuses both; an older room is forgotten and its Rejoin row goes")
+
+    uid = uid_of(page)
+    room = f"rooms/{RULES_ROOM}"
+    fields = '{host: firebase.auth().currentUser.uid, createdAt: now, state: "lobby", i: 0}'
+    script = f"const now = firebase.database.ServerValue.TIMESTAMP, meta = {fields};"
+    for what, extra in (("without v", ""), ("with a string v", 'meta.v = "2";'), ("with v 0", "meta.v = 0;")):
+        denied = db_call(page, f'{script} {extra} await db.ref("{room}/meta").set(meta)')
+        assert "PERMISSION_DENIED" in denied.upper(), f"the rules accept a meta {what}: {denied}"
+    allowed = db_call(page, f'{script} meta.v = {ROOM_V}; await db.ref("{room}/meta").set(meta)')
+    assert allowed == "ok", f"the rules deny a meta with v {ROOM_V}: {allowed}"
+    for how, write in (("update", ".update({v: null})"), ("set", '.child("v").set(null)')):
+        denied = db_call(page, f'await db.ref("{room}/meta"){write}')
+        assert "PERMISSION_DENIED" in denied.upper(), f"the host could drop meta.v by {how}: {denied}"
+    print("the rules deny a meta without a numeric v, and dropping v")
+
+    player = '{name: "Dan", role: "OH1", color: "#123456", joinedAt: firebase.database.ServerValue.TIMESTAMP}'
+    mine = f'db.ref("{room}/players/{uid}")'
+    for what, extra in (("without v", ""), ("with another v", f"node.v = {ROOM_V + 1};")):
+        denied = db_call(page, f"const node = {player}; {extra} await {mine}.set(node)")
+        assert "PERMISSION_DENIED" in denied.upper(), f"the rules accept a player {what}: {denied}"
+    allowed = db_call(page, f"const node = {player}; node.v = {ROOM_V}; await {mine}.set(node)")
+    assert allowed == "ok", f"the rules deny a player with v {ROOM_V}: {allowed}"
+    for what, write in (
+        ("role", '.child("role").set("L")'),
+        ("online", ".child('online').set(true)"),
+        ("colour", '.child("color").transaction(() => "#654321")'),
+        ("score", ".child('score').set(5)"),
+    ):
+        result = db_call(page, f"await {mine}{write}")
+        assert result == "ok", f"the rules deny a player's own {what} write: {result}"
+    reset = {
+        "meta/state": "lobby",
+        "meta/i": 0,
+        "meta/queue": None,
+        "meta/hostLeft": None,
+        "answers": None,
+        f"players/{uid}/score": None,
+    }
+    stamp = '"meta/activeAt": firebase.database.ServerValue.TIMESTAMP'
+    result = db_call(page, f'await db.ref("{room}").update({{...{json.dumps(reset)}, {stamp}}})')
+    assert result == "ok", f"the rules deny the host's reset in a versioned room: {result}"
+    old = {"v": ROOM_V, "name": "Old", "role": "S", "color": "#000000", "joinedAt": 1000, "online": False}
+    admin(emulator_db, "PUT", f"{room}/players/{OLD_UID}", old)
+    admin(emulator_db, "PUT", f"{room}/meta/host", OLD_UID)
+    result = db_call(page, f'await db.ref("{room}/meta/host").set("{uid}")')
+    assert result == "ok", f"the rules deny a takeover in a versioned room: {result}"
+    result = db_call(page, f"await {mine}.remove()")
+    assert result == "ok", f"the rules deny Leave room in a versioned room: {result}"
+    print("the rules deny a player without the room's v; own writes, reset, takeover and leave pass")
+    page.context.close()
+
+
 def failed_join(browser: Browser, url: str, emulator_db: str, errors: list[str]) -> None:
     """A join that fails after the player node is written leaves no ghost online, and the match goes on."""
     host = phone(browser, url, errors)
@@ -957,6 +1054,7 @@ def main() -> None:
         takeover(host, guest, browser, url, emulator_db, errors)
         set_calls(browser, f"{base}&nbgrace={SET_CALLS_GRACE_MS}", emulator_db, errors)
         failed_join(browser, url, emulator_db, errors)
+        version_guard(browser, url, emulator_db, errors)
         browser.close()
     assert not errors, errors
     print("ONLINE TEST: ok")
