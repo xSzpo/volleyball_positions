@@ -607,6 +607,79 @@ def check_learn_fit(browser: Browser, tag: str, quick: bool) -> None:
     ctx.close()
 
 
+ZONES_JS = """() => {
+  const g = document.querySelector('#courtL .zones');
+  if (!g) return null;
+  const first = document.querySelector('#courtL .mk, #courtL .am');
+  const front = [], back = [];
+  [...g.querySelectorAll('text')]
+    .sort((a, b) => a.getAttribute('x') - b.getAttribute('x'))
+    .forEach((t) => (t.getAttribute('y') < 42 ? front : back).push(t.textContent));
+  return { shown: getComputedStyle(g).visibility === 'visible',
+    under: !first || !!(g.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING),
+    rows: front.join('') + '/' + back.join(''),
+    pressed: document.querySelector('#lZones').getAttribute('aria-pressed') };
+}"""
+
+
+def zones_shown(pg: Page, ctx: str, on: bool) -> None:
+    """The zone numbers layer: front 4 3 2, back 5 6 1, under the markers, shown and pressed as `on`."""
+    state = pg.evaluate(ZONES_JS)
+    if state is None:
+        fail(f"{ctx}: no zone numbers layer on the Learn court")
+    elif state["rows"] != "432/561" or not state["under"]:
+        fail(f"{ctx}: zone numbers {state['rows']}, under the markers {state['under']}")
+    elif state["shown"] != on or state["pressed"] != str(on).lower():
+        fail(f"{ctx}: zones shown {state['shown']}, pressed {state['pressed']}, want {on}")
+
+
+def check_zones(browser: Browser, tag: str) -> None:
+    """The Zones toggle beside Next: off by default, stored, kept across screens, reloads and a Reception play."""
+    section("LEARN zones toggle")
+    ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
+    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    pg = ctx.new_page()
+    pg.goto(URL)
+    wait_ready(pg)
+    zones_shown(pg, f"{tag} zones default", False)
+    box, row = pg.locator("#lZones").bounding_box(), pg.locator("#lCtl").bounding_box()
+    assert box is not None and row is not None
+    if box["width"] < 44 or box["height"] < 44:
+        fail(f"{tag} Zones tap target {box['width']:.0f} x {box['height']:.0f} px")
+    if box["y"] < row["y"] - 0.5 or box["y"] + box["height"] > row["y"] + row["height"] + 0.5:
+        fail(f"{tag} Zones is not in the sticky Next row")
+    if pg.evaluate("(() => { const n = document.querySelector('#lNext'); return n.scrollWidth > n.clientWidth; })()"):
+        fail(f"{tag} the Next label is cut off beside Zones")
+    pg.click("#lZones")
+    if pg.evaluate("localStorage.getItem('ksv51:zones')") != "true":
+        fail(f"{tag} zones on is not stored")
+    for ri in (0, 3):
+        for phase in STEPS:
+            pg.click(f'.rot[data-i="{ri}"]')
+            pg.click(f'.ph[data-k="{phase}"]')
+            zones_shown(pg, f"{tag} zones R{ri + 1} {phase}", True)
+    pg.click("#lNext")
+    zones_shown(pg, f"{tag} zones after Next", True)
+    pg.goto(URL.replace("&anim=0", ""))
+    wait_ready(pg)
+    pg.click('.rot[data-i="0"]')
+    pg.click('.ph[data-k="rec"]')
+    zones_shown(pg, f"{tag} zones after a reload", True)
+    pg.click("#lPlay")
+    pg.wait_for_function("window.ksvLearn.anim()?.playing && window.ksvLearn.anim().t > 0")
+    zones_shown(pg, f"{tag} zones while Reception plays", True)
+    pg.click("#lZones")
+    zones_shown(pg, f"{tag} zones off while Reception plays", False)
+    if not pg.evaluate("window.ksvLearn.anim()?.playing"):
+        fail(f"{tag} Zones stopped the Reception play")
+    pg.reload()
+    wait_ready(pg)
+    zones_shown(pg, f"{tag} zones off after a reload", False)
+    if pg.evaluate("localStorage.getItem('ksv51:zones')") != "false":
+        fail(f"{tag} zones off is not stored")
+    ctx.close()
+
+
 def court_xy(pg: Page, x: float, y: float) -> tuple[float, float]:
     """The screen point of court spot (x, y) on the Drill court."""
     point = pg.evaluate(
@@ -989,6 +1062,7 @@ def main() -> None:
         sweep_drill(pg, tag, args.quick)
         check_drill_steps(b, tag)
         check_learn_fit(b, tag, args.quick)
+        check_zones(b, tag)
         check_drill_rotate(b, tag, args.quick)
         sweep_match(pg, tag, combos, args.quick)
         sweep_sets(pg, tag)

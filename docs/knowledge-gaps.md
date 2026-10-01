@@ -767,3 +767,19 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** On 2026-10-01 `learn-tab`, `learn-animation`, `learn-guides`, `rotations-table` and `rules-official` were switched on in project 635296, at their existing 100% rollout. Every other flag stays off, so the live page shows Learn only. `drill-steps`, `drill-rotate-name` and `match-rotate-name` have no PostHog flag and read as off on the live page.
 - **Alternatives:** leave all flags off until the owner checks on a phone; switch on Learn without `rules-official`.
 - **Reversible by:** switching the flags off in PostHog; phones pick up the change on their next fresh load.
+
+### 105. Where the Zones toggle sits and where the numbers stand
+
+- **Issue:** #41
+- **Problem:** `docs/v2.md` §2.3 puts the Zones toggle in an "options fold" that Learn does not have; the issue asks for it near the court. At 390 × 664 the court already ends about 5 px above the sticky Next row (#97), so a new row above or below the court would push markers under Next, and the animation bar has no room left for another 44 px button.
+- **Decision:** A "Zones" toggle button (`aria-pressed`, 48 px high like Next) sits left of Next in the sticky row; Next keeps the rest of the width. The numbers are drawn under the markers in `--court-line` at 40%, centred in each zone's column, the front row just in front of the 3 m line (y 0.36) and the back row by the end line (y 0.94), where fewer reception and attack spots stand than at the zone centres. Toggling never restarts a Reception play.
+- **Alternatives:** a Learn options fold under the hint (the toggle out of sight below the fold); a chip beside the title tag (adds height above the court); the numbers at the zone centres (hidden under markers in most screens).
+- **Reversible by:** `#lZones` and `.lctl .zones` in `src/template.html` for the place, `ZONE_SPOTS` for the numbers.
+
+### 106. Zone numbers only on the Learn court
+
+- **Issue:** #41
+- **Problem:** The issue says "on the court" without naming the tab. In Drill and Match the zone numbers would help answer the question the court asks.
+- **Decision:** Only the Learn court has the toggle and the numbers. Drill and Match courts are unchanged.
+- **Alternatives:** one toggle for every court; a Drill option that also lowers the score in Match like Show on court.
+- **Reversible by:** adding `zonesSvg()` after `courtBase()` in the Drill and Match court renders in `src/template.html`.
