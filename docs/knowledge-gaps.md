@@ -759,3 +759,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** No layout change. `check_learn_fit()` in `src/tests/qa.py` checks the court against the Next row instead.
 - **Alternatives:** drop the bar or the caption minimum on static screens (Next and the hint jump 22 to 52 px between Reception and the other steps).
 - **Reversible by:** nothing to reverse.
+
+### 99. Learn flags switched on in PostHog
+
+- **Issue:** none (end of milestone v2: Learn, by the owner's instruction for this run)
+- **Problem:** Agents never switch a PostHog flag on; the owner asked for the Learn flags to go on once the milestone was done, without waiting for a phone check.
+- **Decision:** On 2026-10-01 `learn-tab`, `learn-animation`, `learn-guides`, `rotations-table` and `rules-official` were switched on in project 635296, at their existing 100% rollout. Every other flag stays off, so the live page shows Learn only. `drill-steps`, `drill-rotate-name` and `match-rotate-name` have no PostHog flag and read as off on the live page.
+- **Alternatives:** leave all flags off until the owner checks on a phone; switch on Learn without `rules-official`.
+- **Reversible by:** switching the flags off in PostHog; phones pick up the change on their next fresh load.
