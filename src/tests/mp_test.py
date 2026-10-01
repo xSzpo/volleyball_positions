@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 SHOTS = ROOT / "src" / "tests" / "_out"
 SHOTS.mkdir(exist_ok=True)
 VERDICT = re.compile(r"Spot on|Close enough|Not there|\+\d")
-CHIPS = "#courtG g[opacity]"
+CHIPS = "#courtG g[opacity]:not(.zones)"
 
 
 def press_next(page: Page) -> None:

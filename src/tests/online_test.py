@@ -1032,7 +1032,7 @@ def failed_join(browser: Browser, url: str, emulator_db: str, errors: list[str])
     host.click("#lStart")
     guest.wait_for_selector("#gOff:enabled", timeout=20000)
     assert guest.is_hidden("#gVisPlay"), "Show on court can be changed during an online match"
-    chips = "#courtG g[opacity]"
+    chips = "#courtG g[opacity]:not(.zones)"
     assert guest.locator(chips).count() == 0, "the guest's own Show on court setting is used online"
     guest.evaluate("document.querySelector('#gVisPlay [data-v=\"ref\"]').click()")
     assert guest.locator(chips).count() == 0, "the in-play picker changes the online court"
