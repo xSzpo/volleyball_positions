@@ -53,6 +53,8 @@ RELOAD = "Reload the app to join this room."
 OLDER = "This room is from an older version. Ask the host to make a new room."
 EVIL_UID = "EvilEvilEvilEvilEvilEvil0000"
 OLD_UID = "OldOldOldOldOldOldOldOld0000"
+# The app sets up a short-lived app first, so any app is not yet the default one.
+DEFAULT_APP = "window.firebase?.apps?.some((app) => app.name === '[DEFAULT]')"
 IPHONE_UA = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "
     "CriOS/140.0.7339.122 Mobile/15E148 Safari/604.1"
@@ -324,7 +326,7 @@ def check_permissions(browser: Browser, url: str, host: Page, code: str, errors:
     eve = phone(browser, url, errors)
     eve.click("#tabGame")
     eve.check('input[name="gPlayers"][value="online"]')
-    eve.wait_for_function("window.firebase?.apps?.length > 0")
+    eve.wait_for_function(DEFAULT_APP)
     room = f"rooms/{code}"
     assert db_call(eve, "await firebase.auth().signInAnonymously()") == "ok"
     anna, ben = uid_of(host), uid_of(eve)
@@ -1055,7 +1057,7 @@ def failed_join(browser: Browser, url: str, emulator_db: str, errors: list[str])
 
     pick_role(late, "MB")
     open_online(late, "Cal")
-    late.wait_for_function("window.firebase?.apps?.length > 0")
+    late.wait_for_function(DEFAULT_APP)
     late.evaluate(
         """() => {
             const proto = firebase.database.Reference.prototype, once = proto.once;
