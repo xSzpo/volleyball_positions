@@ -133,6 +133,19 @@ def check_zones_off(page: Page) -> None:
     page.evaluate("localStorage.removeItem('ksv51:zones'); localStorage.removeItem('ksv51:ffOverride')")
 
 
+def check_answer_glide(page: Page) -> None:
+    for query in ("?ff=reset,-answer-glide", "?ff=reset,-learn-animation"):
+        open_app(page, query)
+        if values(page)["answer-glide"]:
+            fail(f"{query}: answer-glide still on")
+        for element_id in ("dWatch", "gWatch", "rWatch"):
+            if present(page, element_id):
+                fail(f"{query}: #{element_id} still in the DOM")
+    open_app(page, "?ff=reset")
+    if not all(present(page, element_id) for element_id in ("dWatch", "gWatch", "rWatch")):
+        fail("answer-glide on: a Watch the move box missing")
+
+
 def check_override_storage(page: Page) -> None:
     open_app(page, "?ff=reset,-sets-quiz")
     open_app(page)
@@ -364,7 +377,14 @@ def main() -> None:
         page.add_init_script(SEED_ROLE)
         errors: list[str] = []
         page.on("pageerror", lambda error: errors.append(str(error)))
-        for check in (check_defaults, check_off_leaves_no_trace, check_zones_off, check_override_storage, check_tabs):
+        for check in (
+            check_defaults,
+            check_off_leaves_no_trace,
+            check_zones_off,
+            check_answer_glide,
+            check_override_storage,
+            check_tabs,
+        ):
             check(page)
         if errors:
             fail(f"page errors: {errors}")

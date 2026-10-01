@@ -245,10 +245,10 @@ def check_our_serve(browser: Browser) -> None:
     y = float(ring.get_attribute("cy") or "nan") / 100
     if not 0.15 < y < 0.3:
         fail(f"R1 OH1 our serve spot at y {y:.2f}, expected mid-zone in the front row (y 0.21)")
-    arrows = page.locator("#courtG line.route").count()
+    arrows = page.locator("#courtG g.rt:not(.glideroute) line.route").count()
     if arrows != 1:
         fail(f"R1 our serve draws {arrows} arrows, expected 1 (the server)")
-    elif not float(page.locator("#courtG line.route").get_attribute("y1") or "nan") > 100:
+    elif not float(page.locator("#courtG g.rt:not(.glideroute) line.route").get_attribute("y1") or "nan") > 100:
         fail("the server's arrow does not start behind the end line")
     feedback = page.inner_text("#gFb")
     for want in ("middle of your zone", "not confirmed", "before the serve"):
@@ -1501,6 +1501,245 @@ def check_double_check(browser: Browser) -> None:
     print("double tap on Continue keeps the feedback", flush=True)
 
 
+def drill_page(browser: Browser, steps: list[str], query: str = "?ff=all", reduced: bool = False) -> Page:
+    """Opens Drill as OH1 with only ``steps`` picked and the neighbour check off."""
+    page = browser.new_page(
+        viewport={"width": 390, "height": 844},
+        is_mobile=True,
+        has_touch=True,
+        reduced_motion="reduce" if reduced else "no-preference",
+    )
+    page.add_init_script(SEED_ROLE)
+    page.add_init_script(f"localStorage.setItem('ksv51:drillSteps', JSON.stringify({steps!r}))")
+    page.on("pageerror", lambda error: FAIL.append(f"page error: {error}"))
+    page.goto(URL.split("?")[0] + query)
+    page.wait_for_timeout(300)
+    page.click("#tabDrill")
+    if page.get_attribute("#dOpts", "open") is None:
+        page.click("#dOpts > summary")
+    page.set_checked("#nbDrill", False)
+    return page
+
+
+def tap_far(page: Page, court: str = "courtD") -> dict[str, Any]:
+    """Taps the court on the other side from your right spot and reads the answer picture in the same task."""
+    result: dict[str, Any] = page.evaluate(
+        """(id) => {
+            const svg = document.getElementById(id);
+            const ri = +document.getElementById('dq').textContent.match(/R([1-6])/)[1] - 1;
+            const ph = /Attack/.test(document.getElementById('dq').textContent) ? 'ar' : 'rec';
+            const me = window.ksvLearn.players(ri, ph).find((o) => o.p === 'OH1');
+            const x = me ? (me.x > 0.5 ? 0.15 : 0.85) : 0.5, y = me && me.y > 0.5 ? 0.25 : 0.8;
+            const m = svg.getScreenCTM();
+            svg.dispatchEvent(new PointerEvent('pointerup', {bubbles: true,
+                clientX: m.a * x * 100 + m.e, clientY: m.d * y * 100 + m.f}));
+            const g = svg.querySelector('g.glide');
+            const at = g && /translate[(]([-0-9.e]+) ([-0-9.e]+)[)]/.exec(g.getAttribute('transform') || '');
+            const next = document.getElementById('nextBtn');
+            return {
+                on: !!me,
+                shift: at ? Math.hypot(+at[1], +at[2]) : null,
+                want: g ? Math.hypot(+g.dataset.dx, +g.dataset.dy) : null,
+                target: svg.querySelectorAll('circle.target').length,
+                route: svg.querySelectorAll('g.glideroute').length,
+                next: !next.hidden && !next.disabled,
+            };
+        }""",
+        court,
+    )
+    return result
+
+
+def glide_shift(page: Page, court: str) -> float | None:
+    shift: float | None = page.evaluate(
+        """(id) => {
+            const g = document.getElementById(id).querySelector('g.glide');
+            const at = g && /translate[(]([-0-9.e]+) ([-0-9.e]+)[)]/.exec(g.getAttribute('transform') || '');
+            return at ? Math.hypot(+at[1], +at[2]) : null;
+        }""",
+        court,
+    )
+    return shift
+
+
+def check_answer_glide(browser: Browser) -> None:
+    """After the answer your marker glides 400 ms from the tap to the ring outline; Next never waits for it."""
+    page = drill_page(browser, ["rec"])
+    for _ in range(20):
+        got = tap_far(page)
+        if got["on"]:
+            break
+        page.click("#nextBtn")
+    if not got["on"]:
+        fail("glide: OH1 never on court at Receive")
+    if not (got["want"] and got["shift"] and got["shift"] > 0.9 * got["want"]):
+        fail(f"glide: marker does not start at the tap: {got}")
+    if got["target"] != 1 or got["route"] != 1:
+        fail(f"glide: {got['target']} ring outlines and {got['route']} routes")
+    if not got["next"]:
+        fail("glide: Next not available while the marker glides")
+    page.wait_for_timeout(600)
+    if glide_shift(page, "courtD") != 0:
+        fail(f"glide: marker not on its spot after 600 ms ({glide_shift(page, 'courtD')})")
+    for _ in range(20):
+        if tap_far(page)["on"]:
+            break
+        page.click("#nextBtn")
+    question = page.inner_text("#dq")
+    page.click("#nextBtn")
+    if page.locator("#courtD g.glide").count() or page.is_visible("#dWatch"):
+        fail("glide: Next mid-glide left the glide or Watch the move")
+    if not page.inner_text("#dq") or "Tap the court" not in page.inner_text("#fb"):
+        fail(f"glide: Next mid-glide did not open the next question ({question!r})")
+    page.close()
+    for query, reduced, tag in (("?ff=all&anim=0", False, "anim=0"), ("?ff=all", True, "reduced motion")):
+        page = drill_page(browser, ["rec"], query, reduced)
+        for _ in range(20):
+            got = tap_far(page)
+            if got["on"]:
+                break
+            page.click("#nextBtn")
+        if got["shift"] != 0 or got["target"] != 1 or got["route"] != 1:
+            fail(f"glide {tag}: the right spot and route must show at once: {got}")
+        if page.is_visible("#dWatch"):
+            fail(f"glide {tag}: Watch the move offered")
+        page.close()
+    page = drill_page(browser, ["rec"], "?ff=all,-answer-glide")
+    for _ in range(20):
+        got = tap_far(page)
+        if got["on"]:
+            break
+        page.click("#nextBtn")
+    if got["want"] is not None or got["target"] or got["route"]:
+        fail(f"glide off: answer picture changed: {got}")
+    page.close()
+    print("answer glide: 400 ms, Next cuts it short, still with reduced motion, flag off", flush=True)
+
+
+def watch_play(page: Page) -> dict[str, Any] | None:
+    play: dict[str, Any] | None = page.evaluate("window.ksvWatch.play()")
+    return play
+
+
+def check_watch_move(browser: Browser) -> None:
+    """Watch the move plays only on tap, with the Learn controls, and Next closes it at once."""
+    page = drill_page(browser, ["rec", "ar"])
+    for _ in range(40):
+        got = tap_far(page)
+        if got["on"]:
+            break
+        page.click("#nextBtn")
+    page.wait_for_timeout(500)
+    if not page.is_visible("#dWatch .wbtn") or "Watch the move" not in (page.text_content("#dWatch") or ""):
+        fail("watch: no Watch the move button after a Receive or Attack answer")
+    if watch_play(page) is not None:
+        fail("watch: plays without a tap")
+    page.click("#dWatch .wbtn")
+    play = watch_play(page)
+    if not play or not play["playing"]:
+        fail(f"watch: tap does not play: {play}")
+    markers = page.locator("#courtD g.am").count()
+    if markers < 6 or page.locator("#courtD g.am .me-ring").count() != 1:
+        fail(f"watch: {markers} markers in the play, or your ring missing")
+    for name in ("replay", "play", "back", "step", "speed"):
+        if not page.is_visible(f'#dWatch [data-w="{name}"]'):
+            fail(f"watch: control {name} missing")
+    if not page.is_enabled("#nextBtn"):
+        fail("watch: Next disabled while it plays")
+    page.wait_for_timeout(400)
+    if not page.inner_text("#dWatch .wcap").strip():
+        fail("watch: no caption while it plays")
+    page.click('#dWatch [data-w="play"]')
+    paused = watch_play(page)
+    page.wait_for_timeout(300)
+    if not paused or paused["playing"] or watch_play(page) != paused:
+        fail(f"watch: Pause does not hold the frame: {paused} -> {watch_play(page)}")
+    page.click('#dWatch [data-w="back"]')
+    back = watch_play(page)
+    if not back or not paused or back["t"] >= paused["t"]:
+        fail(f"watch: Step back does not go back: {paused} -> {back}")
+    page.click('#dWatch [data-w="play"]')
+    page.wait_for_function("() => window.ksvWatch.play() === null", timeout=20000)
+    if not page.locator("#courtD circle.target").count() or page.locator("#courtD g.am").count():
+        fail("watch: the answer picture does not come back after the play")
+    if not page.is_visible('#dWatch [data-w="replay"]'):
+        fail("watch: the controls go after the play")
+    page.click('#dWatch [data-w="replay"]')
+    page.wait_for_timeout(200)
+    page.click("#nextBtn")
+    if watch_play(page) is not None or page.is_visible("#dWatch") or page.locator("#courtD g.am").count():
+        fail("watch: Next does not close it at once")
+    page.close()
+    page = drill_page(browser, ["serve"])
+    tap_at(page, 0.5, 0.5, "courtD")
+    page.wait_for_timeout(200)
+    if page.is_visible("#dWatch"):
+        fail("watch: offered at Our serve")
+    page.close()
+    page = drill_page(browser, ["start"])
+    for x, y in ZONE_SPOTS:
+        if page.locator("#nextBtn").is_enabled():
+            break
+        tap_at(page, x, y, "courtD")
+    page.click("#nextBtn")
+    page.wait_for_timeout(200)
+    if not page.locator("#courtD g.glide").count():
+        fail("glide: Rotate markers do not glide from the taps")
+    if page.is_visible("#dWatch"):
+        fail("watch: offered at Rotate")
+    page.close()
+    page = new_page(browser, query="?ff=all")
+    setup_match(page, "OH1", ("rec",))
+    page.click("#gStart")
+    if page.is_visible("#gWatch"):
+        fail("watch match: offered before the answer")
+    tap_spot(page, "OH1", 0, "rec")
+    if not page.is_visible("#gWatch .wbtn"):
+        fail("watch match: no Watch the move after the answer")
+    page.click("#gWatch .wbtn")
+    if not (watch_play(page) or {}).get("playing"):
+        fail("watch match: tap does not play")
+    press_next(page)
+    if watch_play(page) is not None or page.is_visible("#gWatch"):
+        fail("watch match: Next does not close it")
+    page.close()
+    print("Watch the move: on tap only, controls, back to the answer, Next closes it", flush=True)
+
+
+def check_reveal_motion(browser: Browser) -> None:
+    """Same device: no motion during a turn; the reveal glides the markers and offers Watch the move."""
+    page = new_page(browser, query="?ff=all")
+    setup_match(page, "OH1", ("rec",))
+    page.check('input[name="gPlayers"][value="mp"]')
+    page.fill('#mpList input[data-k="0"]', "Anna")
+    page.fill('#mpList input[data-k="1"]', "Ben")
+    page.click("#gStart")
+    for turn in range(2):
+        page.click("#pReady")
+        tap_at(page, 0.5, 0.95)
+        press_next(page)
+        if page.locator("#courtG g.glide, #courtG circle.target").count() or page.is_visible("#gWatch"):
+            fail(f"reveal: motion or Watch the move during turn {turn + 1}")
+        page.click("#gNext")
+    page.wait_for_selector("#gReveal:not([hidden])")
+    shift = glide_shift(page, "courtR")
+    if shift is None or shift <= 0:
+        fail(f"reveal: markers do not glide from the taps ({shift})")
+    page.wait_for_timeout(600)
+    if glide_shift(page, "courtR") != 0:
+        fail("reveal: markers not on their spots after the glide")
+    if not page.is_visible("#rWatch .wbtn"):
+        fail("reveal: no Watch the move")
+    page.click("#rWatch .wbtn")
+    if not (watch_play(page) or {}).get("playing"):
+        fail("reveal: Watch the move does not play")
+    page.click("#rNext")
+    if watch_play(page) is not None or page.is_visible("#rWatch"):
+        fail("reveal: Next moment does not close Watch the move")
+    page.close()
+    print("same-device reveal: glide and Watch the move", flush=True)
+
+
 def main() -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -1531,6 +1770,9 @@ def main() -> None:
         check_from_label(browser)
         check_attack_drill(browser)
         check_receive_limits(browser)
+        check_answer_glide(browser)
+        check_watch_move(browser)
+        check_reveal_motion(browser)
         browser.close()
     print("MATCH TEST:", "ok" if not FAIL else f"{len(FAIL)} failures", flush=True)
     sys.exit(1 if FAIL else 0)

@@ -768,6 +768,46 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** leave all flags off until the owner checks on a phone; switch on Learn without `rules-official`.
 - **Reversible by:** switching the flags off in PostHog; phones pick up the change on their next fresh load.
 
+### 100. A flag of its own for the answer glide
+
+- **Issue:** #25
+- **Problem:** The issue lists `drill-tab` as the flag, but the glide and `Watch the move` change Drill and Match, and the owner switches each new feature on after a phone check.
+- **Decision:** A new flag `answer-glide`, built-in default on, needing `learn-animation` (it plays Learn's Reception play). It has no PostHog flag yet, so on the live site it reads as off until the owner creates it.
+- **Alternatives:** ship it under `drill-tab` (on at once, live for everyone); under `learn-animation`.
+- **Reversible by:** the `answer-glide` keys in `FEATURES`, `FEATURE_NEEDS` and `FEATURE_ELEMENTS` in `src/template.html`.
+
+### 101. What Watch the move plays
+
+- **Issue:** #25
+- **Problem:** The plan says it "plays this phase". Only Reception has a play (#69); Attack is a moment inside it, and Rotate and Our serve are static.
+- **Decision:** Receive and Attack both play Learn's whole Reception play for your role, with the Learn controls, then fade back to the answer picture. Rotate and Our serve offer no button.
+- **Alternatives:** play Attack from the pass only; stop the play at the moment the step grades.
+- **Reversible by:** `watchOn()` and `watchBuild()` in `src/template.html`.
+
+### 102. One Watch the move at a time
+
+- **Issue:** #25
+- **Problem:** Drill, solo Match and the reveal each have an answer court; a play could be left running on a tab you left.
+- **Decision:** Only one `Watch the move` exists at a time. Next, a new question, leaving the view and a hidden page stop it; switching tabs returns its court to the answer picture.
+- **Alternatives:** one per court, each with its own clock.
+- **Reversible by:** the `watch` state and `watchClose()` / `watchRest()` in `src/template.html`.
+
+### 103. Motion on the same-device reveal
+
+- **Issue:** #25 (the reveal motion left from #32, `docs/v2.md` §4.7)
+- **Problem:** The reveal shows one marker per role, but several players may share a role, each with their own tap.
+- **Decision:** Each role's marker glides from the first tap for that role. `Watch the move` plays for your role online and for the one role on the same device; with several roles it plays with no ring and the lead mover's captions.
+- **Alternatives:** one marker per player; no glide on the reveal.
+- **Reversible by:** the `glideChip()` and `watchMount()` calls in `mpReveal()` in `src/template.html`.
+
+### 104. Rotate markers glide too
+
+- **Issue:** #25
+- **Problem:** The issue speaks of "your marker"; Rotate from the name places several markers (setter, you, your partners).
+- **Decision:** Every placed Rotate marker glides 400 ms from its tap to its right spot, in Drill and Match.
+- **Alternatives:** only your own marker glides.
+- **Reversible by:** the `glideChip()` call in `drawRotate()` in `src/template.html`.
+
 ### 105. Where the Zones toggle sits and where the numbers stand
 
 - **Issue:** #41
