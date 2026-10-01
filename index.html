@@ -885,6 +885,31 @@
       font-size: 26px;
       color: var(--ink);
     }
+    .dscorebox {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .btn.dreset {
+      min-height: 44px;
+      width: 64px;
+      padding: 4px 0;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    .btn.quiet.dreset.armed {
+      border-color: var(--bad);
+      color: var(--bad);
+    }
+    .sronly {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
     .row {
       display: flex;
       gap: 8px;
@@ -1988,8 +2013,12 @@
               <div class="big" id="dq"></div>
               <div class="sub" id="dsub"></div>
             </div>
-            <div class="score">
-              <strong id="dscore">0/0</strong>streak <span id="dstreak">0</span>
+            <div class="dscorebox">
+              <button type="button" class="btn quiet dreset" id="dReset">Reset</button>
+              <div class="score">
+                <strong id="dscore">0/0</strong>streak <span id="dstreak">0</span>
+              </div>
+              <span class="sronly" id="dResetNote" role="status"></span>
             </div>
           </div>
           <div class="vis dsteps" id="dSteps" role="group" aria-label="Steps to drill">
@@ -2040,9 +2069,6 @@
                 ><button type="button" role="radio" aria-checked="false" data-n="mixed">
                   Mixed
                 </button>
-              </div>
-              <div class="row">
-                <button type="button" class="btn quiet" id="resetBtn">Reset my progress</button>
               </div>
             </div>
           </details>
@@ -5543,13 +5569,33 @@
       };
       $("nextBtn").onclick = () => (rot && !answered ? rotScore() : newQuestion());
       $("reviewBtn").onclick = startReview;
-      $("resetBtn").onclick = () => {
+      const RESET_ARM_MS = 3000,
+        RESET_NOTE_MS = 2000;
+      let resetTimer = 0;
+      // A fixed one-line label, so arming never moves the court under a finger.
+      function resetLabel(label, note, armed) {
+        clearTimeout(resetTimer);
+        $("dReset").textContent = label;
+        if (armed) $("dReset").setAttribute("aria-label", note);
+        else $("dReset").removeAttribute("aria-label");
+        $("dReset").classList.toggle("armed", armed);
+        $("dResetNote").textContent = note;
+      }
+      $("dReset").onclick = () => {
+        if (!$("dReset").classList.contains("armed")) {
+          resetLabel("Sure?", "Tap again to reset", true);
+          resetTimer = setTimeout(() => resetLabel("Reset", "", false), RESET_ARM_MS);
+          return;
+        }
         stats = {};
         score = { ok: 0, n: 0 };
         streak = 0;
+        review = null;
         store.set("stats2", stats);
         store.set("score2", score);
         newQuestion();
+        resetLabel("Reset", "Progress reset.", false);
+        resetTimer = setTimeout(() => resetLabel("Reset", "", false), RESET_NOTE_MS);
       };
       function updateScore() {
         $("dscore").textContent = `${score.ok}/${score.n}`;
