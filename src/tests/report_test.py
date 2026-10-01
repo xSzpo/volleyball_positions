@@ -517,7 +517,7 @@ def check_wide(browser: Browser, url: str, errors: list[str]) -> None:
     page.click("#roleChip")
     open_sheet(page)
     page.keyboard.press("Escape")
-    if page.evaluate("document.activeElement.id") != "reportBtn":
+    if not focused(page, "reportBtn"):
         fail("closing the sheet does not return focus to the icon")
     page.context.close()
 
