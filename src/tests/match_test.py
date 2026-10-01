@@ -1533,9 +1533,8 @@ def drill_page(browser: Browser, steps: list[str], query: str = "?ff=all", reduc
 def tap_far(page: Page, court: str = "courtD") -> dict[str, Any]:
     """Taps the court on the other side from your right spot and reads the answer picture in the same task."""
     result: dict[str, Any] = page.evaluate(
-        """(id) => {
+        """([id, ri]) => {
             const svg = document.getElementById(id);
-            const ri = +document.getElementById('dq').textContent.match(/R([1-6])/)[1] - 1;
             const ph = /Attack/.test(document.getElementById('dq').textContent) ? 'ar' : 'rec';
             const me = window.ksvLearn.players(ri, ph).find((o) => o.p === 'OH1');
             const x = me ? (me.x > 0.5 ? 0.15 : 0.85) : 0.5, y = me && me.y > 0.5 ? 0.25 : 0.8;
@@ -1554,7 +1553,7 @@ def tap_far(page: Page, court: str = "courtD") -> dict[str, Any]:
                 next: !next.hidden && !next.disabled,
             };
         }""",
-        court,
+        [court, drill_ri(page.inner_text("#dq"))],
     )
     return result
 
