@@ -994,3 +994,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `feature()` reads only `FEATURES` and `FEATURE_NEEDS` and the `?ff=` override (`ksv51:ffOverride`). The PostHog flag reading (`flagsFromPosthog()`, `bootstrap.featureFlags`, the first-input gate) is gone, and a stored `ksv51:flags` is removed at start-up. PostHog analytics events are unchanged. `match-online` and `bug-report` go on in `FEATURES`; only `after-dig` stays off (#35). This replaces the "PostHog flag on" step of #128.
 - **Alternatives:** keep PostHog flags and accept the split; bootstrap the flags from the built-in defaults so blocked phones match only until the first change.
 - **Reversible by:** `featureValues(FEATURES, …)` and `analyticsLoad()` in `src/template.html`.
+
+### 131. A report signs in as a new anonymous user on its own Firebase app
+
+- **Issue:** #136
+- **Problem:** On iOS, Firebase Auth's popup/redirect resolver loads apis.google.com and the auth iframe before any sign-in. If either is slow or never answers, the report's 10 s sign-in timeout fires. The compat SDK has no option to leave the resolver out of the default app.
+- **Decision:** Report a problem uses a second app named `report`, whose auth is set up with no resolver and in-memory persistence. Every page load that sends a report signs in as a new anonymous user; reports carry no uid, and anonymous auth clean-up removes the old users. Online room keeps the default app and its stored uid. A failed send now names its cause: sign-in, the server, or a refusal.
+- **Alternatives:** longer timeouts on the default app; the modular SDK for auth.
+- **Reversible by:** `reportReady()` and `REPORT_FAILURE` in `src/template.html`.
