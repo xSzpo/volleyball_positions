@@ -535,6 +535,78 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
     ctx.close()
 
 
+BOX_JS = "els => els.map(e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; })"
+# Selector of each tap target, and whether its width must be 44 px too.
+TARGETS = {
+    "drill": [('.vis[data-vis="drill"] button', False), ("#dName button", True), ("#nbDrillCheck", False)],
+    "game": [
+        ('.visbox .vis[data-vis="game"] button', False),
+        ("#gOpts .steps label", False),
+        ("#nbGameCheck", False),
+        ("#setGameCheck", False),
+        (".scoring > summary", False),
+    ],
+    "sets": [("#setchips button", False)],
+}
+TAB_BUTTON = {"drill": "#tabDrill", "game": "#tabGame", "sets": "#tabSets"}
+
+
+def check_targets(pg: Page, tag: str) -> None:
+    """The Drill, Match and Sets controls are tap targets at least 44 px high."""
+    for tab, targets in TARGETS.items():
+        pg.click(TAB_BUTTON[tab])
+        for fold in ("#dOpts", "#gOpts"):
+            if pg.is_visible(fold):
+                open_fold(pg, fold)
+        for sel, wide in targets:
+            boxes = pg.eval_on_selector_all(sel, BOX_JS)
+            if not boxes:
+                fail(f"{tag} no {sel} to measure")
+            for w, h in boxes:
+                if h < 44 or (wide and w < 44):
+                    fail(f"{tag} tap target {sel} is {w:.0f} x {h:.0f} px")
+    pg.click("#tabLearn")
+
+
+def check_learn_fit(browser: Browser, tag: str, quick: bool) -> None:
+    """At 390 x 664 every Learn screen opens with all markers above the sticky Next row, which is in view.
+
+    The quick sweep checks one role; your ring is the only marker that changes with the role.
+    """
+    section("LEARN fit 390 x 664 and tap targets")
+    ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
+    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    pg = ctx.new_page()
+    pg.goto(URL)
+    wait_ready(pg)
+    fit = """() => { const row = document.querySelector('.lctl').getBoundingClientRect();
+      const marks = [...document.querySelectorAll('#courtL .mk circle:not(.hit)')]
+        .map(e => [e.closest('.mk').dataset.p, e.getBoundingClientRect().bottom]);
+      return [row.top, row.bottom, marks]; }"""
+    for mode in RULES:
+        pick_rules(pg, mode)
+        for role in ["OH1"] if quick else MODE_ROLES[mode]:
+            pick_role(pg, role)
+            for ri in range(6):
+                for phase in STEPS:
+                    pg.click(f'.rot[data-i="{ri}"]')
+                    pg.click(f'.ph[data-k="{phase}"]')
+                    pg.evaluate("window.scrollTo(0, 0)")
+                    top, bottom, marks = pg.evaluate(fit)
+                    low = [p for p, b in marks if b > top]
+                    if low or not marks or bottom > 664:
+                        fail(f"{tag} {mode} {role} R{ri + 1} {phase}: {low} under the Next row at {top:.0f} px")
+    check_targets(pg, tag + " 390 x 664")
+    ctx.close()
+    ctx = browser.new_context(viewport={"width": 1280, "height": 800})
+    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    pg = ctx.new_page()
+    pg.goto(URL)
+    wait_ready(pg)
+    check_targets(pg, tag + " 1280 x 800")
+    ctx.close()
+
+
 def court_xy(pg: Page, x: float, y: float) -> tuple[float, float]:
     """The screen point of court spot (x, y) on the Drill court."""
     point = pg.evaluate(
@@ -916,6 +988,7 @@ def main() -> None:
         sweep_learn(pg, tag, args.quick)
         sweep_drill(pg, tag, args.quick)
         check_drill_steps(b, tag)
+        check_learn_fit(b, tag, args.quick)
         check_drill_rotate(b, tag, args.quick)
         sweep_match(pg, tag, combos, args.quick)
         sweep_sets(pg, tag)
