@@ -978,3 +978,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `match-online` stays off in `FEATURES` in this PR. The owner applies the rules and wipes `rooms`, then the PostHog flag goes on, and a follow-up PR flips the built-in default.
 - **Alternatives:** flip the default in this PR and accept failing creates between the merge and the apply.
 - **Reversible by:** `FEATURES["match-online"]` in `src/template.html` and `DEFAULT_OFF` in `src/tests/flags_test.py`.
+
+### 129. A report signs in as a new anonymous user on its own Firebase app
+
+- **Issue:** #136
+- **Problem:** On iOS, Firebase Auth's popup/redirect resolver loads apis.google.com and the auth iframe before any sign-in. If either is slow or never answers, the report's 10 s sign-in timeout fires. The compat SDK has no option to leave the resolver out of the default app.
+- **Decision:** Report a problem uses a second app named `report`, whose auth is set up with no resolver and in-memory persistence. Every page load that sends a report signs in as a new anonymous user; reports carry no uid, and anonymous auth clean-up removes the old users. Online room keeps the default app and its stored uid. A failed send now names its cause: sign-in, the server, or a refusal.
+- **Alternatives:** longer timeouts on the default app; the modular SDK for auth.
+- **Reversible by:** `reportReady()` and `REPORT_FAILURE` in `src/template.html`.

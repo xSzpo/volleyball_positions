@@ -7203,6 +7203,30 @@
           ),
         );
       }
+      const REPORT_FAILURE = {
+        "sign-in": "Could not sign in. Check your connection.",
+        write: "Could not reach the server.",
+        refused: "The report was refused.",
+      };
+      let reportApp = null;
+      async function reportReady() {
+        const fb = await withTimeout(fbSdk());
+        if (!reportApp) {
+          reportApp = fb.initializeApp(FIREBASE_CONFIG, "report");
+          // Auth without a popup/redirect resolver: on iOS that resolver loads apis.google.com
+          // and the auth iframe before any sign-in, and a report needs neither.
+          const provider = reportApp._delegate?.container?.getProvider("auth");
+          if (provider && !provider.isInitialized()) provider.initialize({ options: {} });
+          if (EMU) {
+            reportApp.auth().useEmulator(`http://${EMU.auth}`);
+            const [host, port] = EMU.db.split(":");
+            reportApp.database().useEmulator(host, +port);
+          }
+        }
+        const auth = reportApp.auth();
+        if (!auth.currentUser) await withTimeout(auth.signInAnonymously());
+        return { fb, db: reportApp.database() };
+      }
       async function reportSend() {
         if (reportBusy) return;
         const comment = $("reportText").value.trim();
@@ -7218,9 +7242,10 @@
         const image = $("reportIncl").checked && shot ? shot : null;
         const context = reportContext();
         let sent = false;
+        let failure = "sign-in";
         try {
-          await withTimeout(fbSdk());
-          const { fb, db } = await fbReady();
+          const { fb, db } = await reportReady();
+          failure = "write";
           if (!reportKey || reportKey.comment !== comment)
             reportKey = { ref: db.ref("reports").push(), comment, unsure: false };
           const report = {
@@ -7235,8 +7260,10 @@
           const denied = String(e?.code).toUpperCase() === "PERMISSION_DENIED";
           // Reports are create-only: a retry is denied when the write that timed out landed.
           if (denied && reportKey?.unsure) sent = true;
-          else if (denied) reportKey = null;
-          else if (reportKey) reportKey.unsure = true;
+          else if (denied) {
+            reportKey = null;
+            failure = "refused";
+          } else if (reportKey) reportKey.unsure = true;
         }
         if (sent) {
           reportKey = null;
@@ -7248,7 +7275,7 @@
           reportDone = setTimeout(() => $("reportSheet").close(), REPORT_DONE_MS);
           return;
         }
-        $("reportMsg").textContent = "Could not send. Try again.";
+        $("reportMsg").textContent = REPORT_FAILURE[failure];
         reportBusy = false;
         $("reportSend").disabled = false;
       }
