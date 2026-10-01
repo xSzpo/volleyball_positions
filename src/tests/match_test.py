@@ -104,15 +104,28 @@ def tap_spot(page: Page, role: str, ri: int, phase: str, check: bool = True) -> 
 
 
 def pass_lands(page: Page, ri: int) -> dict[str, tuple[float, float]]:
-    """Where Learn's Reception play has everyone at the moment the pass reaches the setter."""
-    spots = page.evaluate(
+    """The Attack spots: everyone as the pass reaches the setter in Learn's play, the covers on their cover spot.
+
+    L, the deep OH and the back OP are graded on the spot they stand on at the spike.
+    """
+    found = page.evaluate(
         """(ri) => {
-            const pass = window.ksvLearn.stages(ri, 'rec')[1];
-            return window.ksvLearn.at(ri, 'rec', pass.start + pass.ball.ms);
+            const stages = window.ksvLearn.stages(ri, 'rec');
+            const pass = stages[1];
+            return {
+                lands: window.ksvLearn.at(ri, 'rec', pass.start + pass.ball.ms),
+                spike: stages[stages.length - 1].from,
+                rules: String(localStorage.getItem('ksv51:rulesMode')).includes('official') ? 'official' : 'simple',
+            };
         }""",
         ri,
     )
-    return {p: (at["x"], at["y"]) for p, at in spots.items()}
+    row = lineup(ri, found["rules"])
+    spots = {p: (at["x"], at["y"]) for p, at in found["lands"].items()}
+    for p, at in found["spike"].items():
+        if cover_job(row, p):
+            spots[p] = (at["x"], at["y"])
+    return spots
 
 
 def breakdown_total(line: str) -> tuple[int, int]:
@@ -1169,7 +1182,7 @@ def check_attack_match(browser: Browser) -> None:
 
 
 def check_attack_grading(browser: Browser) -> None:
-    """Attack grades everyone where Learn's Reception play has them as the pass lands, and rings them there."""
+    """Attack grades everyone where Learn has them as the pass lands, the covers on cover, and rings them there."""
     checked = 0
     for rules in RULES_MODES:
         for role in MODE_ROLES[rules]:
@@ -1201,7 +1214,10 @@ def check_attack_grading(browser: Browser) -> None:
                 checked += 1
                 press_next(page)
             page.close()
-    print(f"Attack: graded where Learn has everyone as the pass lands on {checked} courts", flush=True)
+    print(
+        f"Attack: graded where Learn has everyone as the pass lands, the covers on cover, on {checked} courts",
+        flush=True,
+    )
 
 
 MODE_ROLES = {"simple": ("MB", "OH1", "OH2", "OP", "S", "L"), "official": ("MB1", "MB2", "OH1", "OH2", "OP", "S", "L")}

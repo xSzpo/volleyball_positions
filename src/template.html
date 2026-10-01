@@ -2430,7 +2430,7 @@
           if (me.turn)
             return {
               t: "Quick in the middle",
-              d: `${rp && rp[2] < me.turn.y - 0.03 ? "Step off the net to the middle of the front zone" : "Get to the middle of the front zone"}, not the 3 m line: that is the back-row hitter's lane. Then run in (dashed line) and take off in front of the setter as the pass arrives.`,
+              d: `${rp && rp[2] < me.turn.y - 0.03 ? "Step off the net to the middle of the front zone" : "Get to the middle of the front zone"}, not the 3 m line: that is the back-row hitter's lane. Then run in (dashed line) and take off left of the setter as the pass arrives.`,
             };
           if (me.kind === "front") {
             const lane = me.x < 0.34 ? "left (zone 4)" : me.x < 0.67 ? "middle" : "right (zone 2)";
@@ -2608,7 +2608,8 @@
           .filter((o) => o?.kind === "front")
           .reduce((a, o) => (a == null || o.x < a.x ? o : a), null);
         if (!set || !hitter) return null;
-        const hit = { x: hitter.x, y: HIT_Y };
+        // The zone 4 hitter approaches outside-in, from the sideline towards the antenna's inside.
+        const hit = { x: hitter.x + HIT_IN, y: HIT_Y };
         const middle = order
           .filter((p) => ar[p] && isFront(ri, p) && p !== hitter.p && ar[p].kind !== "set")
           .reduce(
@@ -2622,7 +2623,8 @@
         };
         return { set, hitter: hitter.p, hit, quick };
       }
-      // The spots Drill and Match grade. At Attack that is where the Learn Reception play has everyone as the pass lands; the quick middle's route turns at its `ar` spot.
+      // The spots Drill and Match grade. At Attack that is where the Learn Reception play has everyone as the pass lands,
+      // except the covers, graded on the cover spot their text names; the quick middle's route turns at its `ar` spot.
       function answerSpots(ri, phase) {
         const pl = players(ri, phase);
         const tr = phase === "ar" && phaseStages(ri, "rec"),
@@ -2631,7 +2633,7 @@
         const t = pass.start + pass.ball.ms,
           quick = passPlan(ri)?.quick;
         return pl.map((o) => {
-          const at = posAt(tr, o.p, t);
+          const at = tr.coverAt?.[o.p] || posAt(tr, o.p, t);
           return {
             ...o,
             x: at.x,
@@ -3426,6 +3428,7 @@
         `Wait at the sideline while ${sv} serves: the libero may not serve.`;
       const SPIKE_BALL = { x: 0.62, y: -0.09 };
       const HIT_Y = 0.08,
+        HIT_IN = 0.08,
         APPROACH_Y = 0.17;
       // Where front-row players who switch sides pass behind the middle: the one going left runs deeper.
       const SWITCH_VIA = { right: { x: 0.45, y: 0.4 }, left: { x: 0.55, y: 0.53 } };
@@ -3457,7 +3460,7 @@
         ],
         deepFront: "Come in to the middle and cover deep: a ball off the block can fly far.",
         deepBack: "Cover deep in the middle: a ball off the block can fly far.",
-        quick: "Run in from mid front zone for the quick in front of the setter.",
+        quick: "Run in from mid front zone for the quick, left of the setter.",
         cupFront: (hitter) =>
           `Fake the quick, then cover ${hitter} close, between the setter and L.`,
         cupSet: (hitter) =>
@@ -3677,9 +3680,11 @@
         }
         return { n, met: [...met.values()] };
       }
-      // Paths that step round one of the players met, on either side of that part of the path, behind first.
+      // Paths that step round one of the players met, on either side of that part of the path, behind first, inside the
+      // sidelines and no deeper than the end line or the run's own ends.
       function detours(path, met) {
         const out = [];
+        const back = Math.max(1, path[0].y, path[path.length - 1].y);
         met.forEach(({ b, seg }) => {
           const i = Math.min(seg, path.length - 1),
             u = path[i - 1],
@@ -3688,10 +3693,12 @@
           [1.3, 1.7].forEach((wide) => {
             const r = GAP * wide;
             [1, -1]
-              .map((k) => ({
-                x: Math.min(1.04, Math.max(-0.04, b.x - ((v.y - u.y) / d) * r * k)),
-                y: Math.max(0.03, b.y + ((v.x - u.x) / d) * r * k),
-              }))
+              .map((k) => {
+                const x = b.x - ((v.y - u.y) / d) * r * k,
+                  y = Math.min(back, Math.max(0.03, b.y + ((v.x - u.x) / d) * r * k));
+                // Squeezed against a sideline, the detour passes level with the player met.
+                return x < 0 || x > 1 ? { x: Math.min(1, Math.max(0, x)), y: b.y } : { x, y };
+              })
               .sort((w1, w2) => w2.y - w1.y)
               .forEach((w, k) => {
                 out.push({ path: [...path.slice(0, i), w, ...path.slice(i)], netSide: k === 1 });
@@ -3801,28 +3808,12 @@
         const hit = plan?.hit ?? null;
         const cupFront = plan?.quick?.p ?? null;
         const takeOff = cupFront && { x: plan.quick.x, y: plan.quick.y };
-        // Movement is free from the server's first movement: everyone who does not receive leaves at once.
-        const released = [...setter, ...attackers.filter((p) => !receivers.includes(p))];
-        stages.push({
-          moves: pick(released, (p) => to[p]),
-          noWait: true,
-          notes: {
-            ...notes,
-            ...pick(released, (p) => arNotes[p]),
-            ...(passer ? { [passer]: SERVE_TO } : {}),
-          },
-          ball: passer && {
-            from: THEIR_SERVE,
-            to: touch(from[passer], setSpot || SERVE_BALL),
-            ms: SERVE_MS,
-          },
-        });
-        const second = passer ? [passer, ...order.filter((p) => p !== passer)] : order;
         const cover = ({ dx, dy }) => hit && { x: Math.min(0.9, hit.x + dx), y: hit.y + dy };
         const deep = order.filter((p) => !kind[p] && p !== "L" && !isFront(ri, p));
         const side = attackers.filter((p) => p !== hitter && p !== cupFront);
         const backSide = side.filter((p) => kind[p] === "back");
-        // L, the deep OH and a back-row side cover run straight on during the pass, so they get there with the set.
+        // L, the deep OH and a back-row side cover run straight to their cover during the pass, so they get there with
+        // the set; the back-row side cover does not attack, so it waits out of the passing lanes until the pass.
         const onCover =
           setSpot && hit
             ? {
@@ -3839,9 +3830,29 @@
                 ...pick(backSide, () => ATTACK_NOTES.deepBack),
               }
             : {};
+        // Movement is free from the server's first movement: the setter and the attackers who do not receive leave at once.
+        const released = [
+          ...setter,
+          ...attackers.filter((p) => !receivers.includes(p) && !onCover[p]),
+        ];
+        stages.push({
+          moves: pick(released, (p) => to[p]),
+          noWait: true,
+          notes: {
+            ...notes,
+            ...pick(released, (p) => arNotes[p]),
+            ...(passer ? { [passer]: SERVE_TO } : {}),
+          },
+          ball: passer && {
+            from: THEIR_SERVE,
+            to: touch(from[passer], setSpot || SERVE_BALL),
+            ms: SERVE_MS,
+          },
+        });
+        const second = passer ? [passer, ...order.filter((p) => p !== passer)] : order;
         stages.push({
           moves: pick(second, (p) => (p === cupFront ? takeOff : { ...(onCover[p] || to[p]) })),
-          first: ["L"],
+          first: ["L", ...backSide],
           notes: {
             ...pick(
               receivers.filter((p) => p !== passer),
@@ -3989,6 +4000,9 @@
           tr.stages.push(st);
           t += st.dur;
         });
+        // Where each cover stands at the spike, the spot its Attack caption names.
+        const atBase = tr.stages.find((st) => st.base);
+        tr.coverAt = atBase ? pick(Object.keys(covers), (p) => atBase.src[p] || at[p]) : {};
         tr.total = t + HOLD_MS;
         tr.end = at;
         return tr;
