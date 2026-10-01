@@ -873,3 +873,75 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** A player who covers at the Attack step is asked the set call as a watcher: "The setter sets this ball. What is the call?", from every match set, like the libero and the other back row. A back-row opposite who attacks is still asked its own back set.
 - **Alternatives:** keep asking the zone 1 set (A) for a later back-row attack; skip the set call check for covers.
 - **Reversible by:** `setQ()` in `src/template.html`.
+
+### 116. Drill, Match and Sets switched on in PostHog
+
+- **Issue:** none (owner instruction 2026-10-01: "never wait for me to enable feature flag")
+- **Problem:** The Drill, Match and Sets flags were built and deployed but off in PostHog, waiting for the owner's phone check.
+- **Decision:** On 2026-10-01, after `392a3cc` deployed, these PostHog flags are on at 100%: `drill-tab`, `drill-review`, `neighbour-check`, `match-solo`, `set-call-check`, `match-same-device`, `sets-tab`, `sets-quiz`, and the new flags `drill-steps`, `drill-rotate-name`, `match-rotate-name`, `answer-glide`. Left off: `match-online` (#33, live database rules), `after-dig` (#35), `downloads` (removed).
+- **Alternatives:** wait for the owner's phone check.
+- **Reversible by:** switching the flag off in PostHog project 635296.
+
+### 117. Report a problem is in the role list on phones, an icon from 480 px
+
+- **Issue:** #52
+- **Problem:** The plan opens the report sheet from the header menu (#76), but #76 shipped a role list, not a general menu, and the issue asks for a 44 px icon next to the theme button. At 390 px the header row (title, "Outside 1 · Simplified ▾", theme button) has no 52 px to spare: an inline icon pushes the title's volleyball onto a second line, and stacking it under the theme button makes the header 48 px taller, which pushes the Learn court under the sticky Next row and the role list off its button.
+- **Decision:** From 480 px the sheet opens from its own icon (`#reportBtn`, a speech bubble with "!") after the theme button. Below 480 px the icon is hidden and the role list ends with a 44 px "Report a problem" row (`#reportItem`, not on the first-visit "Pick your role" list), which closes the list and opens the sheet. The header is unchanged on phones.
+- **Alternatives:** a shorter role button text on phones ("OH1 · Simplified"); a smaller icon (under 44 px); the icon in the tab bar; the icon stacked under the theme button.
+- **Reversible by:** `#reportBtn`, `#reportItem` and the `max-width: 479px` block for them in `src/template.html`.
+
+### 118. The report sheet is a native modal dialog
+
+- **Issue:** #52
+- **Problem:** The plan says "a panel"; the role list (#76) is a dropdown with no backdrop, which suits a quick pick, not a form with a text box.
+- **Decision:** `#reportSheet` is a `<dialog>` opened with `showModal()`: a backdrop, the page inert behind it, Escape and Cancel close it and focus returns to the icon. The Learn arrow keys do nothing while it is open. The sheet opens at once and says "Taking a screenshot…" until the capture is done; the capture leaves the sheet out.
+- **Alternatives:** a dropdown like the role list; a full-screen page.
+- **Reversible by:** `#reportSheet` and `reportOpen()` in `src/template.html`.
+
+### 119. What the screenshot holds and how small it gets
+
+- **Issue:** #52
+- **Problem:** The plan asks for the visible app as a JPEG of at most 1080 px and 250 kB, but not what to do with a busy screen, or with the court, whose SVG colours come from CSS variables that html2canvas does not apply inside an SVG.
+- **Decision:** html2canvas 1.4.1 (the latest release) captures the viewport at the current scroll, scaled so the long side is at most 1080 px. Before drawing, the computed fill, stroke, opacity and font of every SVG element are copied inline into the clone, so the court looks as on screen. The JPEG is tried at quality 0.8, 0.6, 0.45 and 0.3 and the first under 333 000 base64 characters (about 250 kB) is kept; if none fits, or the capture fails, the report goes without a screenshot and the sheet says so. The rules allow 350 000 characters.
+- **Alternatives:** capture the whole page; send a PNG; shrink the size instead of the quality.
+- **Reversible by:** `SHOT_SIDE`, `SHOT_CHARS`, `inlineSvgStyles()` and `reportCapture()` in `src/template.html`.
+
+### 120. The context a report carries
+
+- **Issue:** #52
+- **Problem:** The plan lists the context (tab, role, rules, Learn rotation and phase or the Drill and Match state, theme, viewport, user agent, app version, flags) but not its shape.
+- **Decision:** Flat fields: `tab` (`learn`, `drill`, `game`, `sets`), `role`, `rules`, `view` (one short string: Learn "R3 rec" plus "playing" while a play runs; Drill the question's rotation and step; Match the mode, the moment number and its rotation and step), `theme`, `viewport` ("390x664@3"), `ua` (first 300 characters), `version` ("2") and `flags` (every key and its value). Never a player name, room code or uid: the report node holds no uid, and the online mode is only the word "online".
+- **Alternatives:** nested objects per tab; the full Match queue.
+- **Reversible by:** `reportContext()` and `viewText()` in `src/template.html` and `reports` in `infra/database.rules.json`.
+
+### 121. An empty comment is asked for, Send stays on
+
+- **Issue:** #52
+- **Problem:** The comment is required, but a disabled primary button looked frozen once before (the neighbour check, see CLAUDE.md "History").
+- **Decision:** Send is always enabled. With an empty comment it writes nothing and says "Write a few words about the problem." and puts the cursor in the comment box. After a send the comment is cleared, the sheet says "Thanks, sent." and Cancel reads Close; a failure says "Could not send. Try again." and keeps the comment.
+- **Alternatives:** disable Send until there is text.
+- **Reversible by:** `reportSend()` in `src/template.html`.
+
+### 122. Reports have no rate limit
+
+- **Issue:** #52
+- **Problem:** Anyone who signs in anonymously can create reports. A per-user limit needs the uid in the report or a second node keyed by uid, and the plan says never a uid.
+- **Decision:** No rate limit. The rules allow a create only (no read, update or delete), with every field validated and the image at most 350 000 characters, so one report is at most about 360 kB. The Spark plan's quota is the cap, and the owner can delete reports in the Firebase console. A retry of the same comment reuses its push key, so a send that timed out but landed is not written twice: the retry is denied as an overwrite and counts as sent.
+- **Alternatives:** a `reportsBy/{uid}` timestamp node checked by the rules; App Check.
+- **Reversible by:** `reports` in `infra/database.rules.json`.
+
+### 123. Report a problem needs no other flag
+
+- **Issue:** #52
+- **Problem:** Reports go through the same Firebase SDK and anonymous sign-in as Online room, whose flag `match-online` is off (#33).
+- **Decision:** `bug-report` has no needs. The Firebase SDK is loaded on the first Send only, as Online room loads it on Create or Join; until the owner's `terraform apply` uploads the new rules every send is denied and says "Could not send. Try again.", so the flag stays off until then (see 124).
+- **Alternatives:** make `bug-report` need `match-online`.
+- **Reversible by:** `FEATURE_NEEDS` in `src/template.html`.
+
+### 124. Report a problem is off by default
+
+- **Issue:** #52
+- **Problem:** The live database rules accept no reports until the owner's `terraform apply`. A first visit has no stored PostHog values and uses the built-in defaults, so a PostHog flag that is off does not hide the icon on that visit.
+- **Decision:** `bug-report` is off in `FEATURES`. After the apply, the PostHog flag switches it on.
+- **Alternatives:** on by default, with every send denied until the apply.
+- **Reversible by:** `FEATURES` in `src/template.html`.

@@ -130,6 +130,28 @@
         },
         "$other": { ".validate": false }
       }
+    },
+    "reports": {
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "$id.matches(/^[-_A-Za-z0-9]{20}$/) && newData.hasChildren(['comment', 'createdAt', 'tab', 'role', 'rules', 'view', 'theme', 'viewport', 'ua', 'version', 'flags'])",
+        "comment": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000" },
+        "createdAt": { ".validate": "newData.val() == now" },
+        "tab": { ".validate": "newData.isString() && newData.val().matches(/^(learn|drill|game|sets|none)$/)" },
+        "role": { ".validate": "newData.isString() && newData.val().matches(/^(MB|MB1|MB2|OH1|OH2|OP|S|L)$/)" },
+        "rules": { ".validate": "newData.isString() && newData.val().matches(/^(simple|official)$/)" },
+        "view": { ".validate": "newData.isString() && newData.val().length <= 120" },
+        "theme": { ".validate": "newData.isString() && newData.val().matches(/^(light|dark)$/)" },
+        "viewport": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "ua": { ".validate": "newData.isString() && newData.val().length <= 300" },
+        "version": { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "flags": {
+          ".validate": "newData.hasChildren()",
+          "$key": { ".validate": "$key.matches(/^[a-z-]{1,40}$/) && newData.isBoolean()" }
+        },
+        "image": { ".validate": "newData.isString() && newData.val().beginsWith('data:image/jpeg;base64,') && newData.val().length <= 350000" },
+        "$other": { ".validate": false }
+      }
     }
   }
 }
