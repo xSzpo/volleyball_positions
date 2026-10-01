@@ -3086,11 +3086,10 @@
                 mask_all_text: true,
                 mask_all_element_attributes: true,
                 respect_dnt: true,
-                bootstrap: { featureFlags: storedObject("flags") || {} },
+                advanced_disable_flags: true,
               });
               posthog = window.posthog;
               posthog.register({ app_version: "2" });
-              posthog.onFeatureFlags(flagsFromPosthog);
             } catch (e) {}
           };
           el.onerror = () => el.remove();
@@ -3123,11 +3122,11 @@
         "answer-glide": true,
         "set-call-check": true,
         "match-same-device": true,
-        "match-online": false,
+        "match-online": true,
         "sets-tab": true,
         "sets-quiz": true,
         "after-dig": false,
-        "bug-report": false,
+        "bug-report": true,
       };
       const FEATURE_NEEDS = {
         "learn-animation": ["learn-tab"],
@@ -3204,8 +3203,7 @@
         FEATURE_KEYS.forEach(on);
         return out;
       }
-      const flagsLive = analyticsOn(location.hostname, POSTHOG_KEY);
-      let flagsBase = flagsLive ? { ...FEATURES, ...storedObject("flags") } : FEATURES;
+      store.del("flags");
       let ffOverride = storedObject("ffOverride");
       const ffParam = new URLSearchParams(location.search).get("ff");
       if (ffParam !== null) {
@@ -3213,13 +3211,9 @@
         if (ffOverride) store.set("ffOverride", ffOverride);
         else store.del("ffOverride");
       }
-      let flags = featureValues(flagsBase, ffOverride);
+      const flags = featureValues(FEATURES, ffOverride);
       const feature = (key) => !!flags[key];
       const nbOn = (id) => feature("neighbour-check") && $(id).checked;
-      let touched = false;
-      ["pointerdown", "touchstart", "keydown", "wheel"].forEach((type) => {
-        document.addEventListener(type, () => (touched = true), { capture: true, passive: true });
-      });
       const SLOTS = new Map();
       function attach(el) {
         const slot = SLOTS.get(el);
@@ -3275,18 +3269,6 @@
         renderLearn();
         gRenderSetup();
         if (!$("game").hidden && gPlayersMode() === "online") onRejoinCheck();
-      }
-      function flagsFromPosthog(_enabled, variants, context) {
-        if (context?.errorsLoading) return;
-        const next = {};
-        FEATURE_KEYS.forEach((k) => {
-          next[k] = !!variants?.[k];
-        });
-        store.set("flags", next);
-        if (touched) return;
-        flagsBase = next;
-        flags = featureValues(flagsBase, ffOverride);
-        applyFeatures();
       }
       window.ksvLearn = {
         describe: (ri, phase, r) => describe(ri, phase, r),
