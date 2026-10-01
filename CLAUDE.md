@@ -91,12 +91,12 @@ Version 2 is planned in `docs/v2.md` and split into GitHub issues (milestones **
   **Differs from the plan:** bullets, or "Nothing."
   **Assumptions / coach:** bullets linked to #16, or "None."
   **Follow-ups:** new issues opened, or "None."
-  **Flag:** `<key>` built-in default on; PostHog flag off. Check with `?ff=<key>`, then switch it on.
+  **Flag:** `<key>` built-in default on; PostHog flag on (id <n>, 100%).
   ```
 
   Tick the issue's checkboxes that are done. Leave an unfinished item open in a new issue and link it; don't reopen the merged one.
 - **Owner decisions.** When a decision is the owner's to make but they are not available, don't ask. Pick the option closest to the plan and the guide, log it in `docs/knowledge-gaps.md` in the same PR, and link the entry in the issue comment.
-- **Flags.** Agents never switch a PostHog flag on. The owner does that after checking on a phone. Never touch the work PostHog projects.
+- **Flags.** After the merge and a green Pages deploy, the agent creates or switches on the issue's PostHog flag (project 635296, 100%) and its needs, without asking the owner. Never touch the work PostHog projects.
 - **Commands.** Push and use `gh` with the owner's personal token. The default gh account is a work account and gets a 403:
 
   ```bash
