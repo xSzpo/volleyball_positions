@@ -95,6 +95,8 @@ IPHONE_UA = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "
     "CriOS/140.0.7339.122 Mobile/15E148 Safari/604.1"
 )
+# An IndexedDB open that never succeeds or fails, as on some iOS Safari versions.
+HANG_IDB = "indexedDB.open = () => new EventTarget();"
 REPORT_APP = "firebase.app('report')"
 FAIL: list[str] = []
 
@@ -172,6 +174,7 @@ def phone(
     width: int = 390,
     height: int = 664,
     user_agent: str | None = None,
+    script: str = "",
 ) -> tuple[Page, list[str]]:
     """Opens the app on a phone; returns the page and the html2canvas requests it makes."""
     context = browser.new_context(
@@ -181,6 +184,8 @@ def phone(
     page.add_init_script(SEED)
     if stub:
         page.add_init_script(STUB)
+    if script:
+        page.add_init_script(script)
     requests: list[str] = []
     page.on("request", lambda r: requests.append(r.url) if "html2canvas" in r.url else None)
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -404,7 +409,7 @@ def check_failure(browser: Browser, url: str, emulator_db: str, errors: list[str
 def check_iphone(browser: Browser, url: str, emulator_db: str, errors: list[str]) -> None:
     """On an iPhone a send does not wait for apis.google.com or the auth iframe, which never answer here."""
     page, _ = phone(browser, url, errors, user_agent=IPHONE_UA)
-    for pattern in ("**/apis.google.com/**", "**/__/auth/**"):
+    for pattern in ("**/apis.google.com/**", "**/__/auth/**", "**/emulator/auth/**"):
         page.route(pattern, lambda route: None)
     open_sheet(page)
     send(page, "From an iPhone", "Thanks, sent.")
@@ -536,6 +541,16 @@ def check_rules(page: Page, emulator_db: str) -> None:
             fail(f"the rules deny {name}: {result}")
 
 
+def check_hung_storage(browser: Browser, url: str, emulator_db: str, errors: list[str]) -> None:
+    """A report sends when IndexedDB never opens: the report app never waits for Online room's storage check."""
+    page, _ = phone(browser, url, errors, script=HANG_IDB)
+    open_sheet(page)
+    send(page, "IndexedDB hangs", "Thanks, sent.")
+    if not any(r["comment"] == "IndexedDB hangs" for r in reports(emulator_db).values()):
+        fail("the report with IndexedDB hanging did not land")
+    page.context.close()
+
+
 def check_real_capture(browser: Browser, url: str, errors: list[str]) -> None:
     """The real html2canvas loads once, with its SRI, and takes a JPEG of at most 1080 px and SHOT_CHARS."""
     page, requests = phone(browser, url, errors, stub=False)
@@ -597,6 +612,7 @@ def main() -> None:
         check_private(browser, url, errors)
         check_failure(browser, url, emulator_db, errors)
         check_iphone(browser, url, emulator_db, errors)
+        check_hung_storage(browser, url, emulator_db, errors)
         check_real_capture(browser, url, errors)
         check_widths(browser, url, errors)
         check_flag_off(browser, url, errors)
