@@ -17,6 +17,15 @@ from data import ATTACK_LINE, RULES_MODES, SETS, UNCONFIRMED_SETS, Row, lineup  
 # The app opens in Simplified KSV.
 ROWS = [lineup(ri, "simple") for ri in range(6)]
 
+
+def drill_ri(question: str) -> int:
+    """The rotation of a Drill question titled by the setter's zone, "H5 · Reception"."""
+    m = re.match(r"H([1-6]) · ", question)
+    if not m:
+        raise AssertionError(f"Drill question {question!r} is not named H<n>")
+    return next(ri for ri in range(6) if ROWS[ri]["setter"] == int(m.group(1)))
+
+
 URL = (ROOT / "index.html").as_uri() + "?ff=all&anim=0"
 FAIL: list[str] = []
 # A stored role skips the first-visit role sheet, which covers the page.
@@ -1357,7 +1366,7 @@ def check_receive_limits(browser: Browser) -> None:
             if not question.endswith("· Reception"):
                 page.click("#resetBtn")
                 continue
-            ri = int(question[1]) - 1
+            ri = drill_ri(question)
             seen.add(ri)
             tag = f"limits drill {rules} R{ri + 1}"
             if limit_lines(page, "courtD"):
@@ -1383,7 +1392,7 @@ def check_receive_limits(browser: Browser) -> None:
         page.click("#resetBtn")
     else:
         fail("limits drill neighbour: Receive never came up")
-    ri = int(page.inner_text("#dq")[1]) - 1
+    ri = drill_ri(page.inner_text("#dq"))
     spot = next((x, y) for p, x, y in lineup(ri, "simple")["rec"] if p == "OH1")
     tap_at(page, *spot, court="courtD")
     page.wait_for_selector("#dnb button")
@@ -1467,7 +1476,7 @@ def check_attack_drill(browser: Browser) -> None:
                 if not question.endswith("· Attack"):
                     page.click("#resetBtn")
                     continue
-                ri = int(question[1]) - 1
+                ri = drill_ri(question)
                 tag = f"drill {rules} {vis} R{ri + 1}"
                 seen.add(ri)
                 check_from_picture(court_picture(page, "courtD"), rows[ri], ri, "OH1", tag)
