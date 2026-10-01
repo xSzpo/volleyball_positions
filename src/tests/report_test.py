@@ -40,10 +40,37 @@ SEED = (
     f"localStorage.setItem('ksv51:room', JSON.stringify('{CODE}'))"
 )
 STUB = """
+// Clones the page as html2canvas does, runs onclone on it and returns every rendered, not hidden
+// element whose own text or input value holds a secret, plus "pReady" if that button is hidden.
+const cloneLeaks = (onclone, secrets) => {
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;left:0;top:0;width:390px;height:664px;visibility:hidden';
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument;
+    doc.replaceChild(doc.importNode(document.documentElement, true), doc.documentElement);
+    onclone(doc);
+    const shown = (el) => el.getClientRects().length > 0
+        && doc.defaultView.getComputedStyle(el).visibility !== 'hidden';
+    const has = (text) => secrets.some((x) => (text || '').includes(x));
+    const leaks = [];
+    doc.body.querySelectorAll('*').forEach((el) => {
+        const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('');
+        if (has(own) && shown(el)) leaks.push(el.id || el.className || el.tagName);
+    });
+    const live = [...document.querySelectorAll('input')];
+    doc.querySelectorAll('input').forEach((el, i) => {
+        if (has(live[i].value) && shown(el)) leaks.push(el.id || 'input');
+    });
+    const ready = doc.getElementById('pReady');
+    if (ready && ready.getClientRects().length && !shown(ready)) leaks.push('pReady');
+    frame.remove();
+    return leaks;
+};
 window.html2canvas = async (el, opts) => {
     window.h2cCalls = (window.h2cCalls || 0) + 1;
     window.h2cOpts = { width: opts.width, height: opts.height, scale: opts.scale,
                        ignores: opts.ignoreElements(document.getElementById('reportSheet')) };
+    if (window.h2cSecrets) window.h2cLeaks = cloneLeaks(opts.onclone, window.h2cSecrets);
     if (window.h2cMode === 'throw') throw new Error('capture failed');
     const c = document.createElement('canvas');
     c.width = Math.round(opts.width * opts.scale);
@@ -310,6 +337,57 @@ def check_failure(browser: Browser, url: str, emulator_db: str, errors: list[str
     page.context.close()
 
 
+def check_retry(page: Page, emulator_db: str) -> None:
+    """A retry after a write that timed out but landed says sent and leaves one report."""
+    page.click("#tabLearn")
+    open_sheet(page)
+    page.evaluate("firebase.database().goOffline()")
+    send(page, "Retry after a timeout", "Could not send. Try again.")
+    page.evaluate("firebase.database().goOnline()")
+    landed = []
+    for _ in range(50):
+        landed = [r for r in reports(emulator_db).values() if r["comment"] == "Retry after a timeout"]
+        if landed:
+            break
+        time.sleep(0.2)
+    if len(landed) != 1:
+        fail(f"the queued write did not land once: {len(landed)}")
+    page.click("#reportSend")
+    page.wait_for_function("document.getElementById('reportMsg').textContent === 'Thanks, sent.'", timeout=20000)
+    copies = [r for r in reports(emulator_db).values() if r["comment"] == "Retry after a timeout"]
+    if len(copies) != 1:
+        fail(f"a retry after a timeout gave {len(copies)} reports")
+    page.click("#reportCancel")
+
+
+def check_private(browser: Browser, url: str, errors: list[str]) -> None:
+    """The screenshot hides player names and the room code on the Match screens that show them."""
+    page, _ = phone(browser, url, errors)
+    page.evaluate(f"window.h2cSecrets = {json.dumps(['Secretname', 'Quin', '482715', '482 715'])}")
+    page.click("#tabGame")
+
+    def leaks(where: str) -> None:
+        page.evaluate("window.h2cLeaks = null")
+        open_sheet(page)
+        found = page.evaluate("window.h2cLeaks")
+        if found is None or found:
+            fail(f"the screenshot of {where} shows a name, a code or hides Continue: {found}")
+        page.click("#reportCancel")
+
+    page.check('input[name="gPlayers"][value="online"]')
+    page.fill("#onCode", "482715")
+    leaks("the online setup")
+    page.check('input[name="gPlayers"][value="mp"]')
+    page.fill('#mpList input[data-k="0"]', NAME)
+    page.fill('#mpList input[data-k="1"]', "Quin Hidden")
+    leaks("the same-device setup")
+    page.click("#gStart")
+    leaks("the pass screen")
+    page.click("#pReady")
+    leaks("a same-device turn")
+    page.context.close()
+
+
 def check_rules(page: Page, emulator_db: str) -> None:
     """The rules allow a valid create only: no read, update, delete, oversize or unknown field."""
     request = urllib.request.Request(
@@ -342,6 +420,7 @@ def check_rules(page: Page, emulator_db: str) -> None:
         "old createdAt": 'await db.ref("reports").push(report({createdAt: 1}))',
         "extra field": 'await db.ref("reports").push(report({name: "Zed"}))',
         "bad role": 'await db.ref("reports").push(report({role: "Zed"}))',
+        "flags not an object": 'await db.ref("reports").push(report({flags: true}))',
         "bad flag": 'await db.ref("reports").push(report({flags: {"bug-report": "yes"}}))',
         "bad key": 'await db.ref("reports/short").set(report({}))',
     }
@@ -422,7 +501,9 @@ def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = check_sheet(browser, url, emulator_db, errors)
+        check_retry(page, emulator_db)
         check_rules(page, emulator_db)
+        check_private(browser, url, errors)
         check_failure(browser, url, emulator_db, errors)
         check_real_capture(browser, url, errors)
         check_wide(browser, url, errors)

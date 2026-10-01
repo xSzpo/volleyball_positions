@@ -146,6 +146,7 @@
         "ua": { ".validate": "newData.isString() && newData.val().length <= 300" },
         "version": { ".validate": "newData.isString() && newData.val().length <= 16" },
         "flags": {
+          ".validate": "newData.hasChildren()",
           "$key": { ".validate": "$key.matches(/^[a-z-]{1,40}$/) && newData.isBoolean()" }
         },
         "image": { ".validate": "newData.isString() && newData.val().beginsWith('data:image/jpeg;base64,') && newData.val().length <= 350000" },

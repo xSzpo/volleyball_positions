@@ -44,7 +44,7 @@ PRIVACY = {
     "mask_all_element_attributes": True,
     "respect_dnt": True,
 }
-DEFAULT_OFF = {"after-dig", "match-online"}
+DEFAULT_OFF = {"after-dig", "match-online", "bug-report"}
 FAKE_POSTHOG = """
 window.posthog = {
   calls: { register: [] },

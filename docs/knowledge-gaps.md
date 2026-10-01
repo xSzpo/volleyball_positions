@@ -926,7 +926,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #52
 - **Problem:** Anyone who signs in anonymously can create reports. A per-user limit needs the uid in the report or a second node keyed by uid, and the plan says never a uid.
-- **Decision:** No rate limit. The rules allow a create only (no read, update or delete), with every field validated and the image at most 350 000 characters, so one report is at most about 360 kB. The Spark plan's quota is the cap, and the owner can delete reports in the Firebase console. A send that times out offline may still arrive later, so a retry can give two copies.
+- **Decision:** No rate limit. The rules allow a create only (no read, update or delete), with every field validated and the image at most 350 000 characters, so one report is at most about 360 kB. The Spark plan's quota is the cap, and the owner can delete reports in the Firebase console. A retry of the same comment reuses its push key, so a send that timed out but landed is not written twice: the retry is denied as an overwrite and counts as sent.
 - **Alternatives:** a `reportsBy/{uid}` timestamp node checked by the rules; App Check.
 - **Reversible by:** `reports` in `infra/database.rules.json`.
 
@@ -934,6 +934,14 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #52
 - **Problem:** Reports go through the same Firebase SDK and anonymous sign-in as Online room, whose flag `match-online` is off (#33).
-- **Decision:** `bug-report` has no needs. The Firebase SDK is loaded on the first Send only, as Online room loads it on Create or Join; until the owner's `terraform apply` uploads the new rules every send is denied and says "Could not send. Try again.", so the PostHog flag stays off until then.
+- **Decision:** `bug-report` has no needs. The Firebase SDK is loaded on the first Send only, as Online room loads it on Create or Join; until the owner's `terraform apply` uploads the new rules every send is denied and says "Could not send. Try again.", so the flag stays off until then (see 124).
 - **Alternatives:** make `bug-report` need `match-online`.
 - **Reversible by:** `FEATURE_NEEDS` in `src/template.html`.
+
+### 124. Report a problem is off by default
+
+- **Issue:** #52
+- **Problem:** The live database rules accept no reports until the owner's `terraform apply`. A first visit has no stored PostHog values and uses the built-in defaults, so a PostHog flag that is off does not hide the icon on that visit.
+- **Decision:** `bug-report` is off in `FEATURES`. After the apply, the PostHog flag switches it on.
+- **Alternatives:** on by default, with every send denied until the apply.
+- **Reversible by:** `FEATURES` in `src/template.html`.
