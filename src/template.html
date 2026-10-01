@@ -4409,29 +4409,50 @@
       // Shows the Watch the move button under the answer; a key keeps a live reveal from mounting it twice.
       function watchMount(boxId, svgId, ri, phase, r, redraw, key = null) {
         const box = $(boxId);
-        if (key != null && box.dataset.key === key && watch?.box === box) return;
-        watchClose();
+        if (key != null && box.dataset.key === key && !box.hidden) return;
+        watchClose(box);
         if (!watchOn(phase)) return;
         box.dataset.key = key ?? "";
         box.hidden = false;
         box.innerHTML = '<button type="button" class="btn wbtn">Watch the move ▸</button>';
-        watch = { box, svg: $(svgId), ri, role: r, redraw, a: null };
+        const spec = { box, svg: $(svgId), ri, role: r, redraw };
+        // Each box keeps its own answer; a tap in it takes over the one play from any other box.
+        const take = () => {
+          if (watch?.box === box) return;
+          if (watch) watchRest();
+          watch = { ...spec, a: null };
+        };
         box.querySelector(".wbtn").onclick = () => {
+          take();
           box.innerHTML = WATCH_BAR;
           box.querySelectorAll("[data-w]").forEach((b) => {
-            b.onclick = () => watchAct(b.dataset.w);
+            b.onclick = () => {
+              take();
+              watchAct(b.dataset.w);
+            };
           });
           watchPlay();
+          watchFit();
         };
       }
-      // One Watch the move at a time; with a box, only the one under that box.
+      // As learnFit(): the whole court on screen, the caption too when it fits.
+      function watchFit() {
+        const court = watch.svg.getBoundingClientRect(),
+          cap = watch.box.getBoundingClientRect();
+        const down = Math.min(cap.bottom - (innerHeight - 6), court.top);
+        if (court.top < 0 || down > 0) scrollBy(0, court.top < 0 ? court.top : down);
+      }
+      // With a box, closes only that box; without, the one that plays.
       function watchClose(box = null) {
-        if (!watch || (box && watch.box !== box)) return;
-        if (watch.a) cancelAnimationFrame(watch.a.raf);
-        watch.box.hidden = true;
-        watch.box.innerHTML = "";
-        delete watch.box.dataset.key;
-        watch = null;
+        const target = box ?? watch?.box;
+        if (!target) return;
+        if (watch?.box === target) {
+          if (watch.a) cancelAnimationFrame(watch.a.raf);
+          watch = null;
+        }
+        target.hidden = true;
+        target.innerHTML = "";
+        delete target.dataset.key;
       }
       // A redraw of the answer court ends a play on it.
       function watchYield(svg) {
@@ -5670,7 +5691,9 @@
         gOptText();
       }
       function gView(v) {
-        if (watch && $("game").contains(watch.box) && !$(v).contains(watch.box)) watchClose();
+        ["gWatch", "rWatch"].forEach((id) => {
+          if (!$(v).contains($(id))) watchClose($(id));
+        });
         ["gSetup", "gPass", "gLobby", "gReveal", "gPlay", "gEnd"].forEach((id) => {
           $(id).hidden = id !== v;
         });

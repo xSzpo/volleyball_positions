@@ -1703,6 +1703,70 @@ def check_watch_move(browser: Browser) -> None:
     if watch_play(page) is not None or page.is_visible("#gWatch"):
         fail("watch match: Next does not close it")
     page.close()
+    check_watch_fit_and_boxes(browser)
+
+
+def court_in_view(page: Page, court: str) -> dict[str, float]:
+    box: dict[str, float] = page.evaluate(
+        """(id) => {
+            const r = document.getElementById(id).getBoundingClientRect();
+            return {top: r.top, bottom: r.bottom, height: innerHeight};
+        }""",
+        court,
+    )
+    return box
+
+
+def check_watch_fit_and_boxes(browser: Browser) -> None:
+    """At 390 x 664 the court stays on screen while it plays; a Match answer keeps the Drill button."""
+    page = drill_page(browser, ["rec", "ar"])
+    page.set_viewport_size({"width": 390, "height": 664})
+    for _ in range(40):
+        if tap_far(page)["on"]:
+            break
+        page.click("#nextBtn")
+    page.wait_for_timeout(500)
+    page.click("#dWatch .wbtn")
+    page.wait_for_timeout(300)
+    box = court_in_view(page, "courtD")
+    if not (watch_play(page) or {}).get("playing") or box["top"] < -1 or box["bottom"] > box["height"] + 1:
+        fail(f"watch fit: the Drill court is not on screen while it plays: {box}")
+    if not page.locator("#dWatch .wcap").is_visible():
+        fail("watch fit: the Drill caption is hidden")
+    if page.locator("#courtD .zones").count():
+        fail("watch: the Learn zone numbers drawn on the Drill court")
+    page.click("#nextBtn")
+    for _ in range(40):
+        if tap_far(page)["on"]:
+            break
+        page.click("#nextBtn")
+    page.wait_for_timeout(500)
+    page.click("#tabGame")
+    page.click('.vis[data-vis="game"] [data-v="none"]')
+    if page.get_attribute("#gOpts", "open") is None:
+        page.click("#gOpts > summary")
+    for step in ("start", "serve", "rec", "ar"):
+        page.set_checked(f"#gs-{step}", step == "rec")
+    page.check('input[name="gOrder"][value="order"]')
+    page.set_checked("#nbGame", False)
+    page.click("#gStart")
+    tap_spot(page, "OH1", 0, "rec")
+    page.click("#gWatch .wbtn")
+    page.wait_for_timeout(300)
+    box = court_in_view(page, "courtG")
+    if not (watch_play(page) or {}).get("playing") or box["top"] < -1 or box["bottom"] > box["height"] + 1:
+        fail(f"watch fit: the Match court is not on screen while it plays: {box}")
+    page.click("#tabDrill")
+    if not page.is_visible("#dWatch .wbtn"):
+        fail("watch boxes: the Drill Watch the move is gone after a Match answer")
+    page.click("#dWatch .wbtn")
+    if not (watch_play(page) or {}).get("playing") or page.locator("#courtG g.am").count():
+        fail("watch boxes: the Drill play does not take over from Match")
+    page.click("#tabGame")
+    if not page.is_visible("#gWatch") or page.locator("#courtG g.am").count():
+        fail("watch boxes: the Match box lost, or its court still playing")
+    page.close()
+    print("Watch the move: court on screen at 390 x 664, each box kept across tabs", flush=True)
     print("Watch the move: on tap only, controls, back to the answer, Next closes it", flush=True)
 
 
