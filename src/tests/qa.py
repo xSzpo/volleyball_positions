@@ -1030,7 +1030,7 @@ def check_drill_reset(browser: Browser, tag: str) -> None:
 
 
 def check_drill_h_names(browser: Browser, tag: str) -> None:
-    """Drill names every rotation H<n> only (question, feedback, weak spots, review); Learn and Match R<n> (H<n>)."""
+    """Drill and Match name every rotation H<n> only (question, feedback, weak spots, review); Learn R<n> (H<n>)."""
     section("DRILL names by the setter")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
     ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
@@ -1074,8 +1074,8 @@ def check_drill_h_names(browser: Browser, tag: str) -> None:
         if pg.is_checked(f"#gs-{step}") != (step == "serve"):
             pg.click(f"#gs-{step}")
     pg.click("#gStart")
-    if not re.fullmatch(r"R[1-6] \(H[1-6]\)", pg.inner_text("#gTitle")):
-        fail(f"{tag} Match lost the R<n> (H<n>) name: {pg.inner_text('#gTitle')!r}")
+    if not re.fullmatch(r"H[1-6]", pg.inner_text("#gTitle")):
+        fail(f"{tag} Match does not name the rotation H<n> only: {pg.inner_text('#gTitle')!r}")
     if errs:
         fail(f"{tag} drill H names JS errors: {errs[:3]}")
     ctx.close()

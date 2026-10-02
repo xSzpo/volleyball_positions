@@ -1018,3 +1018,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `fbSetup()` sets up the default app's auth, and the `report` app's, with no resolver. The default app keeps local persistence (IndexedDB, else localStorage), the same store as before, so a uid signed in before this change is kept. The compat SDK does not export that persistence class, so `fbLocal()` takes it from a short-lived app named `persistence` after `setPersistence(LOCAL)`. If that fails or takes more than 3 s (the IndexedDB check can hang on some iOS versions), sign-in goes on in memory and only Rejoin after a reload joins as a new player. Reports only wait for the scripts, never for that check. Every auth request also waits for Firebase's usage heartbeat, which reads IndexedDB; `fbSetup()` sends it empty after 1 s (`BEAT_MS`), so a hung IndexedDB cannot hold up sign-in, Create or a report.
 - **Alternatives:** in-memory persistence, losing Rejoin after a reload; an own localStorage persistence class; the modular SDK for auth.
 - **Reversible by:** `fbSetup()` and `fbLocal()` in `src/template.html`.
+
+### 134. Match names rotations by the setter only, and Rotate asks by H
+
+- **Issue:** #135
+- **Problem:** Match named rotations `R1 (H1)`, and Match Rotate from the name asked by H or R at random per moment (#93-#95). The owner asked on 2026-10-01 for Match to show only the setter's zone, as Drill does (#110).
+- **Decision:** This amends #93-#95. Every Match text names the rotation `H<n>` only: the setup options, the story, the title (before and after the answer), hints, feedback, the pass screen, the reveal and the mistakes lists, in solo, same-device and online play. Match Rotate always asks by H; the H/R pick (`gRotHow()`) and the match seed it read are gone, so every player of a moment gets the same name and online play needs no seed; a phone on a cached older build may still ask by R until it reloads (`ROOM_V` unchanged, as the room data did not change). The best-score key stays `v8|`: Rotate scores the same whichever name it asks by. Learn keeps `R1 (H1)`.
+- **Alternatives:** keep the H/R pick for Rotate only; an "R names" option in Match options.
+- **Reversible by:** `hName()` and `hOnly()` in the Match code of `src/template.html`.
