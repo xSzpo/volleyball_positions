@@ -1018,3 +1018,35 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `fbSetup()` sets up the default app's auth, and the `report` app's, with no resolver. The default app keeps local persistence (IndexedDB, else localStorage), the same store as before, so a uid signed in before this change is kept. The compat SDK does not export that persistence class, so `fbLocal()` takes it from a short-lived app named `persistence` after `setPersistence(LOCAL)`. If that fails or takes more than 3 s (the IndexedDB check can hang on some iOS versions), sign-in goes on in memory and only Rejoin after a reload joins as a new player. Reports only wait for the scripts, never for that check. Every auth request also waits for Firebase's usage heartbeat, which reads IndexedDB; `fbSetup()` sends it empty after 1 s (`BEAT_MS`), so a hung IndexedDB cannot hold up sign-in, Create or a report.
 - **Alternatives:** in-memory persistence, losing Rejoin after a reload; an own localStorage persistence class; the modular SDK for auth.
 - **Reversible by:** `fbSetup()` and `fbLocal()` in `src/template.html`.
+
+### 134. Rotation plays a build from the setter
+
+- **Issue:** #146
+- **Problem:** A player report asked for Rotation to show how the lineup follows from the setter, not only the finished lineup. Rotation was static: only Reception animated (#78, owner, #69, #94).
+- **Decision:** This amends #78 for Rotation only; Our serve and Base stay static. Rotation still opens on the full lineup with the overlap lines, and nothing plays on its own. Play, Step, Step back, the stage dots, the speed and the Play nudge work as on Reception. The play starts on an empty court and adds one marker per stage on its Rotation spot with a 300 ms fade and pop; nobody runs and there is no ball. The order is the setter, the opposite on the setter's diagonal, OH1, OH2 on OH1's diagonal, the front middle in the empty front spot, then L in the empty back spot. It ends on the still, so there is no fade-back; the overlap lines fade in at the end.
+- **Alternatives:** replace the still with the build; build from the setter with players walking in from the sideline.
+- **Reversible by:** `animPhase()`, `phaseStages()` and `buildRotation()` in `src/template.html`.
+
+### 135. The Rotation build captions every stage
+
+- **Issue:** #146
+- **Problem:** While a play runs, the caption shows only your own lines (`captionPlan()`). In the build each player has one line, so you would see the setter's line and then your own, and miss the rules that place everyone in between.
+- **Decision:** The build shows every stage's line, each held for its whole stage (`BUILD_MS` = `CAPTION_MS`, 2.5 s, so the play lasts 15 s plus the end hold). Your own stage reads "You (OH1): …". After the play, the rest caption lists the six steps under "Then:", and reduced motion lists them on the still. Reception keeps the own-line rule.
+- **Alternatives:** your own line only, as on Reception; shorter stages with the lines shown after the play.
+- **Reversible by:** `captionPlan()` (`tr.build`) and `BUILD_MS` in `src/template.html`.
+
+### 136. Official R3 and R6 build the serving middle in zone 1
+
+- **Issue:** #146
+- **Problem:** In Official R3 and R6 the Rotation step is the real lineup (`middleServes()`): the zone 1 middle serves and L is off. The build's last stage would place L.
+- **Decision:** The build uses the same lineup as the still. Its last stage places the serving middle in zone 1: "MB1 fills zone 1 and serves: the libero may not serve, so L is off." Simplified always builds MB and L, and Official names the front middle (MB1 or MB2).
+- **Alternatives:** build L and then swap it for the serving middle in a seventh stage.
+- **Reversible by:** `buildRotation()` in `src/template.html`.
+
+### 137. "Serves next after the setter" names OH1's zone
+
+- **Issue:** #146
+- **Problem:** Which outside hitter comes "next to the setter" had to match how the app explains the serving order (`S, OH1, MB1, OP, OH2, MB2`; `relation()`: "In the serving order you come 1 after the setter").
+- **Decision:** OH1 is always one zone on from the setter (6 wraps to 1), so the caption says "Outside hitter 1 serves next after the setter, one zone on: zone <n+1>." It names the serving order, as `relation()` does, rather than "next to", which on court can mean either side.
+- **Alternatives:** "OH1 is next to the setter"; count the zones as in `relation()` ("count 1 zone on").
+- **Reversible by:** `buildRotation()` in `src/template.html`.

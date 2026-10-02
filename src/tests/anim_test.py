@@ -1,8 +1,10 @@
 """Playwright test of the Learn animation (learn-animation).
 
 Reception opens at rest on the reception spots with the overlap limits and no
-ball; it plays only on Play, and Play gives one nudge per open. Rotation, Our
-serve and Base are static with no controls, no nudge and no play.
+ball; it plays only on Play, and Play gives one nudge per open. Rotation opens
+on its still lineup too and plays only on Play: it builds the lineup from the
+setter, one marker per stage, and ends on the still. Our serve and Base are
+static with no controls, no nudge and no play.
 Reception plays their serve, the pass, the set, and our spike over the net with
 everyone to base defence, then fades back to the reception spots; Pause and
 Step keep their frame. Checks the stage end positions, the ball on the Our
@@ -29,7 +31,7 @@ from playwright.sync_api import Browser, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from data import ATTACK_LINE, BASE_DEF, lineup  # noqa: E402
+from data import ATTACK_LINE, BASE_DEF, lineup, server  # noqa: E402
 
 BASE = (ROOT / "index.html").as_uri()
 FAIL: list[str] = []
@@ -277,7 +279,7 @@ def check_reception_rest(page: Page, tag: str, ri: int = 0, mode: str = "simple"
 
 
 def check_nudge(browser: Browser) -> None:
-    """Play gets the nudge class once per open of Reception, never on Our serve, Base, a loop or while playing."""
+    """Play nudges once per open of Rotation or Reception, never on Our serve, Base, a loop or while playing."""
     for label, query, motion in (
         ("motion", "?ff=all", None),
         ("reduced motion", "?ff=all", "reduce"),
@@ -310,28 +312,28 @@ def check_nudge(browser: Browser) -> None:
         page.click('.ph[data-k="ar"]')
         expect(3, "a chip to Base")
         page.click('.ph[data-k="start"]')
-        expect(3, "Rotation")
+        expect(4, "Rotation")
         page.click('.ph[data-k="serve"]')
-        expect(3, "a chip to Our serve")
+        expect(4, "a chip to Our serve")
         page.click("#tabSets")
         page.click("#tabLearn")
-        expect(3, "a tab change back to Our serve")
+        expect(4, "a tab change back to Our serve")
         page.click('.ph[data-k="rec"]')
-        expect(4, "back to Reception")
+        expect(5, "back to Reception")
         if on:
             page.click("#lPlay")
         if page.evaluate("document.querySelector('#lPlay').classList.contains('nudge')"):
             fail(f"{label}: the nudge runs while playing")
         page.wait_for_timeout(300)
-        expect(4, "while playing")
+        expect(5, "while playing")
         page.click("#tabSets")
         page.click("#tabLearn")
-        expect(5, "a tab change back to Reception")
+        expect(6, "a tab change back to Reception")
         page.click("#roleChip")
         page.click('#roles .role[data-r="L"]')
         if page.is_visible("#setupPanel"):
             page.click("#roleChip")
-        expect(5, "a role change")
+        expect(6, "a role change")
         context.close()
 
 
@@ -434,18 +436,18 @@ def check_no_autoplay(page: Page) -> None:
 
 
 def check_static(page: Page) -> None:
-    """Rotation never plays and shows no controls; Next reads in full there. Next into Base does not play."""
+    """Rotation opens on its still with the controls and plays nothing; Next reads in full and Base does not play."""
     open_app(page, "?ff=all", {"role": "S", "rulesMode": "simple"})
     for ri, phase in ((0, "start"), (3, "start")):
         learn(page, ri, phase)
         if anim(page):
             fail(f"R{ri + 1} {phase}: a chip tap plays an animation")
-        if page.is_visible("#lAnim") or page.is_visible("#lDots"):
-            fail(f"R{ri + 1} {phase}: controls show")
+        if not page.is_visible("#lPlay") or page.locator("#lDots i").count() != 6:
+            fail(f"R{ri + 1} {phase}: the controls or the six stage dots do not show")
         if not page.inner_text("#lNext").lower().startswith("next:"):
             fail(f"R{ri + 1} {phase}: Next reads {page.inner_text('#lNext')!r}")
         if page.locator("#courtL .am").count():
-            fail(f"R{ri + 1} {phase}: animation markers on a static screen")
+            fail(f"R{ri + 1} {phase}: animation markers on the still")
     learn(page, 0, "rec")
     page.click("#lNext")
     if anim(page) or page.inner_text("#learnTag") != "R1 (H1) · Base":
@@ -457,8 +459,8 @@ def check_static(page: Page) -> None:
     if anim(page) or page.inner_text("#learnTag") != "R2 (H6) · Rotation":
         fail("Next into the next Rotation animates")
     stages: list[dict[str, Any]] = page.evaluate("window.ksvLearn.stages(0, 'start')")
-    if stages:
-        fail(f"Rotation has animation stages: {stages}")
+    if len(stages) != 6:
+        fail(f"Rotation has {len(stages)} build stages, expected 6")
 
 
 HIT_Y, APPROACH_Y = 0.08, 0.17
@@ -529,6 +531,123 @@ def trails_at(stages: list[dict[str, Any]], t: float) -> list[str]:
             if stage["start"] + stage["delays"][p] < t < gone + TRAIL_FADE_MS:
                 shown.append(p)
     return shown
+
+
+ZONES = (4, 3, 2, 5, 6, 1)
+SHOWN = """() => [...document.querySelectorAll('#courtL .am')]
+  .filter((g) => +(g.getAttribute('opacity') ?? 1) > 0).map((g) => g.dataset.p).sort()"""
+
+
+def rotation_zones(ri: int, mode: str) -> dict[str, int]:
+    """The Rotation step's zones: in Official R3 and R6 the serving middle stands in zone 1 and L is off."""
+    row = lineup(ri, mode)  # type: ignore[arg-type]
+    back = list(row["back"])
+    if mode == "official" and back[2] == "L":
+        back[2] = server(ri, mode)  # type: ignore[arg-type]
+    return dict(zip(row["front"] + back, ZONES, strict=True))
+
+
+def build_order(zones: dict[str, int]) -> list[str]:
+    """The setter, the opposite, the outside hitters, then the front middle and the back-row player left."""
+    known = ["S", "OP", "OH1", "OH2"]
+    middle = next(p for p, z in zones.items() if z in (4, 3, 2) and p not in known)
+    back = next(p for p in zones if p not in known and p != middle)
+    return [*known, middle, back]
+
+
+def check_build_stages(page: Page, mode: str, ri: int) -> None:
+    """The Rotation build of one rotation: order, spots, end, captions."""
+    tag = f"{mode} R{ri + 1} Rotation build"
+    zones = rotation_zones(ri, mode)
+    order = build_order(zones)
+    n = zones["S"]
+    want = {"OP": (n + 2) % 6 + 1, "OH1": n % 6 + 1, "OH2": (n + 3) % 6 + 1}
+    for p, z in want.items():
+        if zones[p] != z:
+            fail(f"{tag}: {p} is in zone {zones[p]}, the rule gives {z}")
+    if mode == "official" and ri in (2, 5) and ("L" in zones or zones.get(server(ri, mode)) != 1):  # type: ignore[arg-type]
+        fail(f"{tag}: expected the serving middle in zone 1 and no L: {zones}")
+    stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'start')")
+    got = [st["appear"] for st in stages]
+    if got != order:
+        fail(f"{tag}: the markers appear as {got}, expected {order}")
+    if any(st["moves"] or st["ball"] for st in stages):
+        fail(f"{tag}: a build stage moves a player or the ball")
+    still = {o["p"]: (o["x"], o["y"]) for o in page.evaluate(f"window.ksvLearn.players({ri}, 'start')")}
+    if set(still) != set(zones):
+        fail(f"{tag}: the still has {sorted(still)}, expected {sorted(zones)}")
+    for st in stages:
+        at = page.evaluate("(a) => window.ksvLearn.at(...a)", [ri, "start", st["start"] + 1])
+        p = st["appear"]
+        if p in at and math.dist((at[p]["x"], at[p]["y"]), still.get(p, (9, 9))) > 1e-6:
+            fail(f"{tag}: {p} appears at {at[p]}, expected its Rotation spot {still.get(p)}")
+    end = {p: (v["x"], v["y"]) for p, v in page.evaluate(f"window.ksvLearn.track({ri}, 'start', 1)")[-1]["pos"].items()}
+    if set(end) != set(still) or any(math.dist(end[p], still[p]) > 1e-6 for p in still):
+        fail(f"{tag}: the build ends on {end}, not the still {still}")
+    texts = [st["notes"][st["appear"]] for st in stages]
+    for p, text in zip(order, texts, strict=False):
+        if len(text) > 78 or f"zone {zones[p]}" not in text:
+            fail(f"{tag}: {p}'s caption is {len(text)} characters or misses its zone: {text!r}")
+    if len(set(texts)) != len(texts):
+        fail(f"{tag}: repeated captions {texts}")
+    if mode == "official" and ri in (2, 5) and "serves" not in texts[-1]:
+        fail(f"{tag}: the serving middle's caption does not say it serves: {texts[-1]!r}")
+    for role in MODES[mode]:
+        plan = [c["text"] for c in page.evaluate("(a) => window.ksvLearn.captionPlan(...a)", [ri, "start", role])]
+        if len(plan) != len(stages) or len(set(plan)) != len(plan):
+            fail(f"{tag} as {role}: the caption plan is {plan}, expected every stage's line once")
+
+
+def check_rotation_build(page: Page) -> None:
+    """Rotation builds its lineup from the setter in every rotation and both rule sets.
+
+    One marker appears per stage on its Rotation spot, nobody moves, and the play ends on the still with the
+    overlap lines and the build steps under Then:. Step and Step back walk the stages, and Step back from the
+    first stage returns to the still. Official R3 and R6 build the serving middle in zone 1 and no L.
+    """
+    for mode in MODES:
+        open_app(page, "?ff=all", {"role": "OH1", "rulesMode": mode})
+        for ri in range(6):
+            check_build_stages(page, mode, ri)
+    for mode, ri in (("simple", 0), ("official", 2)):
+        role = "OH1" if mode == "simple" else server(ri, mode)  # type: ignore[arg-type]
+        tag = f"{mode} R{ri + 1} Rotation as {role}"
+        open_app(page, "?ff=all", {"role": role, "rulesMode": mode})
+        learn(page, ri, "start")
+        order = build_order(rotation_zones(ri, mode))
+        still = {o["p"]: (o["x"], o["y"]) for o in page.evaluate(f"window.ksvLearn.players({ri}, 'start')")}
+        if anim(page) or page.locator("#courtL .am").count() or page.locator("#courtL .mk").count() != 6:
+            fail(f"{tag}: does not open on the full still")
+        if not page.is_disabled("#lBack"):
+            fail(f"{tag}: Step back is enabled on the still")
+        for k in (1, 2):
+            page.click("#lStep")
+            wait_paused(page)
+            shown = page.evaluate(SHOWN)
+            if shown != sorted(order[:k]):
+                fail(f"{tag}: after {k} Step(s) the court shows {shown}, expected {sorted(order[:k])}")
+            check_positions(f"{tag} step {k}", page.evaluate(MARKERS, "#courtL .am"), {p: still[p] for p in order[:k]})
+            if page.locator("#courtL .bnd").count():
+                fail(f"{tag}: overlap lines show during the build")
+            if role in order[:k] and "You" not in page.inner_text("#lCap"):
+                fail(f"{tag}: your stage caption does not name you: {page.inner_text('#lCap')!r}")
+        page.click("#lBack")
+        if page.evaluate(SHOWN) != [order[0]]:
+            fail(f"{tag}: Step back shows {page.evaluate(SHOWN)}, expected [{order[0]!r}]")
+        page.click("#lBack")
+        if anim(page) or page.locator("#courtL .mk").count() != 6:
+            fail(f"{tag}: Step back from the first stage does not return to the still")
+        page.click("#lPlay")
+        page.wait_for_function("!window.ksvLearn.anim()", timeout=25000)
+        check_positions(f"{tag} end", page.evaluate(MARKERS, "#courtL .mk"), still)
+        if mode == "official" and ("L" in still or role not in still):
+            fail(f"{tag}: the build shows L or leaves out the serving middle: {sorted(still)}")
+        if mode == "simple" and not page.locator("#courtL .bnd").count():
+            fail(f"{tag}: the overlap lines do not show at the end")
+        want = page.evaluate(f"window.ksvLearn.captions({ri}, 'start', '{role}')")
+        items = page.locator("#lCap .then li").all_inner_texts()
+        if items != want or len(items) != 6:
+            fail(f"{tag}: after the play the Then: list is {items}, expected {want}")
 
 
 def check_reception_stages(page: Page) -> None:
@@ -1293,6 +1412,11 @@ def check_reduced(browser: Browser) -> None:
         page = context.new_page()
         open_app(page, query, {"role": "OH1", "rulesMode": "simple"})
         learn(page, 0, "start")
+        build = page.evaluate("window.ksvLearn.captions(0, 'start', 'OH1')")
+        still = page.evaluate("window.ksvLearn.still(0, 'start', 'OH1')")
+        items = page.locator("#lCap ol li").all_inner_texts()
+        if items != ([still] if still and still not in build else []) + build or page.is_visible("#lAnim"):
+            fail(f"{label} Rotation: the caption lists {items}, expected the six build steps {build}")
         for phase in ("serve", "rec"):
             page.click("#lNext")
             if anim(page) or page.locator("#courtL .am").count():
@@ -1600,6 +1724,7 @@ def main() -> None:
         check_rest_pictures(page)
         check_no_autoplay(page)
         check_static(page)
+        check_rotation_build(page)
         check_reception_stages(page)
         check_reception_ends(page)
         check_quick_in_front(page)
