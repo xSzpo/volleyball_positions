@@ -2139,11 +2139,11 @@
                 <legend>Rotation order</legend>
                 <label
                   ><input type="radio" name="gOrder" value="order">
-                  In order: R1 (H1) → R6 (H2)</label
+                  In order: H1, H6, H5, H4, H3, H2</label
                 >
                 <label
                   ><input type="radio" name="gOrder" value="mixed">
-                  Mixed, like R1, R3, R5, R2, R4, R6</label
+                  Mixed, like H1, H5, H3, H6, H4, H2</label
                 >
               </fieldset>
               <label class="check" id="nbGameCheck"
@@ -5173,7 +5173,7 @@
       // Rotate from the name alone: you place the setter, yourself, then each overlap partner.
       // Shared by Drill (`rot`) and Match (`G.rot`); `how` is "h" (setter's zone) or "r".
       let rot = null;
-      // Drill names a rotation by the setter only (owner, #116); Learn and Match keep "R3 (H5)".
+      // Drill and Match name a rotation by the setter only (owner, #116, #135); Learn keeps "R3 (H5)".
       const hName = (ri) => `H${ROWS[ri].setter}`;
       const hOnly = (text) => text.replace(/R[1-6] \((H[1-6])\)/g, "$1");
       function rotStart(ri, role, how) {
@@ -5967,7 +5967,6 @@
           setN: 0,
           sc: null,
           rot: null,
-          seed: Math.floor(Math.random() * 1e9),
           mp: null,
         };
         track("match_started", {
@@ -6029,11 +6028,6 @@
       function gNewMatch() {
         gStart(gQueue(), false, gPlayersMode() === "mp" ? mpPlayers : null);
       }
-      // Every player of a moment gets the same name: it comes from the match seed and the moment.
-      function gRotHow(i) {
-        const x = Math.imul((G.seed ^ Math.imul(i + 1, 0x9e3779b1)) >>> 0, 0x45d9f3b) >>> 0;
-        return (x ^ (x >>> 15)) & 1 ? "h" : "r";
-      }
       function gRotStory(N) {
         if (G.replay) return `We won the rally and rotate into ${N}.`;
         if (G.mixed) return `Coach calls ${N}.`;
@@ -6043,7 +6037,7 @@
       }
       function gStory(st, prev) {
         if (G.rot) return gRotStory(G.rot.name);
-        const R = ROWS[st.ri].name,
+        const R = hName(st.ri),
           newRot = !prev || prev.ri !== st.ri;
         const call = `Coach calls ${R}: setter in ${ROWS[st.ri].setter}.`;
         const pre =
@@ -6087,12 +6081,12 @@
         G.sc = null;
         G.rot =
           st.phase === "start" && feature("match-rotate-name")
-            ? rotStart(st.ri, G.role, gRotHow(G.i))
+            ? rotStart(st.ri, G.role, "h")
             : null;
         $("gWait").hidden = true;
         $("gNbBox").innerHTML = "";
         delete $("gNext").dataset.label;
-        $("gTitle").textContent = G.rot ? G.rot.name : ROWS[st.ri].name;
+        $("gTitle").textContent = hName(st.ri);
         const who = G.mp ? mpCur() : G.online ? G.online.me : null;
         if (who) {
           const p = who;
@@ -6197,11 +6191,11 @@
         if (!me && G.role === "L")
           return rulesMode === "official"
             ? "Who is in zone 1 when we serve? Remember: under the official rules the libero may never serve."
-            : "Who is in zone 1 when we serve? In Simplified KSV a substitute (SUB) serves in R3 and R6, so the libero waits off court.";
+            : "Who is in zone 1 when we serve? In Simplified KSV a substitute (SUB) serves in H5 and H2, so the libero waits off court.";
         if (!me)
           return st.phase === "serve"
             ? "Who does the libero replace while we serve? And who is serving from zone 1?"
-            : `Who does the libero replace in ${ROWS[st.ri].name}? Is your middle in the back row?`;
+            : `Who does the libero replace in ${hName(st.ri)}? Is your middle in the back row?`;
         if (st.phase === "start") {
           if (G.role === "L") return `${relation(st.ri, "L")} Find the back-row middle first.`;
           const pz = zoneOf((st.ri + 5) % 6, G.role);
@@ -6250,7 +6244,7 @@
         $("gHelp").disabled = G.help >= 2;
         $("gFb").className = "fb close";
         $("gFb").innerHTML =
-          `<b>${G.help === 1 ? "Hint" : "More help"}</b><p style="margin:2px 0 0">${gHint(G.help)}</p>`;
+          `<b>${G.help === 1 ? "Hint" : "More help"}</b><p style="margin:2px 0 0">${hOnly(gHint(G.help))}</p>`;
         gDraw();
       };
       const FULL_PTS = { perfect: 100, close: 60, miss: 0 };
@@ -6333,13 +6327,13 @@
           $("gFb").innerHTML = ON_SAVED;
         } else {
           $("gFb").className = `fb ${{ perfect: "good", close: "close", miss: "bad" }[q]}`;
-          $("gFb").innerHTML =
-            `<span class="pts">+${pts}</span><b>${title}</b><p class="bd" id="gBd"></p><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`;
+          $("gFb").innerHTML = hOnly(
+            `<span class="pts">+${pts}</span><b>${title}</b><p class="bd" id="gBd"></p><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`,
+          );
           $("gScore").textContent = G.score;
           $("gStreak").textContent = G.streak;
           watchMount("gWatch", "courtG", st.ri, st.phase, G.role, gDraw);
           if (G.rot) {
-            $("gTitle").textContent = ROWS[st.ri].name;
             $("gFb").insertAdjacentHTML(
               "beforeend",
               rotGradesHtml(G.rotGrades, G.role) + rotLimitsHtml(st.ri, G.role),
@@ -6560,7 +6554,7 @@
           ? `<h2 style="font-size:20px;margin-top:4px">Where you should have been</h2><ul class="mist">${G.misses
               .map((m) => {
                 const d = describe(m.ri, m.phase, G.role);
-                return `<li><b>${ROWS[m.ri].name} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`;
+                return hOnly(`<li><b>${hName(m.ri)} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`);
               })
               .join("")}</ul>`
           : "<p>No mistakes. " +
@@ -6781,7 +6775,7 @@
         swapIn(p);
         const st = G.queue[G.i];
         $("pMoment").textContent =
-          `Moment ${G.i + 1} of ${G.queue.length} · ${st.phase === "start" && feature("match-rotate-name") ? rotStart(st.ri, p.role, gRotHow(G.i)).name : ROWS[st.ri].name} · ${FULL[st.phase]} · turn ${G.mp.turn + 1} of ${G.mp.players.length}`;
+          `Moment ${G.i + 1} of ${G.queue.length} · ${hName(st.ri)} · ${FULL[st.phase]} · turn ${G.mp.turn + 1} of ${G.mp.players.length}`;
         $("pName").textContent = p.name;
         $("pName").style.color = p.color;
         $("pRole").textContent = `plays ${NAMES[p.role]}`;
@@ -6861,7 +6855,7 @@
           () => mpReveal(G.revealPs),
           `${G.i}`,
         );
-        $("rTitle").textContent = `${ROWS[st.ri].name} · ${FULL[st.phase]}`;
+        $("rTitle").textContent = `${hName(st.ri)} · ${FULL[st.phase]}`;
         $("rSub").textContent = `Moment ${G.i + 1} of ${G.queue.length}`;
         const lab = { perfect: "Spot on", close: "Close enough", miss: "Not there" };
         $("rList").innerHTML = ps
@@ -6880,7 +6874,9 @@
             const d = describe(st.ri, st.phase, r);
             const limits =
               st.phase === "rec" && pl.some((o) => o.p === r) ? overlapText(st.ri, r, "rec") : "";
-            return `<li><b>${NAMES[r]}</b>: ${d.t}. ${d.d}${limits ? ` ${limits}` : ""}</li>`;
+            return hOnly(
+              `<li><b>${NAMES[r]}</b>: ${d.t}. ${d.d}${limits ? ` ${limits}` : ""}</li>`,
+            );
           })
           .join("");
         $("rBoard").innerHTML = mpBoard(false, ps);
@@ -6925,7 +6921,9 @@
               ? `<details class="pm"><summary><span style="color:${p.color}">●</span> ${esc(p.name)}: where you should have been (${p.misses.length})</summary><ul class="mist">${p.misses
                   .map((m) => {
                     const d = describe(m.ri, m.phase, p.role);
-                    return `<li><b>${ROWS[m.ri].name} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`;
+                    return hOnly(
+                      `<li><b>${hName(m.ri)} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`,
+                    );
                   })
                   .join("")}</ul></details>`
               : `<p><span style="color:${p.color}">●</span> ${esc(p.name)}: no mistakes.</p>`,
@@ -7897,7 +7895,6 @@
           setN: me.setN,
           sc: null,
           rot: null,
-          seed: meta.createdAt,
           mp: null,
           online: ON,
         };

@@ -16,6 +16,19 @@ SHOTS = ROOT / "src" / "tests" / "_out"
 SHOTS.mkdir(exist_ok=True)
 VERDICT = re.compile(r"Spot on|Close enough|Not there|\+\d")
 CHIPS = "#courtG g[opacity]:not(.zones)"
+R_NAME = re.compile(r"\bR[1-6]\b")
+# The whole Match tab, closed folds and mistakes lists included, and every aria-label in it.
+GAME_TEXT_JS = (
+    "() => { const g = document.getElementById('game');"
+    " return [g.textContent, ...[...g.querySelectorAll('[aria-label]')].map(e => e.getAttribute('aria-label'))]"
+    ".join(' | '); }"
+)
+
+
+def assert_h_names(pg: Page, where: str) -> None:
+    text = pg.evaluate(GAME_TEXT_JS)
+    found = R_NAME.search(text)
+    assert not found, f"{where} names a rotation by R: ...{text[max(0, found.start() - 80) : found.end() + 40]!r}"
 
 
 def press_next(page: Page) -> None:
@@ -106,15 +119,15 @@ with sync_playwright() as p:
         n += 1
         if pg.is_visible("#gEnd"):
             break
+        assert_h_names(pg, f"action {n}")
         if pg.is_visible("#gPass"):
             order_seen.append(pg.inner_text("#pName"))
             moment = pg.inner_text("#pMoment").split(" · turn")[0]
             board = pg.inner_text("#pBoard")
             if moment != moment_seen:
                 moment_seen, moment_board = moment, board
-            if moment.endswith("· Rotation"):
-                asked = moment.split(" · ")[1]
-                assert re.fullmatch(r"(H|R)[1-6]", asked), f"pass screen names the Rotate moment {asked!r}"
+            asked = moment.split(" · ")[1]
+            assert re.fullmatch(r"H[1-6]", asked), f"pass screen names the moment {asked!r}"
             assert board == moment_board, f"pass screen leaks a score change: {moment_board!r} -> {board!r}"
             if shots == 0:
                 pg.locator("#gPass").screenshot(path=str(SHOTS / "mp1.png"))
@@ -181,7 +194,7 @@ with sync_playwright() as p:
             assert not pg.locator('#gPlay .vis[data-vis="game"]').count(), "Show on court picker in a multiplayer match"
             if pg.inner_text("#gStepName").startswith("Rotation"):
                 asked = pg.inner_text("#gTitle")
-                assert re.fullmatch(r"(H|R)[1-6]", asked), f"Rotate turn titled {asked!r}"
+                assert re.fullmatch(r"H[1-6]", asked), f"Rotate turn titled {asked!r}"
                 assert pg.locator("#courtG g.mk").count() == 0, "teammates shown at Rotate"
                 box = pg.locator("#courtG").bounding_box()
                 assert box is not None
@@ -243,6 +256,8 @@ with sync_playwright() as p:
         print("STUCK")
         break
     print("ended:", pg.is_visible("#gEnd"), "actions", n)
+    assert pg.locator("#gMist li").count(), "no mistakes listed on the end screen"
+    assert_h_names(pg, "the end screen")
     assert attack_turns, "no Attack turn was played"
     assert rotate_turns and rotate_reveals, f"Rotate turns {rotate_turns}, reveals {rotate_reveals}"
     print("Rotate turns:", rotate_turns, "reveals with grades:", rotate_reveals)
