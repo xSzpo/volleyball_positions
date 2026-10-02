@@ -629,8 +629,9 @@ def check_rotation_build(page: Page) -> None:
             check_positions(f"{tag} step {k}", page.evaluate(MARKERS, "#courtL .am"), {p: still[p] for p in order[:k]})
             if page.locator("#courtL .bnd").count():
                 fail(f"{tag}: overlap lines show during the build")
-            if role in order[:k] and "You" not in page.inner_text("#lCap"):
-                fail(f"{tag}: your stage caption does not name you: {page.inner_text('#lCap')!r}")
+            line = page.evaluate(f"window.ksvLearn.captions({ri}, 'start', '{role}')")[k - 1]
+            if page.inner_text("#lCap").strip() != line:
+                fail(f"{tag}: after {k} Step(s) the caption is {page.inner_text('#lCap')!r}, expected {line!r}")
         page.click("#lBack")
         if page.evaluate(SHOWN) != [order[0]]:
             fail(f"{tag}: Step back shows {page.evaluate(SHOWN)}, expected [{order[0]!r}]")

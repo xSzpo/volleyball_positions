@@ -4310,7 +4310,8 @@
           a.stage = i;
           a.onStage();
         }
-        const cap = a.caps.findLast((c) => c.t <= a.t) || a.caps[0];
+        // A build pauses where the next marker is due, so its caption waits for that marker.
+        const cap = a.caps.findLast((c) => (tr.build ? c.t < a.t : c.t <= a.t)) || a.caps[0];
         if (cap && cap !== a.cap) {
           a.cap = cap;
           a.capEl.innerHTML = cap.html;
