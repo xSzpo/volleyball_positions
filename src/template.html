@@ -712,9 +712,14 @@
         animation: none;
       }
     }
+    .lanim .ictl {
+      flex-shrink: 0;
+    }
     .ldots {
       display: flex;
-      gap: 6px;
+      flex-wrap: wrap;
+      min-width: 0;
+      gap: 4px 6px;
       margin-right: auto;
       padding-left: 4px;
     }
@@ -3280,6 +3285,7 @@
             arrive: Object.fromEntries(
               Object.entries(st.mv).map(([p, m]) => [p, m.delay + m.glide]),
             ),
+            appear: st.appear ?? null,
             start: st.start,
             dur: st.dur,
           })),
@@ -3554,7 +3560,10 @@
         FADE_MS = 150,
         TRAIL_FADE_MS = 400,
         FADE_BACK_MS = 400,
-        CAPTION_MS = 2500;
+        CAPTION_MS = 2500,
+        POP_MS = 300;
+      // A Rotation build stage lasts as long as its caption is held, so every line shows in full.
+      const BUILD_MS = CAPTION_MS;
       // 1 unit is 9 m; with a quarter of the glide spent speeding up and a quarter slowing down, the top speed is about 4.8 m/s.
       const MS_PER_UNIT = 2500,
         EASE_PART = 0.25,
@@ -3640,7 +3649,7 @@
       function animated() {
         return feature("learn-animation") && !ANIM_OFF && !motionQuery.matches;
       }
-      const animPhase = (ph) => ph === "rec";
+      const animPhase = (ph) => ph === "rec" || ph === "start";
       // Learn's Base screen: base defence by job for the players on court at Reception.
       function learnPlayers(ri, phase) {
         if (phase !== "ar") return players(ri, phase);
@@ -3912,8 +3921,8 @@
           if (clashes(plan[p], others).n) place(p);
         });
       }
-      // What plays in (ri, phase), in stages. Reception plays from their serve to base defence and then fades back
-      // to its still picture; the other phases are still.
+      // What plays in (ri, phase), in stages. Rotation builds its still picture from the setter; Reception plays from
+      // their serve to base defence and then fades back to its still picture; the other phases are still.
       const stageCache = {};
       function phaseStages(ri, phase) {
         const key = `${rulesMode}|${ri}|${phase}`;
@@ -3925,8 +3934,51 @@
           stageCache[key] = { from: at, players: order, stages: [], total: 0, end: at };
           return stageCache[key];
         }
-        stageCache[key] = { ...buildReception(ri), fadeBack: true };
+        stageCache[key] =
+          phase === "start" ? buildRotation(ri) : { ...buildReception(ri), fadeBack: true };
         return stageCache[key];
+      }
+      // One player appears on their Rotation spot per stage, in the order the setter's zone gives them.
+      function buildRotation(ri) {
+        const list = players(ri, "start");
+        const order = list.map((o) => o.p);
+        const from = spots(list);
+        const z = (p) => zoneOf(ri, p);
+        const known = ["S", "OP", "OH1", "OH2"];
+        const mid = order.find((p) => isFront(ri, p) && !known.includes(p));
+        const back = order.find((p) => !known.includes(p) && p !== mid);
+        const lines = [
+          ["S", `The setter tells you the rotation: zone ${z("S")}.`],
+          ["OP", `The opposite is always on the setter's diagonal: zone ${z("OP")}.`],
+          ["OH1", `Outside hitter 1 serves next after the setter, one zone on: zone ${z("OH1")}.`],
+          ["OH2", `Outside hitter 2 is on outside hitter 1's diagonal: zone ${z("OH2")}.`],
+          [
+            mid,
+            `The middle${rulesMode === "official" ? ` ${mid}` : ""} fills the empty front-row spot: zone ${z(mid)}.`,
+          ],
+          [
+            back,
+            middleServes(ri)
+              ? `${back} fills zone ${z(back)} and serves: the libero may not serve, so L is off.`
+              : `The libero fills the empty back-row spot: zone ${z(back)}.`,
+          ],
+        ];
+        const appear = {};
+        const stages = lines.map(([p, text], k) => {
+          appear[p] = k * BUILD_MS;
+          return {
+            moves: {},
+            mv: {},
+            src: {},
+            notes: { [p]: text },
+            team: text,
+            appear: p,
+            start: k * BUILD_MS,
+            dur: BUILD_MS,
+          };
+        });
+        const total = stages.length * BUILD_MS + HOLD_MS;
+        return { from, players: order, stages, total, end: from, appear, build: true };
       }
       function buildReception(ri) {
         const list = players(ri, "rec");
@@ -4157,10 +4209,11 @@
         return stageCaption(base || stillStage(ri, phase), r);
       }
       // While a play runs, the caption changes only when you get a new line, and each line stays CAPTION_MS of play.
+      // A Rotation build shows every stage's line: each one is the rule that places the next player.
       function captionPlan(ri, phase, tr, r) {
         const want = [];
         tr.stages.forEach((st, k) => {
-          if (r == null || st.notes[r] || k === 0)
+          if (tr.build || r == null || st.notes[r] || k === 0)
             want.push({ t: st.start, html: stageCaption(st, r) });
         });
         const out = [];
@@ -4212,7 +4265,11 @@
           const s = posAt(tr, p, a.t),
             g = a.els[p];
           if (!g) return;
-          g.setAttribute("transform", `translate(${s.x * W} ${s.y * H})`);
+          const shown = tr.appear?.[p];
+          const f = shown == null ? 1 : Math.max(0, Math.min(1, (a.t - shown) / POP_MS));
+          const pop = shown == null ? "" : ` scale(${0.6 + 0.4 * f})`;
+          g.setAttribute("transform", `translate(${s.x * W} ${s.y * H})${pop}`);
+          if (shown != null) g.setAttribute("opacity", f);
         });
         const i = stageAt(tr, a.t),
           st = tr.stages[i];
@@ -4253,7 +4310,8 @@
           a.stage = i;
           a.onStage();
         }
-        const cap = a.caps.findLast((c) => c.t <= a.t) || a.caps[0];
+        // A build pauses where the next marker is due, so its caption waits for that marker.
+        const cap = a.caps.findLast((c) => (tr.build ? c.t < a.t : c.t <= a.t)) || a.caps[0];
         if (cap && cap !== a.cap) {
           a.cap = cap;
           a.capEl.innerHTML = cap.html;
@@ -4273,7 +4331,13 @@
         if (a.t >= a.tr.total) {
           if (a.tr.fadeBack) return fadeBack(now);
           anim = null;
+          restList = `${rulesMode}|${ri}|${phase}`;
           renderLearn();
+          $("courtL")
+            .querySelectorAll(".bnd")
+            .forEach((el) => {
+              el.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_BACK_MS });
+            });
           return;
         }
         if (a.t >= stop) {
