@@ -1011,6 +1011,14 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** keep the peek but count it as a separate best; bump the key to `v9|` and drop every old best.
 - **Reversible by:** `gVis()`, `gVisMult()` and `gShownHtml()` in `src/template.html`.
 
+### 133. Online room keeps its stored uid with no Google auth iframe
+
+- **Issue:** #140
+- **Problem:** Online room signs in on the default Firebase app, whose compat auth starts the popup/redirect resolver on iOS and waits for apis.google.com and the auth iframe, as reports did before #136. The fix of #131 also drops persistence, but Rejoin needs the same anonymous uid after a reload to find the player's node and score.
+- **Decision:** `fbSetup()` sets up the default app's auth, and the `report` app's, with no resolver. The default app keeps local persistence (IndexedDB, else localStorage), the same store as before, so a uid signed in before this change is kept. The compat SDK does not export that persistence class, so `fbLocal()` takes it from a short-lived app named `persistence` after `setPersistence(LOCAL)`. If that fails or takes more than 3 s (the IndexedDB check can hang on some iOS versions), sign-in goes on in memory and only Rejoin after a reload joins as a new player. Reports only wait for the scripts, never for that check. Every auth request also waits for Firebase's usage heartbeat, which reads IndexedDB; `fbSetup()` sends it empty after 1 s (`BEAT_MS`), so a hung IndexedDB cannot hold up sign-in, Create or a report.
+- **Alternatives:** in-memory persistence, losing Rejoin after a reload; an own localStorage persistence class; the modular SDK for auth.
+- **Reversible by:** `fbSetup()` and `fbLocal()` in `src/template.html`.
+
 ### 134. Match names rotations by the setter only, and Rotate asks by H
 
 - **Issue:** #135

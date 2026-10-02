@@ -2,7 +2,8 @@
 
 Runs against the Firebase Realtime Database and Auth emulators:
 
-    python src/tests/online_test.py
+    python src/tests/online_test.py            # Chromium
+    python src/tests/online_test.py --webkit   # WebKit, as on an iPhone
 
 Without the emulators running, the script restarts itself under
 ``firebase emulators:exec --only auth,database`` (config in infra/firebase.json;
@@ -52,6 +53,14 @@ RELOAD = "Reload the app to join this room."
 OLDER = "This room is from an older version. Ask the host to make a new room."
 EVIL_UID = "EvilEvilEvilEvilEvilEvil0000"
 OLD_UID = "OldOldOldOldOldOldOldOld0000"
+# The app sets up a short-lived app first, so any app is not yet the default one.
+DEFAULT_APP = "window.firebase?.apps?.some((app) => app.name === '[DEFAULT]')"
+# An IndexedDB open that never succeeds or fails, as on some iOS Safari versions.
+HANG_IDB = "indexedDB.open = () => new EventTarget();"
+IPHONE_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+    "CriOS/140.0.7339.122 Mobile/15E148 Safari/604.1"
+)
 LABELS = {"perfect": "Spot on", "close": "Close enough", "miss": "Not there", "none": "No answer"}
 
 
@@ -77,7 +86,7 @@ def run_under_emulators() -> None:
     env["PATH"] = "/opt/homebrew/opt/openjdk/bin:" + env.get("PATH", "")
     firebase = shutil.which("firebase", path=env["PATH"])
     assert firebase, "Firebase CLI not found; install it with npm install -g firebase-tools"
-    command = f'"{sys.executable}" "{Path(__file__).resolve()}"'
+    command = " ".join(f'"{arg}"' for arg in (sys.executable, Path(__file__).resolve(), *sys.argv[1:]))
     process = subprocess.Popen(
         [firebase, "emulators:exec", "--only", "auth,database", "--project", PROJECT, command],
         cwd=ROOT / "infra",
@@ -136,11 +145,32 @@ def serve() -> str:
     return f"http://127.0.0.1:{server.server_address[1]}"
 
 
-def phone(browser: Browser, url: str, errors: list[str]) -> Page:
-    """Opens the app in a fresh browser context, like a separate phone."""
-    context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+def phone(
+    browser: Browser,
+    url: str,
+    errors: list[str],
+    user_agent: str | None = None,
+    hang: list[str] | None = None,
+    script: str = "",
+) -> Page:
+    """Opens the app in a fresh browser context, like a separate phone.
+
+    With ``hang``, requests to apis.google.com and the auth iframe never answer and are listed there.
+    """
+    context = browser.new_context(
+        viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, user_agent=user_agent
+    )
+    if hang is not None:
+        context.route(
+            lambda request_url: any(
+                part in request_url for part in ("apis.google.com", "/__/auth/", "/emulator/auth/")
+            ),
+            lambda route: hang.append(route.request.url),
+        )
     page = context.new_page()
     page.add_init_script(SEED_ROLE)
+    if script:
+        page.add_init_script(script)
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(url)
     page.wait_for_timeout(300)
@@ -307,7 +337,7 @@ def check_permissions(browser: Browser, url: str, host: Page, code: str, errors:
     eve = phone(browser, url, errors)
     eve.click("#tabGame")
     eve.check('input[name="gPlayers"][value="online"]')
-    eve.wait_for_function("window.firebase?.apps?.length > 0")
+    eve.wait_for_function(DEFAULT_APP)
     room = f"rooms/{code}"
     assert db_call(eve, "await firebase.auth().signInAnonymously()") == "ok"
     anna, ben = uid_of(host), uid_of(eve)
@@ -987,6 +1017,46 @@ def version_guard(browser: Browser, url: str, emulator_db: str, errors: list[str
     page.context.close()
 
 
+def iphone(browser: Browser, url: str, errors: list[str]) -> None:
+    """On an iPhone, create, join and rejoin after a reload do not wait for apis.google.com or the auth iframe."""
+    google: list[str] = []
+    host = phone(browser, url, errors, user_agent=IPHONE_UA, hang=google)
+    guest = phone(browser, url, errors, user_agent=IPHONE_UA, hang=google)
+    pick_role(host, "OH1")
+    open_online(host, "Anna", rec_only=True)
+    host.click("#onCreate")
+    host.wait_for_selector("#gLobby", state="visible", timeout=8000)
+    code = host.inner_text("#lCode").replace(" ", "")
+    pick_role(guest, "OH2")
+    open_online(guest, "Ben")
+    guest.fill("#onCode", code)
+    guest.click("#onJoin")
+    in_lobby(guest, 2)
+    ben = uid_of(guest)
+    guest.reload()
+    guest.wait_for_timeout(300)
+    guest.click("#tabGame")
+    guest.wait_for_selector("#onRejoin", state="visible", timeout=8000)
+    guest.click("#onRejoin")
+    in_lobby(guest, 2)
+    assert uid_of(guest) == ben, "rejoin after a reload on an iPhone used a new player"
+    assert not google, f"online sign-in loaded {google}"
+    print("iPhone: create, join and rejoin without apis.google.com or the auth iframe")
+    for page in (host, guest):
+        page.context.close()
+
+
+def hung_storage(browser: Browser, url: str, errors: list[str]) -> None:
+    """Create a room works when IndexedDB never opens, signed in without a stored uid."""
+    page = phone(browser, url, errors, script=HANG_IDB)
+    pick_role(page, "OH1")
+    open_online(page, "Anna", rec_only=True)
+    page.click("#onCreate")
+    page.wait_for_selector("#gLobby", state="visible", timeout=10000)
+    print("Create works when IndexedDB hangs")
+    page.context.close()
+
+
 def failed_join(browser: Browser, url: str, emulator_db: str, errors: list[str]) -> None:
     """A join that fails after the player node is written leaves no ghost online, and the match goes on."""
     host = phone(browser, url, errors)
@@ -1009,7 +1079,7 @@ def failed_join(browser: Browser, url: str, emulator_db: str, errors: list[str])
 
     pick_role(late, "MB")
     open_online(late, "Cal")
-    late.wait_for_function("window.firebase?.apps?.length > 0")
+    late.wait_for_function(DEFAULT_APP)
     late.evaluate(
         """() => {
             const proto = firebase.database.Reference.prototype, once = proto.once;
@@ -1046,8 +1116,9 @@ def failed_join(browser: Browser, url: str, emulator_db: str, errors: list[str])
 
 
 def main() -> None:
-    """Runs the online scenarios against the emulators."""
+    """Runs the online scenarios against the emulators, in WebKit with --webkit, else in Chromium."""
     signal.alarm(600)
+    engine = "webkit" if "--webkit" in sys.argv[1:] else "chromium"
     emulator_db = os.environ["FIREBASE_DATABASE_EMULATOR_HOST"]
     emulator_auth = os.environ["FIREBASE_AUTH_EMULATOR_HOST"]
     check_rules(emulator_db)
@@ -1055,15 +1126,17 @@ def main() -> None:
     url = f"{base}&nbgrace={NB_GRACE_MS}"
     errors: list[str] = []
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = getattr(p, engine).launch()
         host, guest = main_match(browser, url, emulator_db, errors)
         takeover(host, guest, browser, url, emulator_db, errors)
         set_calls(browser, f"{base}&nbgrace={SET_CALLS_GRACE_MS}", emulator_db, errors)
         failed_join(browser, url, emulator_db, errors)
         version_guard(browser, url, emulator_db, errors)
+        iphone(browser, url, errors)
+        hung_storage(browser, url, errors)
         browser.close()
     assert not errors, errors
-    print("ONLINE TEST: ok")
+    print(f"ONLINE TEST ({engine}): ok")
 
 
 if __name__ == "__main__":

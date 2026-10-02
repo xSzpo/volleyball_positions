@@ -2,7 +2,7 @@
 # Once per ticket, after review fixes: build and audit, then every browser test in parallel.
 source "$(dirname "$0")/lib.sh"
 
-ORDER=(build audit qa-m qa-d theme analytics flags rules learn anim match mp online report report-wk)
+ORDER=(build audit qa-m qa-d theme analytics flags rules learn anim match mp online online-wk report report-wk)
 run build src/build.py
 run audit src/tests/audit.py
 read -r rc _ <"$LOGS/build.status"
@@ -14,6 +14,7 @@ if [ "$rc" = 0 ]; then
   # All use the emulator ports 9000 and 9099, so they run one after the other.
   {
     run online src/tests/online_test.py
+    run online-wk src/tests/online_test.py --webkit
     run report src/tests/report_test.py
     run report-wk src/tests/report_test.py --webkit
   } &
