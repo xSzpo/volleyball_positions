@@ -1933,7 +1933,6 @@
           Sets<small>set calls</small>
         </button>
       </div>
-      <p class="card" id="ffEmpty" hidden>New version on the way.</p>
 
       <section id="learn">
         <div class="learnmain">
@@ -2415,13 +2414,11 @@
         rec: "Reception",
         ar: "Attack",
       };
-      const ZONES = { 4: [0, 0], 3: [1, 0], 2: [2, 0], 5: [0, 1], 6: [1, 1], 1: [2, 1] };
       const ORDER = [4, 3, 2, 5, 6, 1];
       const XS = [0.17, 0.5, 0.83],
         FY = 0.21,
         BY = 0.71;
-      const DETACHED = new Map();
-      const $ = (id) => document.getElementById(id) || DETACHED.get(id);
+      const $ = (id) => document.getElementById(id);
 
       function players(ri, phase) {
         const r = ROWS[ri];
@@ -2651,7 +2648,6 @@
         [1, 5 / 6, 0.94],
       ];
       function zonesSvg() {
-        if (!feature("court-zones")) return "";
         const texts = ZONE_SPOTS.map(
           ([z, x, y]) =>
             `<text x="${x * W}" y="${y * H + 3.2}" text-anchor="middle" font-size="9" font-weight="700" font-family="Barlow Condensed,sans-serif">${z}</text>`,
@@ -3078,16 +3074,14 @@
         return MISTAKES[phase];
       }
       function mistakeHtml(text) {
-        return feature("common-mistakes") && text
-          ? `<p class="mistake" style="margin:4px 0 0">Common mistake: ${text}</p>`
-          : "";
+        return text ? `<p class="mistake" style="margin:4px 0 0">Common mistake: ${text}</p>` : "";
       }
       function mistakeLine(ri, phase, role, tap) {
-        return feature("common-mistakes") ? mistakeHtml(mistakeText(ri, phase, role, tap)) : "";
+        return mistakeHtml(mistakeText(ri, phase, role, tap));
       }
       // Rotate: a count along the arrows for any marker, else your own marker's mistake, else the step's line.
       function rotMistake(r, grades) {
-        if (!feature("common-mistakes") || grades.every((o) => o.g === "right")) return "";
+        if (grades.every((o) => o.g === "right")) return "";
         const tapOf = (p) => (p === r.role && r.off ? null : r.spots[p]);
         if (grades.some(({ p, g }) => g === "wrong" && tapOf(p) && alongArrows(r.ri, p, tapOf(p))))
           return mistakeHtml(MISTAKES.arrows);
@@ -3198,187 +3192,16 @@
       }
       window.ksvAnalytics = { analyticsOn, track };
 
-      // ---------- Feature flags ----------
-      const FEATURES = {
-        "learn-tab": true,
-        "court-zones": true,
-        "learn-animation": true,
-        "rules-official": true,
-        "learn-guides": true,
-        "rotations-table": true,
-        "drill-tab": true,
-        "drill-review": true,
-        "drill-steps": true,
-        "drill-rotate-name": true,
-        "drill-both-middles": true,
-        "neighbour-check": true,
-        "match-solo": true,
-        "match-rotate-name": true,
-        "answer-glide": true,
-        "set-call-check": true,
-        "match-same-device": true,
-        "match-online": true,
-        "sets-tab": true,
-        "sets-quiz": true,
-        "after-dig": false,
-        "bug-report": true,
-        "passer-tag": true,
-        "common-mistakes": true,
-        "middle-cycle": true,
-      };
-      const FEATURE_NEEDS = {
-        "learn-animation": ["learn-tab"],
-        "rules-official": ["learn-tab", "learn-animation"],
-        "learn-guides": ["learn-tab"],
-        "rotations-table": ["learn-tab"],
-        "drill-tab": ["learn-tab"],
-        "drill-review": ["drill-tab"],
-        "drill-steps": ["drill-tab"],
-        "drill-rotate-name": ["drill-tab"],
-        "drill-both-middles": ["drill-tab"],
-        "neighbour-check": ["drill-tab"],
-        "match-solo": ["learn-tab"],
-        "match-rotate-name": ["match-solo"],
-        "answer-glide": ["learn-animation"],
-        "set-call-check": ["match-solo", "sets-tab"],
-        "match-same-device": ["match-solo"],
-        "match-online": ["match-same-device"],
-        "sets-quiz": ["sets-tab"],
-        "after-dig": ["match-solo"],
-        "passer-tag": ["learn-tab"],
-        "middle-cycle": ["learn-tab"],
-      };
-      const FEATURE_ELEMENTS = {
-        "learn-tab": ["tabLearn", "learn"],
-        "court-zones": ["lZones", "dZonesCheck", "gZonesCheck"],
-        "learn-animation": ["lCap", "lAnim", "lDots"],
-        "rules-official": ["rmOfficial"],
-        "learn-guides": ["thumbsBox"],
-        "rotations-table": ["allRots"],
-        "drill-tab": ["tabDrill", "drill"],
-        "drill-review": ["reviewRow"],
-        "drill-steps": ["dSteps"],
-        "drill-rotate-name": ["dName"],
-        "drill-both-middles": ["dMiddles"],
-        "neighbour-check": ["nbDrillCheck", "nbGameCheck"],
-        "match-solo": ["tabGame", "game"],
-        "answer-glide": ["dWatch", "gWatch", "rWatch"],
-        "set-call-check": ["setGameCheck", "setGameHint"],
-        "match-same-device": ["gPlayersMp", "mpBox"],
-        "match-online": ["gPlayersOnline", "onBox"],
-        "sets-tab": ["tabSets", "sets"],
-        "sets-quiz": ["setsQuiz"],
-        "bug-report": ["reportBtn", "reportSheet"],
-      };
-      const TABS = [
-        ["learn", "learn-tab"],
-        ["drill", "drill-tab"],
-        ["game", "match-solo"],
-        ["sets", "sets-tab"],
-      ];
-      const FEATURE_KEYS = Object.keys(FEATURES);
-      function ffParse(value, current) {
-        let next = { ...(current || {}) };
-        String(value)
-          .split(",")
-          .forEach((part) => {
-            const key = part.trim().replace(/^-/, "");
-            if (part.trim() === "all") next = { "*": true };
-            else if (part.trim() === "reset") next = {};
-            else if (key in FEATURES) next[key] = !part.trim().startsWith("-");
-          });
-        return Object.keys(next).length ? next : null;
-      }
-      function storedObject(key) {
-        const value = store.get(key, null);
-        return value && typeof value === "object" && !Array.isArray(value) ? value : null;
-      }
-      function featureValues(base, override) {
-        const out = {};
-        const on = (k) => {
-          if (!(k in out)) {
-            const own = override && k in override ? override[k] : override?.["*"] || base[k];
-            out[k] = !!own && (FEATURE_NEEDS[k] || []).every(on);
-          }
-          return out[k];
-        };
-        FEATURE_KEYS.forEach(on);
-        return out;
-      }
       store.del("flags");
-      let ffOverride = storedObject("ffOverride");
-      const ffParam = new URLSearchParams(location.search).get("ff");
-      if (ffParam !== null) {
-        ffOverride = ffParse(ffParam, ffOverride);
-        if (ffOverride) store.set("ffOverride", ffOverride);
-        else store.del("ffOverride");
-      }
-      const flags = featureValues(FEATURES, ffOverride);
-      const feature = (key) => !!flags[key];
-      if (feature("rules-official") && !store.get("officialReset", null)) {
+      store.del("ffOverride");
+      if (!store.get("officialReset", null)) {
         store.del("rulesMode");
         store.del("role");
         store.set("officialReset", "1");
         rulesMode = storedRules();
         ROWS = RULE_ROWS[rulesMode];
       }
-      const nbOn = (id) => feature("neighbour-check") && $(id).checked;
-      const SLOTS = new Map();
-      function attach(el) {
-        const slot = SLOTS.get(el);
-        if (el.parentNode === slot.parent) return;
-        const next = slot.following.find((s) => s.parentNode === slot.parent);
-        slot.parent.insertBefore(el, next || null);
-      }
-      function applyFeatures() {
-        const els = FEATURE_KEYS.flatMap((k) =>
-          (FEATURE_ELEMENTS[k] || []).map((id) => [k, $(id)]),
-        );
-        els.forEach(([, el]) => {
-          if (!SLOTS.has(el)) {
-            const following = [];
-            for (let n = el.nextElementSibling; n; n = n.nextElementSibling) following.push(n);
-            SLOTS.set(el, { parent: el.parentNode, following });
-          }
-        });
-        els.forEach(([k, el]) => {
-          if (feature(k)) attach(el);
-          else el.remove();
-        });
-        DETACHED.clear();
-        els.forEach(([, el]) => {
-          if (!el.isConnected)
-            [el, ...el.querySelectorAll("[id]")].forEach((n) => {
-              DETACHED.set(n.id, n);
-            });
-        });
-        const tabs = TABS.filter(([, k]) => feature(k)).map(([t]) => t);
-        $("tabs").hidden = tabs.length < 2;
-        $("ffEmpty").hidden = tabs.length > 0;
-        if (!feature("rules-official") && rulesMode === "official") {
-          setRules("simple");
-          renderRulesMode();
-        } else if (feature("rules-official") && !ON && !G && rulesMode !== storedRules()) {
-          setRules(storedRules());
-          renderRulesMode();
-        }
-        if (!ALL_ROLES.includes(store.get("role", null))) {
-          $("setupNudge").hidden = false;
-          setSetupOpen(tabs.length > 0, false);
-        }
-        const players =
-          $("game").querySelector(
-            `input[name="gPlayers"][value="${store.get("gPlayers", "solo")}"]`,
-          ) || $("game").querySelector('input[name="gPlayers"][value="solo"]');
-        players.checked = true;
-        if (tabs.length && tabs.every((t) => $(t).hidden)) setTab(tabs[0], true);
-        drawVis("drill", visDrill);
-        drawVis("game", visGame);
-        renderRefLabels();
-        renderLearn();
-        gRenderSetup();
-        if (!$("game").hidden && gPlayersMode() === "online") onRejoinCheck();
-      }
+      const nbOn = (id) => $(id).checked;
       window.ksvLearn = {
         buildMs: () => ({ marker: BUILD_MS, swap: SWAP_MS, hold: BUILD_HOLD_MS, pop: POP_MS }),
         describe: (ri, phase, r) => describe(ri, phase, r),
@@ -3436,7 +3259,6 @@
             ends: anim.tr.stages.map((st) => st.start + st.dur),
           },
       };
-      window.ksvFeatures = { feature, ffParse, featureValues, values: () => ({ ...flags }) };
       const themeBtn = $("themeBtn");
       function paintThemeButton() {
         const shown = document.documentElement.dataset.theme || "light";
@@ -3637,8 +3459,7 @@
           : me && (phase === "start" || phase === "rec")
             ? ` ${limitsSentence(ri, role, phase, bounds)} ${OVERLAP_WHEN[phase]}`
             : "";
-        const passers =
-          phase === "rec" && feature("passer-tag") ? `<p class="passers">${PASSERS_LINE}</p>` : "";
+        const passers = phase === "rec" ? `<p class="passers">${PASSERS_LINE}</p>` : "";
         $("cue").innerHTML =
           `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${passers}${guide}${libero}`;
         const at = PHASES.findIndex(([k]) => k === phase);
@@ -3656,7 +3477,7 @@
         ri = nextRi;
         phase = nextPhase;
         renderLearn();
-        if (!changed || !feature("learn-animation")) return;
+        if (!changed) return;
         fadeCourt();
         nudgePlay();
       }
@@ -3809,7 +3630,7 @@
         return out;
       }
       function learnPassTags(ri, pl) {
-        if (phase !== "rec" || !feature("passer-tag")) return {};
+        if (phase !== "rec") return {};
         return passTagSpots(pl, role, boundLines(ri, pl, role, "rec").segs);
       }
       // The 3-2 cover: three close covers about 3 m from the hitter, in an arc behind and inside, at least GAP clear of
@@ -3873,7 +3694,7 @@
         // The screen whose play ran to the end: its rest caption lists your lines under "Then:".
         restList = null;
       function animated() {
-        return feature("learn-animation") && !ANIM_OFF && !motionQuery.matches;
+        return !ANIM_OFF && !motionQuery.matches;
       }
       const animPhase = (ph) => ph === "rec" || ph === "start";
       // Learn's Base screen: base defence by job for the players on court at Reception.
@@ -4836,14 +4657,14 @@
       let glideAt = -Infinity,
         // Watch the move: { box, svg, ri, role, redraw, a }; a is the play while one is on the court.
         watch = null;
-      const glideOn = () => feature("answer-glide") && !ANIM_OFF && !motionQuery.matches;
+      const glideOn = () => !ANIM_OFF && !motionQuery.matches;
       function glideStart() {
         glideAt = performance.now();
       }
       // A marker drawn on its right spot that glides there from the tap; a redraw mid-glide carries on from the clock.
       function glideChip(o, tap, opts) {
         const c = chip(o, opts);
-        if (!tap || !feature("answer-glide")) return c;
+        if (!tap) return c;
         return `<g class="glide" data-dx="${(tap.x - o.x) * W}" data-dy="${(tap.y - o.y) * H}">${c}</g>`;
       }
       function glideRun(svg) {
@@ -4863,12 +4684,6 @@
       // Your tap, the right spot as a ring outline, the route between them and your marker gliding along it.
       function answerMe(me, tap) {
         let s = "";
-        if (!feature("answer-glide")) {
-          if (tap && me)
-            s += `<line x1="${tap.x * W}" y1="${tap.y * H}" x2="${me.x * W}" y2="${me.y * H}" stroke="var(--net-label)" stroke-width="0.5" stroke-dasharray="1 1" opacity=".7"/>`;
-          if (tap) s += tapMark(tap);
-          return me ? s + chip(me, { me: true }) : s;
-        }
         if (me)
           s += `<circle class="target" cx="${me.x * W}" cy="${me.y * H}" r="8.3" fill="none" stroke="var(--ring)" stroke-width="0.8" stroke-dasharray="1.6 1.2"/>`;
         if (tap && me && Math.hypot(tap.x - me.x, tap.y - me.y) > 0.08) {
@@ -4879,8 +4694,7 @@
         return me ? s + glideChip(me, tap, { me: true }) : s;
       }
       // Watch the move plays Learn's Reception play, which also passes the spots the Attack step grades.
-      const watchOn = (phase) =>
-        feature("answer-glide") && animated() && (phase === "rec" || phase === "ar");
+      const watchOn = (phase) => animated() && (phase === "rec" || phase === "ar");
       const WATCH_BAR =
         '<div class="lanim"><div class="ldots" aria-hidden="true"></div>' +
         '<button type="button" class="ictl" data-w="replay" aria-label="Replay">⟲</button>' +
@@ -5153,7 +4967,6 @@
           t: "A middle goes 4, 3, 2, serve, off, off",
           roles: ["MB1", "MB2"],
           modes: ["official"],
-          flag: "middle-cycle",
           d: "You come on in zone 4, play 3, then 2. In zone 1 you serve, then defend zone 5; the libero stays off. When we lose the serve, the libero comes in for you and plays zones 6 and 5. MB1 is in the front row in H2, H1 and H6 and serves in H5. MB2 is in the front row in H5, H4 and H3 and serves in H2.",
         },
         {
@@ -5190,9 +5003,7 @@
       });
       // Simplified has one middle and no cycle, so the list depends on the rule set.
       function thumbList() {
-        return THUMB.filter(
-          (t) => (!t.modes || t.modes.includes(rulesMode)) && (!t.flag || feature(t.flag)),
-        );
+        return THUMB.filter((t) => !t.modes || t.modes.includes(rulesMode));
       }
       // Hints cite a rule of thumb by key, so its number follows the list order.
       function thumbNo(key) {
@@ -5202,9 +5013,7 @@
       }
       function thumbRef(key, advice) {
         const n = thumbNo(key);
-        return feature("learn-guides")
-          ? `Remember rule ${n} of the Rules of thumb: ${advice}.`
-          : `${advice[0].toUpperCase()}${advice.slice(1)}.`;
+        return `Remember rule ${n} of the Rules of thumb: ${advice}.`;
       }
       function ruleText(x) {
         const off = rulesMode === "official";
@@ -5410,7 +5219,7 @@
       }
       let drillPick = storedDrillSteps();
       function drillSteps() {
-        return feature("drill-steps") ? drillPick : STEP_ORDER;
+        return drillPick;
       }
       function renderDrillSteps() {
         $("dSteps")
@@ -5476,9 +5285,7 @@
         ? store.get("drillMiddles", "mine")
         : "mine";
       function middlesShown() {
-        return (
-          feature("drill-both-middles") && rulesMode === "official" && MIDDLE_ROLES.includes(role)
-        );
+        return rulesMode === "official" && MIDDLE_ROLES.includes(role);
       }
       function drillRoles() {
         return middlesShown() && drillMiddles === "both" ? MIDDLE_ROLES : [role];
@@ -5511,7 +5318,7 @@
       };
       // Where a middle is in "4, 3, 2, serve, off, off"; off court, the libero stands in its zone.
       function cycleOn(who) {
-        return feature("middle-cycle") && rulesMode === "official" && MIDDLE_ROLES.includes(who);
+        return rulesMode === "official" && MIDDLE_ROLES.includes(who);
       }
       function cycleLine(ri, who, phase) {
         if (!cycleOn(who)) return "";
@@ -5747,7 +5554,7 @@
             }) || pool[0];
         }
         answered = false;
-        if (cur.phase === "start" && feature("drill-rotate-name"))
+        if (cur.phase === "start")
           rot = rotStart(
             cur.ri,
             cur.role,
@@ -5760,7 +5567,7 @@
         $("dq").textContent =
           `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${rot ? rot.name : hName(cur.ri)} · ${FULL[cur.phase]}${cur.role !== role || drillRoles().length > 1 ? ` · You are ${cur.role}` : ""}`;
         $("dsub").textContent =
-          `${rot ? rotPrompt(rot) : cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? arQuestion(cur.ri, cur.role) : cur.phase === "serve" ? serveQuestion(cur.ri, cur.role) : "Where do you stand?"}`;
+          `${rot ? rotPrompt(rot) : cur.phase === "ar" ? arQuestion(cur.ri, cur.role) : cur.phase === "serve" ? serveQuestion(cur.ri, cur.role) : "Where do you stand?"}`;
         $("fb").className = "fb";
         $("fb").innerHTML = rot ? ROT_HINT : HINT;
         drawDrill();
@@ -5775,7 +5582,6 @@
         }
         const pl = answerSpots(cur.ri, cur.phase, cur.role);
         let s = DEFS + courtBase(answered && !pl.some((o) => o.p === cur.role));
-        if (answered && cur.phase === "start") s += rotArrows();
         if (answered && cur.phase === "ar") s += arLayer(cur.ri, pl, cur.role);
         if (answered && cur.phase === "serve") s += serveLayer(cur.ri, pl, cur.role);
         if (!answered && cur.phase === "ar") s += fromLayer(cur.ri, cur.role, null, "d");
@@ -5897,13 +5703,7 @@
           feedback("bad", "Not this time: you are off court");
           return;
         }
-        let dist = Math.hypot(tap.x - me.x, (tap.y - me.y) * 0.67);
-        if (cur.phase === "start") {
-          const zx = Math.min(2, Math.max(0, Math.floor(tap.x * 3))),
-            zy = tap.y < AL ? 0 : 1;
-          const [c, r] = ZONES[zoneOf(cur.ri, cur.role, "start")];
-          dist = zx === c && zy === r ? 0 : 1;
-        }
+        const dist = Math.hypot(tap.x - me.x, (tap.y - me.y) * 0.67);
         if (dist < 0.14) {
           record(true);
           drawDrill(tap);
@@ -6213,7 +6013,7 @@
         $("gNext").focus({ preventScroll: true });
       }
       function setOn() {
-        return feature("set-call-check") && $("setGame").checked && gSteps().includes("ar");
+        return $("setGame").checked && gSteps().includes("ar");
       }
       function gBonusPending() {
         return !!((G.nb && !G.nb.done) || (G.sc && !G.sc.done));
@@ -6254,7 +6054,7 @@
       }
       function gKey() {
         return (
-          (feature("match-rotate-name") ? "v9|" : "v7|") +
+          "v9|" +
           role +
           "|" +
           gSteps().join(",") +
@@ -6408,25 +6208,13 @@
         const R = hName(st.ri),
           newRot = !prev || prev.ri !== st.ri;
         const call = `Coach calls ${R}: setter in ${ROWS[st.ri].setter}.`;
-        const pre =
-          newRot && st.phase !== "start" && !G.replay
-            ? G.mixed
-              ? `${call} `
-              : `Now in ${R}. `
-            : "";
+        const pre = newRot && !G.replay ? (G.mixed ? `${call} ` : `Now in ${R}. `) : "";
         if (G.replay)
           return {
-            start: `We won the rally and rotate into ${R}. Where are you?`,
             serve: serveQuestion(st.ri, G.role).replace("serve.", `serve in ${R}.`),
             rec: `${R}: we lost the rally. The opponent serves. Take your reception spot.`,
             ar: `${R}: ${arQuestion(st.ri, G.role)}`,
           }[st.phase];
-        if (st.phase === "start")
-          return G.mixed
-            ? `${call} Where is your rotational spot?`
-            : G.i === 0
-              ? `First rally of the set. You line up in ${R}. Where are you?`
-              : `We won the rally. Rotate one zone clockwise. Where are you in ${R}?`;
         if (st.phase === "serve")
           return pre && !G.mixed
             ? `${pre}${serveQuestion(st.ri, G.role)}`
@@ -6447,10 +6235,7 @@
         G.off = false;
         G.nb = null;
         G.sc = null;
-        G.rot =
-          st.phase === "start" && feature("match-rotate-name")
-            ? rotStart(st.ri, G.role, "h")
-            : null;
+        G.rot = st.phase === "start" ? rotStart(st.ri, G.role, "h") : null;
         $("gWait").hidden = true;
         $("gNbBox").innerHTML = "";
         delete $("gNext").dataset.label;
@@ -6518,7 +6303,6 @@
           return;
         }
         let s = DEFS + courtBase(shown && !me);
-        if (shown && st.phase === "start") s += rotArrows();
         if (shown && st.phase === "ar") s += arLayer(st.ri, pl, G.role);
         if (shown && st.phase === "serve") s += serveLayer(st.ri, pl, G.role);
         if (!G.answered && G.help >= 2 && me) s += gHelpArea(me);
@@ -6839,13 +6623,7 @@
         const me = answerSpots(st.ri, st.phase, G.role).find((o) => o.p === G.role);
         if (!G.tap) return gAnswer(me ? "miss" : "perfect");
         if (!me) return gAnswer("miss");
-        let dist = Math.hypot(G.tap.x - me.x, (G.tap.y - me.y) * 0.67);
-        if (st.phase === "start") {
-          const zx = Math.min(2, Math.max(0, Math.floor(G.tap.x * 3))),
-            zy = G.tap.y < AL ? 0 : 1;
-          const [c, r] = ZONES[zoneOf(st.ri, G.role, "start")];
-          dist = zx === c && zy === r ? 0 : 1;
-        }
+        const dist = Math.hypot(G.tap.x - me.x, (G.tap.y - me.y) * 0.67);
         gAnswer(dist < 0.14 ? "perfect" : dist < 0.24 ? "close" : "miss");
       }
       $("gNext").onclick = () => {
@@ -7589,7 +7367,7 @@
         return null;
       }
       function currentTab() {
-        return TABS.map(([t]) => t).find((t) => !$(t).hidden) || "none";
+        return ["learn", "drill", "game", "sets"].find((t) => !$(t).hidden) || "none";
       }
       function viewText(tab) {
         if (tab === "learn") return `R${ri + 1} ${phase}${anim ? " playing" : ""}`;
@@ -7604,10 +7382,6 @@
       // Never a player name, room code or uid.
       function reportContext() {
         const tab = currentTab();
-        const out = {};
-        FEATURE_KEYS.forEach((k) => {
-          out[k] = feature(k);
-        });
         return {
           tab,
           role,
@@ -7617,7 +7391,8 @@
           viewport: `${innerWidth}x${innerHeight}@${Math.round((devicePixelRatio || 1) * 100) / 100}`,
           ua: navigator.userAgent.slice(0, 300),
           version: "2",
-          flags: out,
+          // The database rules require a non-empty flags object.
+          flags: { animation: animated(), zones: zonesOn },
         };
       }
       function reportShow() {
@@ -8085,7 +7860,7 @@
         G = null;
         $("onNote").hidden = true;
         $("gWait").hidden = true;
-        setRules(feature("rules-official") ? storedRules() : "simple");
+        setRules(storedRules());
         renderRulesMode();
         renderLearn();
         visGame = store.get("visGame", "none");
@@ -8619,7 +8394,7 @@
       renderRoles();
       renderLearn();
       renderSets();
-      applyFeatures();
+      gRenderSetup();
       nudgePlay();
       analyticsLoad();
     })();

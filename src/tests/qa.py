@@ -35,7 +35,7 @@ def fail(m: str) -> None:
     print("FAIL:", m, flush=True)
 
 
-URL = (ROOT / "index.html").as_uri() + "?ff=all&anim=0"
+URL = (ROOT / "index.html").as_uri() + "?anim=0"
 MODE_ROLES = {
     "simple": ["MB", "OH1", "OH2", "OP", "S", "L"],
     "official": ["MB1", "MB2", "OH1", "OH2", "OP", "S", "L"],
@@ -701,7 +701,7 @@ def check_zones(browser: Browser, tag: str) -> None:
             zones_shown(pg, f"{tag} zones R{ri + 1} {phase}", True)
     pg.click("#lNext")
     zones_shown(pg, f"{tag} zones after Next", True)
-    pg.goto(URL.replace("&anim=0", ""))
+    pg.goto(URL.replace("?anim=0", ""))
     wait_ready(pg)
     pg.click('.rot[data-i="0"]')
     pg.click('.ph[data-k="rec"]')

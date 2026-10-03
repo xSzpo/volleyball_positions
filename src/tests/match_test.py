@@ -31,7 +31,7 @@ def drill_ri(question: str) -> int:
     return next(ri for ri in range(6) if ROWS[ri]["setter"] == int(m.group(1)))
 
 
-URL = (ROOT / "index.html").as_uri() + "?ff=all&anim=0"
+URL = (ROOT / "index.html").as_uri() + "?anim=0"
 FAIL: list[str] = []
 # A stored role skips the first-visit role sheet, which covers the page.
 SEED_ROLE = (
@@ -51,7 +51,7 @@ def fail(message: str) -> None:
     print("FAIL:", message, flush=True)
 
 
-def new_page(browser: Browser, rules: str = "simple", query: str = "?ff=all&anim=0") -> Page:
+def new_page(browser: Browser, rules: str = "simple", query: str = "?anim=0") -> Page:
     page = browser.new_page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
     page.add_init_script(SEED_ROLE)
     page.add_init_script(f"localStorage.setItem('ksv51:rulesMode', JSON.stringify('{rules}'))")
@@ -231,15 +231,6 @@ def check_best_key(browser: Browser) -> None:
     """Bests from another scoring are ignored, and the neighbour check has its own best."""
     bests = '{"v5|OH1|rec": 9999, "v6|OH1|rec": 9999, "v7|OH1|rec": 500, "v8|OH1|rec": 9999, "v9|OH1|rec": 700}'
     seed = f"localStorage.setItem('ksv51:gameBest', JSON.stringify({bests}))"
-    page = new_page(browser, query="?ff=all,-match-rotate-name&anim=0")
-    page.evaluate(seed)
-    page.reload()
-    page.wait_for_timeout(300)
-    setup_match(page, "OH1", ("rec",))
-    text = page.inner_text("#gBest")
-    if "500" not in text:
-        fail(f"best line with match-rotate-name off reads {text!r}, expected the v7 best of 500")
-    page.close()
     page = new_page(browser)
     page.evaluate(seed)
     page.reload()
@@ -390,31 +381,6 @@ def check_hint_rule_numbers(browser: Browser) -> None:
     print("hint rule numbers: each cited rule of thumb is the right one", flush=True)
 
 
-def check_hints_without_guides(browser: Browser) -> None:
-    """With Rules of thumb off, the hints give the advice without citing a rule."""
-    cases = (
-        ("OH1", 0, "The front-row outside starts left"),
-        ("L", 0, "The libero finishes"),
-        ("OP", 3, "Come in to cover deep"),
-    )
-    for role, rotation, advice in cases:
-        page = new_page(browser, query="?ff=all,-learn-guides&anim=0")
-        setup_match(page, role, ("ar",), sets=False)
-        page.click("#gStart")
-        for _ in range(rotation):
-            page.wait_for_selector("#gOff:enabled")
-            tap_at(page, 0.5, 0.5)
-            press_next(page)
-            press_next(page)
-        page.wait_for_selector("#gOff:enabled")
-        page.click("#gHelp")
-        hint = " ".join(page.inner_text("#gFb").split())
-        if "rule" in hint.lower() or "Remember" in hint or f". {advice}" not in hint or not hint.endswith("."):
-            fail(f"{role} R{rotation + 1} hint without Rules of thumb reads {hint!r}")
-        page.close()
-    print("hints without Rules of thumb: advice only, no rule cited", flush=True)
-
-
 ZONE_SPOTS = [(0.17, 0.21), (0.5, 0.21), (0.83, 0.21), (0.17, 0.71), (0.5, 0.71), (0.83, 0.71)]
 
 
@@ -515,17 +481,7 @@ def check_match_rotate(browser: Browser) -> None:
             fail(f"{ctx}: breakdown {line!r}, expected {want!r}")
         press_next(page)
     page.close()
-    page = new_page(browser, query="?ff=all,-match-rotate-name&anim=0")
-    setup_match(page, "OH1", ("start",))
-    page.click("#gStart")
-    page.wait_for_selector("#gOff:enabled")
-    if page.inner_text("#gTitle") != "H1" or page.locator("#gAsk").count():
-        fail(f"flag off: Rotate title {page.inner_text('#gTitle')!r} or a marker prompt")
-    tap_at(page, 0.5, 0.5)
-    if not page.locator("#gNext").is_enabled():
-        fail("flag off: one tap does not enable Continue at Rotate")
-    page.close()
-    print("match rotate: H name, every marker asked and graded, x1 scoring, flag off", flush=True)
+    print("match rotate: H name, every marker asked and graded, x1 scoring", flush=True)
 
 
 R_NAME = re.compile(r"\bR[1-6]\b")
@@ -1710,7 +1666,7 @@ def check_double_check(browser: Browser) -> None:
     print("double tap on Continue keeps the feedback", flush=True)
 
 
-def drill_page(browser: Browser, steps: list[str], query: str = "?ff=all", reduced: bool = False) -> Page:
+def drill_page(browser: Browser, steps: list[str], query: str = "", reduced: bool = False) -> Page:
     """Opens Drill as OH1 with only ``steps`` picked and the neighbour check off."""
     page = browser.new_page(
         viewport={"width": 390, "height": 844},
@@ -1855,7 +1811,7 @@ def check_answer_glide(browser: Browser) -> None:
     if not page.inner_text("#dq") or "Tap the court" not in page.inner_text("#fb"):
         fail(f"glide: Next mid-glide did not open the next question ({question!r})")
     page.close()
-    for query, reduced, tag in (("?ff=all&anim=0", False, "anim=0"), ("?ff=all", True, "reduced motion")):
+    for query, reduced, tag in (("?anim=0", False, "anim=0"), ("", True, "reduced motion")):
         page = drill_page(browser, ["rec"], query, reduced)
         for _ in range(20):
             got = tap_far(page)
@@ -1867,16 +1823,7 @@ def check_answer_glide(browser: Browser) -> None:
         if page.is_visible("#dWatch"):
             fail(f"glide {tag}: Watch the move offered")
         page.close()
-    page = drill_page(browser, ["rec"], "?ff=all,-answer-glide")
-    for _ in range(20):
-        got = tap_far(page)
-        if got["on"]:
-            break
-        page.click("#nextBtn")
-    if got["want"] is not None or got["target"] or got["route"]:
-        fail(f"glide off: answer picture changed: {got}")
-    page.close()
-    print("answer glide: 400 ms, Next cuts it short, still with reduced motion, flag off", flush=True)
+    print("answer glide: 400 ms, Next cuts it short, still with reduced motion", flush=True)
 
 
 def watch_play(page: Page) -> dict[str, Any] | None:
@@ -1951,7 +1898,7 @@ def check_watch_move(browser: Browser) -> None:
     if page.is_visible("#dWatch"):
         fail("watch: offered at Rotate")
     page.close()
-    page = new_page(browser, query="?ff=all")
+    page = new_page(browser, query="")
     setup_match(page, "OH1", ("rec",))
     page.click("#gStart")
     if page.is_visible("#gWatch"):
@@ -2035,7 +1982,7 @@ def check_watch_fit_and_boxes(browser: Browser) -> None:
 
 def check_reveal_motion(browser: Browser) -> None:
     """Same device: no motion during a turn; the reveal glides the markers and offers Watch the move."""
-    page = new_page(browser, query="?ff=all")
+    page = new_page(browser, query="")
     setup_match(page, "OH1", ("rec",))
     page.check('input[name="gPlayers"][value="mp"]')
     page.fill('#mpList input[data-k="0"]', "Anna")
@@ -2088,30 +2035,23 @@ def check_common_mistakes(browser: Browser) -> None:
             "OH1",
             "simple",
             ("rec",),
-            "?ff=all&anim=0",
+            "?anim=0",
             [
                 (0.3, 0.73, "Overlap fault: at the whistle you must stand right of MB."),
                 (0.84, 0.72, ""),
                 (None, None, "Only the libero goes off, while MB serves"),
             ],
         ),
-        ("OH1", "official", ("rec",), "?ff=all&anim=0", [(None, None, "the middle it replaces go off")]),
-        ("OH1", "simple", ("serve",), "?ff=all&anim=0", [(0.15, 0.8, "Wrong row: you are front row here")]),
-        ("S", "simple", ("rec",), "?ff=all&anim=0", [(0.75, 0.8, "!In a passing lane"), (0.58, 0.31, "")]),
-        ("MB", "simple", ("rec",), "?ff=all&anim=0", [(0.5, 0.65, "In a passing lane")]),
+        ("OH1", "official", ("rec",), "?anim=0", [(None, None, "the middle it replaces go off")]),
+        ("OH1", "simple", ("serve",), "?anim=0", [(0.15, 0.8, "Wrong row: you are front row here")]),
+        ("S", "simple", ("rec",), "?anim=0", [(0.75, 0.8, "!In a passing lane"), (0.58, 0.31, "")]),
+        ("MB", "simple", ("rec",), "?anim=0", [(0.5, 0.65, "In a passing lane")]),
         (
             "OP",
             "simple",
             ("ar",),
-            "?ff=all&anim=0",
+            "?anim=0",
             [(0.5, 0.5, None), (0.5, 0.5, None), (0.5, 0.5, None), (0.8, 0.3, "!A back-row attacker")],
-        ),
-        (
-            "OH1",
-            "simple",
-            ("start",),
-            "?ff=all,-match-rotate-name&anim=0",
-            [(0.5, 0.71, "You counted along the arrows")],
         ),
     ]
     for role, rules, steps, query, taps in cases:
@@ -2152,13 +2092,7 @@ def check_common_mistakes(browser: Browser) -> None:
     if "You counted along the arrows" not in got:
         fail(f"Match Rotate counted along the arrows: line {got!r}")
     page.close()
-    page = new_page(browser, query="?ff=all,-common-mistakes&anim=0")
-    setup_match(page, "OH1", ("rec",))
-    page.click("#gStart")
-    if mistake_after(page, 0.3, 0.73):
-        fail("a Common mistake line with common-mistakes off")
-    page.close()
-    page = drill_page(browser, ["rec"], query="?ff=all&anim=0")
+    page = drill_page(browser, ["rec"], query="?anim=0")
     for _ in range(3):
         if page.locator("#courtD .ptag").count():
             fail("a pass tag on the Drill court before the answer")
@@ -2171,7 +2105,7 @@ def check_common_mistakes(browser: Browser) -> None:
         page.click("#nextBtn")
     page.close()
     print(
-        "common mistakes: overlap, row, off court, lane and along the arrows lines; none when exact or off; "
+        "common mistakes: overlap, row, off court, lane and along the arrows lines; none when exact; "
         "no pass tag in Drill",
         flush=True,
     )
@@ -2221,7 +2155,6 @@ def units() -> list[tuple[str, Callable[[Browser], None]]]:
         check_learn_keeps_r_names,
         check_libero_hint,
         check_hint_rule_numbers,
-        check_hints_without_guides,
         check_set_calls,
         check_sets_tab,
         check_set_quiz_neutral,
