@@ -8431,11 +8431,9 @@
         hideRulesNote();
         $("rulesNote").textContent = rulesNoteText(rulesMode, role);
         rulesNoteTimer = setTimeout(hideRulesNote, RULES_NOTE_MS);
-        setTimeout(() => {
-          if (!$("rulesNote").textContent) return;
-          document.addEventListener("pointerdown", hideRulesNote, true);
-          document.addEventListener("keydown", hideRulesNote, true);
-        });
+        // The pick's own pointerdown and keydown have passed by its click.
+        document.addEventListener("pointerdown", hideRulesNote, true);
+        document.addEventListener("keydown", hideRulesNote, true);
       }
       function renderRulesMode() {
         const locked = !!G?.online || (!!ON && !ON.isHost);
@@ -8472,6 +8470,8 @@
             cur = null;
             newQuestion();
           }
+          // On a first visit the list stays open until a role is picked.
+          if (!picked) return;
           setSetupOpen(false);
           showRulesNote();
         };

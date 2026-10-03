@@ -157,6 +157,10 @@ def check_first_list(pg: Page, tag: str) -> None:
     if pg.is_visible("#setupPanel"):
         fail(f"{tag} first visit: a tap outside did not close the list")
     pg.click("#roleChip")
+    for mode in ("simple", "official"):
+        pg.click(f'.rulesmode [data-rm="{mode}"]')
+        if not pg.is_visible("#setupNudge") or pg.locator("#rulesNote").inner_text():
+            fail(f"{tag} first visit: a rules pick closed the list or spoke before a role was picked")
 
 
 def check_rules_note(pg: Page, tag: str) -> None:
