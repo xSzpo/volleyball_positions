@@ -29,7 +29,10 @@ def drill_ri(question: str) -> int:
 URL = (ROOT / "index.html").as_uri() + "?ff=all&anim=0"
 FAIL: list[str] = []
 # A stored role skips the first-visit role sheet, which covers the page.
-SEED_ROLE = "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"
+SEED_ROLE = (
+    "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'));"
+    " localStorage.setItem('ksv51:officialReset', JSON.stringify('1'))"
+)
 
 
 def press_next(page: Page) -> None:
