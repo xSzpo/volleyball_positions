@@ -3224,6 +3224,7 @@
         "bug-report": true,
         "passer-tag": true,
         "common-mistakes": true,
+        "middle-cycle": true,
       };
       const FEATURE_NEEDS = {
         "learn-animation": ["learn-tab"],
@@ -3245,6 +3246,7 @@
         "sets-quiz": ["sets-tab"],
         "after-dig": ["match-solo"],
         "passer-tag": ["learn-tab"],
+        "middle-cycle": ["learn-tab"],
       };
       const FEATURE_ELEMENTS = {
         "learn-tab": ["tabLearn", "learn"],
@@ -5151,7 +5153,8 @@
           t: "A middle goes 4, 3, 2, serve, off, off",
           roles: ["MB1", "MB2"],
           modes: ["official"],
-          d: "You come on in zone 4, play 3, then 2, then serve from zone 1 while the libero stays off. Then the libero plays for you in zones 6 and 5. MB1 is in the front row in H2, H1 and H6 and serves in H5. MB2 is in the front row in H5, H4 and H3 and serves in H2.",
+          flag: "middle-cycle",
+          d: "You come on in zone 4, play 3, then 2. In zone 1 you serve, then defend zone 5; the libero stays off. When we lose the serve, the libero comes in for you and plays zones 6 and 5. MB1 is in the front row in H2, H1 and H6 and serves in H5. MB2 is in the front row in H5, H4 and H3 and serves in H2.",
         },
         {
           k: "outside-left",
@@ -5187,7 +5190,9 @@
       });
       // Simplified has one middle and no cycle, so the list depends on the rule set.
       function thumbList() {
-        return THUMB.filter((t) => !t.modes || t.modes.includes(rulesMode));
+        return THUMB.filter(
+          (t) => (!t.modes || t.modes.includes(rulesMode)) && (!t.flag || feature(t.flag)),
+        );
       }
       // Hints cite a rule of thumb by key, so its number follows the list order.
       function thumbNo(key) {
@@ -5500,17 +5505,25 @@
         4: "4",
         3: "3",
         2: "2",
-        1: "serve",
+        1: "serve: you serve, then defend zone 5",
         6: "the first off",
         5: "the second off",
       };
       // Where a middle is in "4, 3, 2, serve, off, off"; off court, the libero stands in its zone.
-      function cycleLine(ri, who) {
-        if (rulesMode !== "official" || !MIDDLE_ROLES.includes(who)) return "";
+      function cycleOn(who) {
+        return feature("middle-cycle") && rulesMode === "official" && MIDDLE_ROLES.includes(who);
+      }
+      function cycleLine(ri, who, phase) {
+        if (!cycleOn(who)) return "";
         const r = ROWS[ri],
           i = [...r.front, ...r.back].indexOf(who);
         const zone = i < 0 ? ORDER[3 + r.back.indexOf("L")] : ORDER[i];
-        return `<p class="cycle" style="margin:4px 0 0">Your cycle: 4, 3, 2, serve, off, off — you are at ${CYCLE_STEP[zone]}.</p>`;
+        // When we receive in the serving rotation, the libero is in for you in zone 1.
+        const step =
+          zone === 1 && phase === "rec"
+            ? "serve: when we receive, the libero plays for you"
+            : CYCLE_STEP[zone];
+        return `<p class="cycle" style="margin:4px 0 0">Your cycle: 4, 3, 2, serve, off, off — you are at ${step}.</p>`;
       }
       // Rotate from the name alone: you place the setter, yourself, then each overlap partner.
       // Shared by Drill (`rot`) and Match (`G.rot`); `how` is "h" (setter's zone) or "r".
@@ -5826,7 +5839,7 @@
         $("fb").className = `fb ${cls}`;
         $("fb").innerHTML = hOnly(`<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`);
         if (cur.phase === "start" || cur.phase === "rec")
-          $("fb").insertAdjacentHTML("beforeend", cycleLine(cur.ri, cur.role));
+          $("fb").insertAdjacentHTML("beforeend", cycleLine(cur.ri, cur.role, cur.phase));
         if (cls !== "good" && !rot)
           $("fb").insertAdjacentHTML(
             "beforeend",
@@ -6579,7 +6592,7 @@
         return `When we serve there is no overlap rule, so everyone except the server stands in base defence before the serve: the front row in the middle of its zones, the back row deep. You are ${isFront(st.ri, G.role, "serve") ? "front" : "back"} row in this rotation.`;
       }
       function cycleHint(who) {
-        return rulesMode === "official" && MIDDLE_ROLES.includes(who)
+        return cycleOn(who)
           ? ` ${thumbRef("cycle", "a middle goes 4, 3, 2, serve, off, off")}`
           : "";
       }

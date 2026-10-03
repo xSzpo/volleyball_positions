@@ -1056,17 +1056,26 @@ def check_drill_reset(browser: Browser, tag: str) -> None:
     ctx.close()
 
 
-CYCLE_STEP = {4: "4", 3: "3", 2: "2", 1: "serve", 6: "the first off", 5: "the second off"}
+CYCLE_STEP = {
+    4: "4",
+    3: "3",
+    2: "2",
+    1: "serve: you serve, then defend zone 5",
+    6: "the first off",
+    5: "the second off",
+}
+CYCLE_SERVE_REC = "serve: when we receive, the libero plays for you"
 ZONE_ORDER = [4, 3, 2, 5, 6, 1]
 
 
-def cycle_step(middle: str, ri: int) -> str:
+def cycle_step(middle: str, ri: int, phase: str) -> str:
     """Where an Official middle is in "4, 3, 2, serve, off, off", from data.py: off court, L stands in its zone."""
     from data import ROWS
 
     row = ROWS[ri]
     lineup = [*row["front"], *row["back"]]
-    return CYCLE_STEP[ZONE_ORDER[lineup.index(middle if middle in lineup else "L")]]
+    zone = ZONE_ORDER[lineup.index(middle if middle in lineup else "L")]
+    return CYCLE_SERVE_REC if zone == 1 and phase == "rec" else CYCLE_STEP[zone]
 
 
 def check_drill_middles(browser: Browser, tag: str, quick: bool) -> None:
@@ -1106,7 +1115,10 @@ def check_drill_middles(browser: Browser, tag: str, quick: bool) -> None:
         fail(f"{tag} Both is not stored in ksv51:drillMiddles")
     ri_of = {f"H{row['setter']}": ri for ri, row in enumerate(ROWS)}
     asked: set[str] = set()
-    for n in range(16 if quick else 30):
+    serving = False
+    for n in range(80):
+        if n >= (16 if quick else 30) and serving and len(asked) == 2:
+            break
         title = pg.inner_text("#dq")
         found = re.fullmatch(r"(H[1-6]) · Reception · You are (MB1|MB2)", title)
         if not found:
@@ -1121,7 +1133,9 @@ def check_drill_middles(browser: Browser, tag: str, quick: bool) -> None:
         old = before or {"ok": 0, "miss": 0}
         if not after or after["ok"] + after["miss"] != old["ok"] + old["miss"] + 1:
             fail(f"{tag} the answer as {middle} in {found[1]} was not recorded under {key}: {old} -> {after}")
-        want = f"Your cycle: 4, 3, 2, serve, off, off — you are at {cycle_step(middle, ri)}."
+        step = cycle_step(middle, ri, "rec")
+        serving = serving or step == CYCLE_SERVE_REC
+        want = f"Your cycle: 4, 3, 2, serve, off, off — you are at {step}."
         if want not in pg.inner_text("#fb"):
             fail(f"{tag} {middle} {found[1]} feedback lacks {want!r}: {pg.inner_text('#fb')!r}")
         if pg.get_attribute("#roleChip", "data-role") != "MB1":
@@ -1129,6 +1143,8 @@ def check_drill_middles(browser: Browser, tag: str, quick: bool) -> None:
         pg.click("#nextBtn")
     if asked != {"MB1", "MB2"}:
         fail(f"{tag} Both asked only {sorted(asked)}")
+    if not serving:
+        fail(f"{tag} Both never asked a middle at Receive in its serving rotation")
     weak = pg.inner_text("#weak")
     if weak.startswith("Needs practice") and "both middles" not in weak:
         fail(f"{tag} the weak spots with Both do not cover both middles: {weak!r}")

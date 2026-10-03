@@ -1137,7 +1137,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** none (owner request, 2026-10-03)
 - **Problem:** The owner plays MB1 and MB2 and wanted the middles' rotation as one line, "4, 3, 2, serve, off, off". Simplified has one MB who plays the front middle in every rotation, so the cycle does not hold there.
-- **Decision:** The `cycle` entry has `modes: ["official"]`: Simplified leaves it out, and `thumbList()` numbers the list per rule set, so the rule numbers in hints and Rotation captions follow it. It sits after the middles entry and is marked as your rule for MB1 and MB2. It does not name the defence zone after the serve.
+- **Decision:** The `cycle` entry has `modes: ["official"]`: Simplified leaves it out, and `thumbList()` numbers the list per rule set, so the rule numbers in hints follow it. It sits after the middles entry and is marked as your rule for MB1 and MB2. After the serve the middle defends zone 5, as at Our serve (#145). The entry, the Drill line and the Match hint sit behind the flag `middle-cycle` (needs `learn-tab`); with it off, the list and the rule numbers are as before.
 - **Alternatives:** a Simplified wording ("MB plays the front middle; in H5 and H2 MB serves"), which the middles entry already says.
 - **Reversible by:** `THUMB`, `thumbList()` and `thumbNo()` in `src/template.html`.
 
@@ -1149,10 +1149,10 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** Both by default; weak spots of your own middle only.
 - **Reversible by:** `drillRoles()`, `middlesShown()` and `renderDrillMiddles()` in `src/template.html`.
 
-### 150. The cycle line in Drill names the step, with no flag of its own
+### 150. The cycle line in Drill names the step
 
 - **Issue:** none (owner request, 2026-10-03)
-- **Problem:** Drill feedback for an Official middle at Rotate and Receive adds "Your cycle: 4, 3, 2, serve, off, off — you are at <step>." The two off steps needed names, and the line has no flag key.
-- **Decision:** The steps read 4, 3, 2, serve, "the first off" (the libero in zone 6) and "the second off" (zone 5), from the middle's zone in the Official rotation lineup (the libero's zone when it is in). The line ships with the `cycle` rule of thumb and has no flag; Match hints for an Official middle at Rotate, and when it is off court, cite the rule with `thumbRef("cycle", …)`.
-- **Alternatives:** "off (zone 6)"; a flag key for the line.
+- **Problem:** Drill feedback for an Official middle at Rotate and Receive adds "Your cycle: 4, 3, 2, serve, off, off — you are at <step>." The steps needed names, and at Receive in the serving rotation (MB1 H5, MB2 H2) the libero is in for the middle, so "you are at serve" alone was wrong there.
+- **Decision:** The steps read 4, 3, 2, "serve: you serve, then defend zone 5", "the first off" (the libero in zone 6) and "the second off" (zone 5), from the middle's zone in the Official rotation lineup (the libero's zone when it is in). At Receive in the serving rotation the step reads "serve: when we receive, the libero plays for you". The line ships with the `cycle` rule of thumb under the flag `middle-cycle`; Match hints for an Official middle at Rotate, and when it is off court, cite the rule with `thumbRef("cycle", …)`.
+- **Alternatives:** "off (zone 6)"; no cycle line at Receive in the serving rotation.
 - **Reversible by:** `CYCLE_STEP`, `cycleLine()` and `cycleHint()` in `src/template.html`.
