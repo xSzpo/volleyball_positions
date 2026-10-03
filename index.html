@@ -3264,7 +3264,7 @@
         if (!$("game").hidden && gPlayersMode() === "online") onRejoinCheck();
       }
       window.ksvLearn = {
-        buildMs: () => BUILD_MS,
+        buildMs: () => ({ marker: BUILD_MS, swap: SWAP_MS, hold: BUILD_HOLD_MS, pop: POP_MS }),
         describe: (ri, phase, r) => describe(ri, phase, r),
         players: (ri, phase) => players(ri, phase),
         captions: (ri, phase, r) =>
@@ -3293,6 +3293,7 @@
               Object.entries(st.mv).map(([p, m]) => [p, m.delay + m.glide]),
             ),
             appear: st.appear ?? null,
+            leave: st.leave ?? null,
             walk: st.walk ?? null,
             start: st.start,
             dur: st.dur,
@@ -3569,8 +3570,14 @@
         TRAIL_FADE_MS = 400,
         FADE_BACK_MS = 400,
         CAPTION_MS = 2500,
-        POP_MS = 300;
-      const BUILD_MS = 1200;
+        POP_MS = 250;
+      const BUILD_MS = 450,
+        SWAP_MS = 500,
+        BUILD_HOLD_MS = 300;
+      // Two lines on a 390 px phone: the list starts at the setter, so the line does not say so.
+      const WALK_LINE = "Against the rotation: Setter, Outside, Middle, Opposite, Outside, Middle.";
+      const walkLine = (ri) =>
+        `${WALK_LINE} ${players(ri, "start").some((o) => o.p === "L") ? "The libero replaces the back middle." : "The zone 1 middle serves, libero off."}`;
       // 1 unit is 9 m; with a quarter of the glide spent speeding up and a quarter slowing down, the top speed is about 4.8 m/s.
       const MS_PER_UNIT = 2500,
         EASE_PART = 0.25,
@@ -3945,65 +3952,51 @@
           phase === "start" ? buildRotation(ri) : { ...buildReception(ri), fadeBack: true };
         return stageCache[key];
       }
-      // One player appears per stage, walking the zones up from the setter's: S, OH1, a middle, OP, OH2, a middle.
-      // A last stage adds nobody and names the diagonal pairs as the check.
+      // One player appears per stage, walking the zones up from the setter's: S, OH, MB, OP, OH, MB. The back middle
+      // appears as itself, then a last stage swaps it for L; with no L on court there is no swap.
       function buildRotation(ri) {
         const list = players(ri, "start");
         const from = spots(list);
-        const n = zoneOf(ri, "S");
-        const swap = middleServes(ri);
-        const rule = (key, text) =>
-          feature("learn-guides")
-            ? `Rule ${THUMB.findIndex((t) => t.k === key) + 1}: ${text}`
-            : `${text[0].toUpperCase()}${text.slice(1)}`;
-        const middle = (z, p) => {
-          if (p === "L")
-            return `Zone ${z}: next is a middle; in the back row the libero replaces it.`;
-          if (swap && p === server(ri))
-            return `Zone ${z}: next is a middle, ${p}; it serves, so the libero is off.`;
-          return `Zone ${z}: next is a middle, ${p}.`;
+        // Zones from the Rotation spots, so a lineup that differs from the reception rows still walks.
+        const zone = (o) =>
+          (o.y < AL ? [4, 3, 2] : [5, 6, 1])[Math.min(2, Math.max(0, Math.floor(o.x * 3)))];
+        const n = zone(list.find((o) => o.p === "S"));
+        const back = ROWS[ri].liberofor || "SUB";
+        const swap = !!from.L;
+        if (swap) from[back] = from.L;
+        const order = [0, 1, 2, 3, 4, 5].map((k) => {
+          const p = list.find((o) => zone(o) === ((n - 1 + k) % 6) + 1).p;
+          return p === "L" ? back : p;
+        });
+        const team = walkLine(ri);
+        const stage = (k, p, dur) => ({
+          walk: k && k < 6 ? [order[k - 1], order[k]] : null,
+          moves: {},
+          mv: {},
+          src: {},
+          notes: {},
+          team,
+          appear: p,
+          start: k * BUILD_MS,
+          dur,
+        });
+        const stages = order.map((p, k) => stage(k, p, BUILD_MS));
+        if (swap) stages.push({ ...stage(6, "L", SWAP_MS), leave: back });
+        const appear = Object.fromEntries(stages.map((st) => [st.appear, st.start]));
+        const leave = swap ? { [back]: 6 * BUILD_MS } : {};
+        const last = stages[stages.length - 1];
+        const total = last.start + last.dur + BUILD_HOLD_MS;
+        const shown = swap ? [...order, "L"] : order;
+        return {
+          from,
+          players: shown,
+          stages,
+          total,
+          end: spots(list),
+          appear,
+          leave,
+          build: true,
         };
-        const steps = [
-          () =>
-            rule(
-              "walk",
-              `setter in zone ${n} (H${n}). Count up: ${[1, 2, 3, 4, 5].map((k) => ((n - 1 + k) % 6) + 1).join(", ")}${n > 1 ? "; after 6 comes 1" : ""}.`,
-            ),
-          (z) => `Zone ${z}: next in the walk after the setter, outside hitter 1.`,
-          middle,
-          (z) => `Zone ${z}: next is the opposite, on the setter's diagonal.`,
-          (z) => `Zone ${z}: next is outside hitter 2, on outside hitter 1's diagonal.`,
-          middle,
-        ];
-        const order = [];
-        const lines = steps.map((text, k) => {
-          const z = ((n - 1 + k) % 6) + 1;
-          const p = list.find((o) => zoneOf(ri, o.p) === z).p;
-          order.push(p);
-          return [p, text(z, p)];
-        });
-        lines.push([
-          null,
-          rule("corners", `same job, opposite corners: S–OP, OH–OH, MB–${swap ? "MB" : "L"}.`),
-        ]);
-        const appear = {};
-        const stages = lines.map(([p, text], k) => {
-          if (p) appear[p] = k * BUILD_MS;
-          const walk = k ? [order[k - 1], order[k % order.length]] : null;
-          return {
-            walk,
-            moves: {},
-            mv: {},
-            src: {},
-            notes: p ? { [p]: text } : {},
-            team: text,
-            appear: p,
-            start: k * BUILD_MS,
-            dur: BUILD_MS,
-          };
-        });
-        const total = stages.length * BUILD_MS + HOLD_MS;
-        return { from, players: order, stages, total, end: from, appear, build: true };
       }
       function buildReception(ri) {
         const list = players(ri, "rec");
@@ -4234,18 +4227,19 @@
         return stageCaption(base || stillStage(ri, phase), r);
       }
       // While a play runs, the caption changes only when you get a new line, and each line stays CAPTION_MS of play.
-      // A Rotation build shows every stage's line as its marker appears, with no hold: each one places the next player.
+      // A Rotation build has one line for the whole play.
       function captionPlan(ri, phase, tr, r) {
+        if (tr.build) return [{ t: 0, html: walkLine(ri) }];
         const want = [];
         tr.stages.forEach((st, k) => {
-          if (tr.build || r == null || st.notes[r] || k === 0)
+          if (r == null || st.notes[r] || k === 0)
             want.push({ t: st.start, html: stageCaption(st, r) });
         });
         const out = [];
         want.forEach((w) => {
           const prev = out[out.length - 1];
           if (prev?.html === w.html) return;
-          const t = prev && !tr.build ? Math.max(w.t, prev.t + CAPTION_MS) : w.t;
+          const t = prev ? Math.max(w.t, prev.t + CAPTION_MS) : w.t;
           if (t < tr.total) out.push({ t, html: w.html });
         });
         return out;
@@ -4254,6 +4248,8 @@
       function captionHtml(ri, phase, tr) {
         const still = restCaption(ri, phase, role);
         const list = tr.stages.map((st) => stageCaption(st, role));
+        if (tr.build && restList === `${rulesMode}|${ri}|${phase}`) return walkLine(ri);
+        if (tr.build && !animated()) return [still, walkLine(ri)].filter(Boolean).join("<br>");
         if (animated()) {
           if (restList !== `${rulesMode}|${ri}|${phase}` || !list.length) return still;
           return `${still}<div class="then"><b>Then:</b>${numbered(list)}</div>`;
@@ -4293,8 +4289,10 @@
           const shown = tr.appear?.[p];
           const f = shown == null ? 1 : Math.max(0, Math.min(1, (a.t - shown) / POP_MS));
           const pop = shown == null ? "" : ` scale(${0.6 + 0.4 * f})`;
+          const gone = tr.leave?.[p];
+          const out = gone == null ? 1 : Math.max(0, Math.min(1, 1 - (a.t - gone) / POP_MS));
           g.setAttribute("transform", `translate(${s.x * W} ${s.y * H})${pop}`);
-          if (shown != null) g.setAttribute("opacity", f);
+          if (shown != null) g.setAttribute("opacity", Math.min(f, out));
         });
         a.walks?.forEach((g) => {
           const t = a.t - tr.stages[g.dataset.stage].start;
@@ -4339,8 +4337,7 @@
           a.stage = i;
           a.onStage();
         }
-        // A build pauses where the next marker is due, so its caption waits for that marker.
-        const cap = a.caps.findLast((c) => (tr.build ? c.t < a.t : c.t <= a.t)) || a.caps[0];
+        const cap = a.caps.findLast((c) => c.t <= a.t) || a.caps[0];
         if (cap && cap !== a.cap) {
           a.cap = cap;
           a.capEl.innerHTML = cap.html;

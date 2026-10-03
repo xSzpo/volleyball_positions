@@ -1075,3 +1075,20 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The owner decided on 2026-10-03 that everyone restarts in Official once. On start-up, while `rules-official` is on and `ksv51:officialReset` is not stored, the app removes `ksv51:rulesMode` and `ksv51:role` and stores the mark, so the next screen is a first visit for rules and role: Official, and the role list opens with "Pick your role". Progress, bests, theme, room, zones and every other key are kept. A user who then picks Simplified keeps it. A phone with `rules-official` off is not reset until the flag is on for it. Drill stats of the Simplified `MB` do not carry over to MB1 or MB2.
 - **Alternatives:** keep stored choices (#139 alone); map a stored `simple` to Official without clearing the role.
 - **Reversible by:** the `officialReset` block after `feature` in `src/template.html`.
+
+### 141. The Rotation build is a fast zone walk
+
+- **Issue:** none (owner feedback, 2026-10-03)
+- **Supersedes:** the stage order of #135, the per-stage lines and "Rule 1"/"Rule 2" stages of #136, and the last stage of #137.
+- **Problem:** The owner found the Rotation play too slow and its text too long. He asked for Setter, Outside, Middle, Opposite, Outside, Middle, then the libero replacing the back middle, played fast.
+- **Decision:** The build adds the six markers in the walk order from the setter's zone (`players(ri, 'start')`), with a walk arrow from each marker to the next. The back middle appears as itself (MB1 or MB2 in Official, SUB in Simplified), then one swap stage fades it out and L in on its spot. Official R3 and R6, where the zone 1 middle serves and L is off, have no swap stage. Timings: `BUILD_MS` 450 ms per marker, `POP_MS` 250 ms pop, `SWAP_MS` 500 ms swap, `BUILD_HOLD_MS` 300 ms end hold, so a play lasts 3.5 s (3 s without the swap). The rule stages are dropped.
+- **Alternatives:** keep L appearing directly in the back middle's spot; keep the closing "Same job, opposite corners" stage.
+- **Reversible by:** `buildRotation()` and the build constants in `src/template.html`.
+
+### 142. One short line for the Rotation build
+
+- **Issue:** none (owner feedback, 2026-10-03)
+- **Problem:** The owner's sentence ("start from setter backward to rotation: Setter, Outside, Middle, Opposite, Outside, Middle and replace back Middle with Libero") takes three lines on a 390 px phone.
+- **Decision:** The build shows one line during and after the play: "Against the rotation: Setter, Outside, Middle, Opposite, Outside, Middle. The libero replaces the back middle." (Official R3/R6: "The zone 1 middle serves, libero off."). The list starts with Setter, so the line does not say to start at the setter. It fits two lines at 390 px and takes three at 360 px. There is no "Then:" list after a Rotation play; with reduced motion the still caption is followed by this line instead of a stage list. The rest caption before a play is unchanged, and Reception keeps its "Then:" list.
+- **Alternatives:** the owner's sentence word for word on three lines; "Libero for the back middle."
+- **Reversible by:** `WALK_LINE`, `walkLine()`, `captionPlan()` and `captionHtml()` in `src/template.html`.
