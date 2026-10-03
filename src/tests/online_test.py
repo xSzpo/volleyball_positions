@@ -514,6 +514,7 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
     assert host.is_hidden("#gWait"), "the online wait box shows in a solo match"
     assert host.is_hidden("#gStrip"), "solo match shows the scoreboard strip"
     host.click("#gQuit")
+    host.click("#gQuit")
     print("solo match after online play has no wait box")
     return host, guest
 
@@ -602,6 +603,7 @@ def persistent_room(host: Page, guest: Page, emulator_db: str, code: str) -> Non
     host.click("#rNext")
     host.wait_for_function("document.getElementById('gStepName').textContent.includes('moment 2 of')")
     host.click("#gQuit")
+    host.click("#gQuit")
     for page in (host, guest):
         in_lobby(page, 2)
     assert host.is_visible("#lStart") and guest.is_hidden("#lLive"), "lobby after the host quit is wrong"
@@ -613,6 +615,7 @@ def persistent_room(host: Page, guest: Page, emulator_db: str, code: str) -> Non
     for page in (host, guest):
         moment_one(page)
     guest.click("#gQuit")
+    guest.click("#gQuit")
     guest.wait_for_selector("#lLive", state="visible")
     assert "in progress" in guest.inner_text("#gLobby").lower(), "lobby does not say a match is running"
     answer(host, "OH1", 0)
@@ -623,6 +626,8 @@ def persistent_room(host: Page, guest: Page, emulator_db: str, code: str) -> Non
     guest.wait_for_function("document.getElementById('gStepName').textContent.includes('moment 2 of')")
     answer(guest, "OH2", 1)
     print("a guest can quit to the lobby and join in again")
+
+    host.click("#gQuit")
 
     host.click("#gQuit")
     for page in (host, guest):
@@ -794,6 +799,7 @@ def takeover(host: Page, guest: Page, browser: Browser, url: str, emulator_db: s
     for page in roles:
         check_reveal(page, {"Cid": "perfect", "Anna": "perfect", "Ben": "perfect"})
     assert new_host.is_visible("#rNext") and first.is_hidden("#rNext"), "the new host cannot advance"
+    new_host.click("#rQuit")
     new_host.click("#rQuit")
     for page in (new_host, other, first):
         page.wait_for_selector("#gLobby", state="visible", timeout=10000)

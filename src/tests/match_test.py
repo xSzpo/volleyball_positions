@@ -2112,6 +2112,196 @@ def check_common_mistakes(browser: Browser) -> None:
 
 
 # Rough seconds per unit, from a sharded run; they only balance the shards.
+def stored(page: Page, key: str) -> Any:
+    return page.evaluate(f"() => JSON.parse(localStorage.getItem('ksv51:{key}') || 'null')")
+
+
+def check_quit_confirm(browser: Browser) -> None:
+    """Quit in a solo or same-device match takes two taps; the first arms it for 3 s without moving anything."""
+    page = new_page(browser)
+    setup_match(page, "OH1", ("rec",))
+    page.click("#gStart")
+    before = (page.locator("#gQuit").bounding_box(), page.locator("#courtG").bounding_box())
+    page.click("#gQuit")
+    after = (page.locator("#gQuit").bounding_box(), page.locator("#courtG").bounding_box())
+    if not page.is_visible("#gPlay"):
+        fail("solo Quit: one tap quit the match")
+    if page.text_content("#gQuit") != "Sure?" or page.get_attribute("#gQuit", "aria-label") != "Tap again to quit":
+        fail(f"solo Quit: the first tap reads {page.text_content('#gQuit')!r}")
+    if before != after:
+        fail(f"solo Quit: arming moved the button or the court: {before} -> {after}")
+    page.wait_for_timeout(3300)
+    if page.text_content("#gQuit") != "Quit" or not page.is_visible("#gPlay"):
+        fail(f"solo Quit: not back to Quit after 3 s: {page.text_content('#gQuit')!r}")
+    page.click("#gQuit")
+    page.click("#gQuit")
+    if not page.is_visible("#gSetup"):
+        fail("solo Quit: two taps did not quit")
+    if stored(page, "match") is not None:
+        fail("solo Quit: the saved match is kept")
+    page.check('input[name="gPlayers"][value="mp"]')
+    page.click("#gStart")
+    page.click("#pQuit")
+    if not page.is_visible("#gPass") or page.text_content("#pQuit") != "Sure?":
+        fail("same-device Quit: one tap quit the match")
+    page.click("#pQuit")
+    if not page.is_visible("#gSetup"):
+        fail("same-device Quit: two taps did not quit")
+    page.close()
+    print("Quit takes two taps", flush=True)
+
+
+def check_resume(browser: Browser) -> None:
+    """A solo match survives a reload: Resume goes on with the score, Discard and a bad stored value drop it."""
+    page = new_page(browser)
+    setup_match(page, "OH1", ("rec",))
+    page.click("#gStart")
+    for ri in range(3):
+        tap_spot(page, "OH1", ri, "rec")
+        press_next(page)
+    score = page.inner_text("#gScore")
+    page.reload()
+    page.click("#tabGame")
+    if not page.is_visible("#gResume") or page.inner_text("#gResumeText") != "Resume match (moment 4 of 6)":
+        fail(f"resume: offer reads {page.inner_text('#gResumeText')!r}")
+    page.click("#gResumeBtn")
+    if page.inner_text("#gStepName") != "Reception · moment 4 of 6" or page.inner_text("#gScore") != score:
+        fail(f"resume: {page.inner_text('#gStepName')!r} with score {page.inner_text('#gScore')} ({score} before)")
+    for ri in range(3, 6):
+        tap_spot(page, "OH1", ri, "rec")
+        press_next(page)
+    if not page.is_visible("#gEnd") or "100%" not in page.inner_text("#gStats"):
+        fail("resume: the resumed match does not finish with every answer")
+    if stored(page, "match") is not None:
+        fail("resume: the saved match is kept after the end")
+
+    page.click("#gAgain")
+    tap_spot(page, "OH1", 0, "rec")
+    press_next(page)
+    page.reload()
+    page.click("#tabGame")
+    page.click("#gDiscard")
+    if page.is_visible("#gResume") or stored(page, "match") is not None:
+        fail("resume: Discard keeps the match")
+
+    page.click("#gStart")
+    page.reload()
+    page.click("#tabGame")
+    if not page.is_visible("#gResume"):
+        fail("resume: no offer for a match left at moment 1")
+    if page.get_attribute("#gOpts", "open") is None:
+        page.click("#gOpts > summary")
+    page.check('input[name="gOrder"][value="mixed"]')
+    if page.is_visible("#gResume") or stored(page, "match") is not None:
+        fail("resume: a settings change keeps the match")
+
+    for bad in ("'{bad'", "JSON.stringify({queue: 5, i: 0})", "JSON.stringify({queue: [{ri: 9, phase: 'rec'}], i: 0})"):
+        page.evaluate(f"() => localStorage.setItem('ksv51:match', {bad})")
+        page.reload()
+        page.click("#tabGame")
+        if page.is_visible("#gResume") or page.evaluate("() => localStorage.getItem('ksv51:match')") is not None:
+            fail(f"resume: the stored value {bad} is not ignored")
+    page.close()
+    print("solo match resumes after a reload", flush=True)
+
+
+def pictures(page: Page, selector: str) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = page.eval_on_selector_all(
+        selector,
+        """(items) => items.map((li) => ({
+            pics: li.querySelectorAll('svg.mpic').length,
+            tap: li.querySelectorAll('svg.mpic circle.yourtap').length,
+            ring: li.querySelectorAll('svg.mpic circle.target').length,
+            pill: +(li.querySelector('svg.mpic rect.offpill')?.getAttribute('width') || 0),
+            top: Math.round(li.getBoundingClientRect().top),
+        }))""",
+    )
+    return found
+
+
+def check_mistake_pictures(browser: Browser) -> None:
+    """Each mistake on the end screen has a picture with your tap and the right spot, off court on the pill."""
+    page = new_page(browser)
+    setup_match(page, "OH1", ("rec",))
+    page.click("#gStart")
+    tap_at(page, 0.5, 0.03)
+    press_next(page)
+    press_next(page)
+    page.click("#gOff")
+    press_next(page)
+    press_next(page)
+    for ri in range(2, 6):
+        tap_spot(page, "OH1", ri, "rec")
+        press_next(page)
+    found = pictures(page, "#gMist li")
+    if len(found) != 2 or any(p["pics"] != 1 or p["tap"] != 1 or p["ring"] != 1 for p in found):
+        fail(f"mistake pictures: {found}")
+    elif found[0]["pill"] != 30 or found[1]["pill"] != 40:
+        fail(f"mistake pictures: the off-court answer does not show the pill: {found}")
+    elif found[0]["top"] != found[1]["top"]:
+        fail(f"mistake pictures: not two per row at 390 px: {found}")
+    page.close()
+    print("mistake pictures on the end screen", flush=True)
+
+
+def check_review_pictures(browser: Browser) -> None:
+    """Review done shows Back to drill without scrolling and a picture of each reviewed item."""
+    page = drill_page(browser, ["rec"])
+    page.set_viewport_size({"width": 390, "height": 664})
+    weak = {"OH1|0|rec": {"ok": 0, "miss": 2}, "OH1|3|rec": {"ok": 0, "miss": 2}}
+    page.evaluate(f"() => localStorage.setItem('ksv51:stats2', JSON.stringify({weak!r}))")
+    page.reload()
+    page.click("#tabDrill")
+    page.click("#reviewBtn")
+    for _ in range(2):
+        tap_at(page, 0.5, 0.03, "courtD")
+        page.click("#nextBtn")
+    if page.inner_text("#dq") != "Review done":
+        fail(f"review pictures: the review did not finish: {page.inner_text('#dq')!r}")
+    page.evaluate("() => window.scrollTo(0, 0)")
+    box = page.locator("#nextBtn").bounding_box()
+    if page.is_visible("#courtD") or not box or box["y"] + box["height"] > 664:
+        fail(f"review pictures: Back to drill not above the fold ({box})")
+    found = pictures(page, "#reviewPics li")
+    if len(found) != 2 or any(p["pics"] != 1 or p["tap"] != 1 or p["ring"] != 1 for p in found):
+        fail(f"review pictures: {found}")
+    page.click("#nextBtn")
+    if not page.is_visible("#courtD") or page.inner_text("#dq") == "Review done":
+        fail("review pictures: Back to drill does not bring the court back")
+    page.close()
+    print("Review done pictures", flush=True)
+
+
+def reveal_labels(browser: Browser, names: tuple[str, str]) -> tuple[list[str], str]:
+    page = new_page(browser)
+    setup_match(page, "OH1", ("rec",))
+    page.check('input[name="gPlayers"][value="mp"]')
+    for k, name in enumerate(names):
+        page.fill(f'#mpList input[data-k="{k}"]', name)
+    page.click("#gStart")
+    for _ in names:
+        page.click("#pReady")
+        tap_at(page, 0.5, 0.95)
+        press_next(page)
+        page.click("#gNext")
+    page.wait_for_selector("#gReveal:not([hidden])")
+    labels = sorted(page.eval_on_selector_all("#courtR text.tapname", "(ts) => ts.map((t) => t.textContent)"))
+    text = page.inner_text("#rList")
+    page.close()
+    return labels, text
+
+
+def check_reveal_labels(browser: Browser) -> None:
+    """Same-device reveal taps carry the initial, or the player's number when initials are the same."""
+    labels, text = reveal_labels(browser, ("Player 1", "Player 2"))
+    if labels != ["1", "2"] or "Player 1 (1)" not in text:
+        fail(f"reveal labels for default names: {labels}, {text!r}")
+    labels, text = reveal_labels(browser, ("Anna", "Ben"))
+    if labels != ["A", "B"] or "(" in text.split("·")[0]:
+        fail(f"reveal labels for Anna and Ben: {labels}, {text!r}")
+    print("same-device reveal labels", flush=True)
+
+
 COST = {
     "attack_drill": 8,
     "breakdown": 14,
@@ -2199,6 +2389,11 @@ def units() -> list[tuple[str, Callable[[Browser], None]]]:
         check_watch_move,
         check_reveal_motion,
         check_common_mistakes,
+        check_quit_confirm,
+        check_resume,
+        check_mistake_pictures,
+        check_review_pictures,
+        check_reveal_labels,
     ):
         add(check)
     return found
