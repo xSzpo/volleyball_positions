@@ -1088,7 +1088,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #152
 - **Problem:** The issue lists the mistakes to name but not how to tell them apart, or which one wins when a tap makes more than one.
-- **Decision:** `mistakeText()` checks in this order and names the first that fits: off court versus on (and the libero off at its serve; in Simplified only the libero goes off, while SUB serves); at Rotate a count along the rotation arrows (the tap is in the zone mirrored round the setter); an overlap fault against the real positions (Rotate and Receive); a passing lane at Receive (anyone but OH1, OH2 and L tapping between y 0.55 and 0.88, in front of a receiver and within 0.2 of it, and not within 0.24 of their own spot); the wrong row at Rotate and Our serve (by the 3 m line); a back-row attacker in front of the 3 m line at Attack (not a back-row opposite graded on its cover spot); the wrong side (the other half and more than 0.3 across); too deep or too close to the net (more than 0.08 and mostly in depth; the front middle at Attack "near the net, ready for the quick"); else one line for the step. Match Rotate and Drill Rotate name the arrows for any wrong marker counted along them, else your own marker's mistake. Same-device and online show none, as they show no verdict per turn.
+- **Decision:** `mistakeText()` checks in this order and names the first that fits: off court versus on (and the libero off at its serve; in Simplified only the libero goes off, while MB serves); at Rotate a count along the rotation arrows (the tap is in the zone mirrored round the setter); an overlap fault against the real positions (Rotate and Receive); a passing lane at Receive (anyone but OH1, OH2 and L tapping between y 0.55 and 0.88, in front of a receiver and within 0.2 of it, and not within 0.24 of their own spot); the wrong row at Rotate and Our serve (by the 3 m line); a back-row attacker in front of the 3 m line at Attack (not a back-row opposite graded on its cover spot); the wrong side (the other half and more than 0.3 across); too deep or too close to the net (more than 0.08 and mostly in depth; the front middle at Attack "near the net, ready for the quick"); else one line for the step. Match Rotate and Drill Rotate name the arrows for any wrong marker counted along them, else your own marker's mistake. Same-device and online show none, as they show no verdict per turn.
 - **Alternatives:** name every mistake that fits; a line only for the listed cases and none otherwise.
 - **Reversible by:** `MISTAKES` and `mistakeText()` in `src/template.html`.
 
@@ -1100,19 +1100,27 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** one key for both, as the issue asked.
 - **Reversible by:** `FEATURES` and `FEATURE_NEEDS` in `src/template.html`.
 
-### 145. The Rotation build is a fast zone walk
+### 144. Simplified R3 and R6: MB serves, the other middle is OM
+
+- **Issue:** none (owner decision, 2026-10-03)
+- **Problem:** In Simplified R3 and R6 the libero would be in zone 1 and may not serve. A grey substitute (SUB) used to come on to serve, which no real team does.
+- **Decision:** The owner decided MB serves. At Rotation and Our serve MB is in zone 1 and serves, L is off, and the other middle plays zone 4. When we lose the serve, at Reception, MB goes back to the net and L to the back row. The other middle is labelled `OM` ("Other middle"): middle colour with a dashed edge, named "the other middle" in captions, prompts and grades; its overlap limit at Rotation reads MB, whose slot it is at the whistle for their serve. When we lose the serve the change is called a training convention. Rotate grades change, so `ROOM_V` is 3 and the best-score key `v9|`.
+- **Alternatives:** `MB2` or `SUB` as the label (both read as a second, specific player); hiding the other middle (leaves zone 4 empty).
+- **Reversible by:** `OTHER_MIDDLE`, `lineup()`, `server()` and `rotation_lineup()` in `src/data.py`; `middleServes()`, `who()`, `limitName()` and `stillStage()` in `src/template.html`.
+
+### 146. The Rotation build is a fast zone walk
 
 - **Issue:** none (owner feedback, 2026-10-03)
 - **Supersedes:** the stage order of #135, the per-stage lines and "Rule 1"/"Rule 2" stages of #136, and the last stage of #137.
 - **Problem:** The owner found the Rotation play too slow and its text too long. He asked for Setter, Outside, Middle, Opposite, Outside, Middle, then the libero replacing the back middle, played fast.
-- **Decision:** The build adds the six markers in the walk order from the setter's zone (`players(ri, 'start')`), with a walk arrow from each marker to the next. The back middle appears as itself (MB1 or MB2 in Official, SUB in Simplified), then one swap stage fades it out and L in on its spot. Official R3 and R6, where the zone 1 middle serves and L is off, have no swap stage. Timings: `BUILD_MS` 450 ms per marker, `POP_MS` 250 ms pop, `SWAP_MS` 500 ms swap, `BUILD_HOLD_MS` 300 ms end hold, so a play lasts 3.5 s (3 s without the swap). The rule stages are dropped.
+- **Decision:** The build adds the six markers in the walk order from the setter's zone (`players(ri, 'start')`), with a walk arrow from each marker to the next. In Official the back middle appears as itself (MB1 or MB2), then one swap stage fades it out and L in on its spot. Simplified has no back middle, so L appears in its zone. R3 and R6, where the zone 1 middle serves and L is off (#144), have no swap stage. Timings: `BUILD_MS` 450 ms per marker, `POP_MS` 250 ms pop, `SWAP_MS` 500 ms swap, `BUILD_HOLD_MS` 300 ms end hold, so a play lasts 3.5 s (3 s without the swap). The rule stages are dropped.
 - **Alternatives:** keep L appearing directly in the back middle's spot; keep the closing "Same job, opposite corners" stage.
 - **Reversible by:** `buildRotation()` and the build constants in `src/template.html`.
 
-### 146. One short line for the Rotation build
+### 147. One short line for the Rotation build
 
 - **Issue:** none (owner feedback, 2026-10-03)
 - **Problem:** The owner's sentence ("start from setter backward to rotation: Setter, Outside, Middle, Opposite, Outside, Middle and replace back Middle with Libero") takes three lines on a 390 px phone.
-- **Decision:** The build shows one line during and after the play: "Against the rotation: Setter, Outside, Middle, Opposite, Outside, Middle. The libero replaces the back middle." (Official R3/R6: "The zone 1 middle serves, libero off."). The list starts with Setter, so the line does not say to start at the setter. It fits two lines at 390 px and takes three at 360 px. There is no "Then:" list after a Rotation play; with reduced motion the still caption is followed by this line instead of a stage list. The rest caption before a play is unchanged, and Reception keeps its "Then:" list.
+- **Decision:** The build shows one line during and after the play: "Against the rotation: Setter, Outside, Middle, Opposite, Outside, Middle. The libero replaces the back middle." (R3/R6: "The zone 1 middle serves, libero off."). The list starts with Setter, so the line does not say to start at the setter. It fits two lines at 390 px and takes three at 360 px. There is no "Then:" list after a Rotation play; with reduced motion the still caption is followed by this line instead of a stage list. The rest caption before a play is unchanged, and Reception keeps its "Then:" list.
 - **Alternatives:** the owner's sentence word for word on three lines; "Libero for the back middle."
 - **Reversible by:** `WALK_LINE`, `walkLine()`, `captionPlan()` and `captionHtml()` in `src/template.html`.

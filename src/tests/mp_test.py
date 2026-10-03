@@ -186,7 +186,7 @@ def play(rules: str) -> None:
                 if moment_seen and moment_seen.endswith("· Rotation"):
                     grades = pg.locator("#rList .rotgrades").all_inner_texts()
                     assert len(grades) == 3 and all(
-                        re.fullmatch(r"\w+: (right|wrong)( · \w+: (right|wrong))*", g) for g in grades
+                        re.fullmatch(r"[\w ]+: (right|wrong)( · [\w ]+: (right|wrong))*", g) for g in grades
                     ), f"Rotate reveal grades: {grades}"
                     rotate_reveals += 1
                 for row in rows:

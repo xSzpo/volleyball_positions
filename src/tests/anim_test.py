@@ -10,7 +10,7 @@ everyone to base defence, then fades back to the reception spots; Pause and
 Step keep their frame. Checks the stage end positions, the ball on the Our
 serve and Base stills, the controls (Replay, Pause, Step, speed), that no
 route plays on open, that Next and the chips never animate or wait, the still
-captions for exchanges and the middle pair reset, the caption length and
+captions for exchanges and MB serving in Simplified R3 and R6, the caption length and
 height, reduced motion and ?anim=0, the movement trails (through the stage and a
 run carried on), that the ball never waits in a player's hands, L's run in
 front of the deep outside hitter,
@@ -31,7 +31,7 @@ from playwright.sync_api import Browser, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from data import ATTACK_LINE, BASE_DEF, lineup, server  # noqa: E402
+from data import ATTACK_LINE, BASE_DEF, lineup, rotation_lineup, server  # noqa: E402
 
 BASE = (ROOT / "index.html").as_uri()
 FAIL: list[str] = []
@@ -439,7 +439,7 @@ def check_no_autoplay(page: Page) -> None:
 
 def check_static(page: Page) -> None:
     """Rotation opens on its still with the controls and plays nothing; Next reads in full and Base does not play."""
-    open_app(page, "?ff=all", {"role": "S", "rulesMode": "simple"})
+    open_app(page, "?ff=all", {"role": "S", "rulesMode": "official"})
     for ri, phase in ((0, "start"), (3, "start")):
         learn(page, ri, phase)
         if anim(page):
@@ -454,7 +454,7 @@ def check_static(page: Page) -> None:
     page.click("#lNext")
     if anim(page) or page.inner_text("#learnTag") != "R1 (H1) · Base":
         fail("Next into Base animates or does not move the tag")
-    check_positions("Base", page.evaluate(MARKERS, "#courtL .mk"), reception_plan(0, "simple")[1])
+    check_positions("Base", page.evaluate(MARKERS, "#courtL .mk"), reception_plan(0, "official")[1])
     if not page.inner_text("#lNext").lower().startswith("next:"):
         fail(f"Base: Next reads {page.inner_text('#lNext')!r}")
     page.click("#lNext")
@@ -553,12 +553,8 @@ SHOWN = """() => [...document.querySelectorAll('#courtL .am')]
 
 
 def rotation_zones(ri: int, mode: str) -> dict[str, int]:
-    """The Rotation step's zones: in Official R3 and R6 the serving middle stands in zone 1 and L is off."""
-    row = lineup(ri, mode)  # type: ignore[arg-type]
-    back = list(row["back"])
-    if mode == "official" and back[2] == "L":
-        back[2] = server(ri, mode)  # type: ignore[arg-type]
-    return dict(zip(row["front"] + back, ZONES, strict=True))
+    """The Rotation step's zones: in R3 and R6 the serving middle stands in zone 1 and L is off."""
+    return dict(zip(rotation_lineup(ri, mode), ZONES, strict=True))  # type: ignore[arg-type]
 
 
 def build_order(zones: dict[str, int]) -> list[str]:
@@ -571,13 +567,13 @@ WALK_JOBS = ("S", "OH", "MB", "OP", "OH", "MB")
 
 
 def job(p: str) -> str:
-    """A role's job in the walk: L plays the middle."""
-    return "MB" if p in ("L", "SUB") else p.rstrip("12")
+    """A role's job in the walk: L and OM play the middle."""
+    return "MB" if p in ("L", "OM") else p.rstrip("12")
 
 
 def back_middle(ri: int, mode: str) -> str:
-    """The middle the libero replaces at the Rotation step: SUB in Simplified."""
-    return lineup(ri, mode)["liberofor"] or "SUB"  # type: ignore[arg-type]
+    """The middle the libero replaces at the Rotation step: none in Simplified, where L plays the back middle."""
+    return lineup(ri, mode)["liberofor"]  # type: ignore[arg-type]
 
 
 def walk_line(zones: dict[str, int]) -> str:
@@ -590,16 +586,16 @@ def check_build_stages(page: Page, mode: str, ri: int) -> None:
     """The Rotation build of one rotation: order, the libero swap, spots, end, timing and the one caption."""
     tag = f"{mode} R{ri + 1} Rotation build"
     zones = rotation_zones(ri, mode)
-    swap = "L" in zones
     back = back_middle(ri, mode)
-    order = [back if p == "L" else p for p in build_order(zones)]
-    walk_zones = {back if p == "L" else p: z for p, z in zones.items()}
+    swap = bool(back) and "L" in zones
+    order = [back if p == "L" and swap else p for p in build_order(zones)]
+    walk_zones = {back if p == "L" and swap else p: z for p, z in zones.items()}
     n = zones["S"]
     want = {"OP": (n + 2) % 6 + 1, "OH1": n % 6 + 1, "OH2": (n + 3) % 6 + 1}
     for p, z in want.items():
         if zones[p] != z:
             fail(f"{tag}: {p} is in zone {zones[p]}, the rule gives {z}")
-    if mode == "official" and ri in (2, 5) and (swap or zones.get(server(ri, mode)) != 1):  # type: ignore[arg-type]
+    if ri in (2, 5) and ("L" in zones or zones.get(server(ri, mode)) != 1):  # type: ignore[arg-type]
         fail(f"{tag}: expected the serving middle in zone 1 and no L: {zones}")
     if tuple(job(p) for p in order) != WALK_JOBS:
         fail(f"{tag}: the walk from the setter's zone meets {order}, expected the jobs {WALK_JOBS}")
@@ -657,10 +653,10 @@ def check_build_stages(page: Page, mode: str, ri: int) -> None:
 def check_rotation_build(page: Page) -> None:
     """Rotation builds its lineup from the setter in every rotation and both rule sets.
 
-    One marker appears per stage on its Rotation spot, the back middle first and then L in its place, nobody moves,
-    and the play ends on the still with the overlap lines and one caption of at most two lines, no Then: list. Step
-    and Step back walk the stages, and Step back from the first stage returns to the still. Official R3 and R6 build
-    the serving middle in zone 1 and no L.
+    One marker appears per stage on its Rotation spot (in Official the back middle first and then L in its place),
+    nobody moves, and the play ends on the still with the overlap lines and one caption of at most two lines, no
+    Then: list. Step and Step back walk the stages, and Step back from the first stage returns to the still. R3 and
+    R6 build the serving middle in zone 1 and no L.
     """
     for mode in MODES:
         open_app(page, "?ff=all", {"role": "OH1", "rulesMode": mode})
@@ -673,15 +669,16 @@ def check_rotation_build(page: Page) -> None:
         learn(page, ri, "start")
         zones = rotation_zones(ri, mode)
         back = back_middle(ri, mode)
-        order = [back if p == "L" else p for p in build_order(zones)]
+        swap = bool(back) and "L" in zones
+        order = [back if p == "L" and swap else p for p in build_order(zones)]
         line = walk_line(zones)
         still = {o["p"]: (o["x"], o["y"]) for o in page.evaluate(f"window.ksvLearn.players({ri}, 'start')")}
-        spot = {**still, back: still["L"] if "L" in still else still[back]}
+        spot = {**still, back: still["L"]} if swap else still
         if anim(page) or page.locator("#courtL .am").count() or page.locator("#courtL .mk").count() != 6:
             fail(f"{tag}: does not open on the full still")
         if not page.is_disabled("#lBack"):
             fail(f"{tag}: Step back is enabled on the still")
-        for k in range(1, 8 if "L" in zones else 7):
+        for k in range(1, 8 if swap else 7):
             page.click("#lStep")
             wait_paused(page)
             shown = page.evaluate(SHOWN)
@@ -1272,27 +1269,30 @@ def check_speed(page: Page) -> None:
 
 
 def check_still_captions(page: Page) -> None:
-    """The exchanges and the middle pair reset that no longer animate stay in the still captions."""
+    """The exchanges and MB serving in Simplified R3 and R6 stay in the still captions."""
     open_app(page, "?ff=all", {"role": "MB", "rulesMode": "simple"})
     for ri in (2, 5):
         tag = f"Simplified R{ri + 1}"
         still = page.evaluate(f"window.ksvLearn.still({ri}, 'start', 'MB')")
-        if still != "You (MB): Walk along the net from zone 2 to zone 4: the middle pair resets.":
+        if still != "You (MB): Rotate to zone 1 and serve: the libero may not serve, so you stay on.":
             fail(f"{tag} Rotation still caption for MB: {still!r}")
+        still = page.evaluate(f"window.ksvLearn.still({ri}, 'start', 'L')")
+        if still != "You (L): Go off: the other middle comes on in zone 4 and MB serves from zone 1.":
+            fail(f"{tag} Rotation still caption for L: {still!r}")
         if page.evaluate(f"window.ksvLearn.still({ri}, 'serve', 'L')") != (
-            "You (L): Go off at the sideline: the libero may not serve."
+            "You (L): Wait at the sideline while MB serves: the libero may not serve."
         ):
             fail(f"{tag} Our serve still caption for L")
-        if page.evaluate(f"window.ksvLearn.still({ri}, 'serve', 'SUB')") != (
-            "You (SUB): Come on for the libero: you serve from the spot behind the end line."
-        ):
-            fail(f"{tag} Our serve still caption for SUB")
         learn(page, ri, "serve")
         check_positions(f"{tag} Our serve still picture", page.evaluate(MARKERS, "#courtL .mk"), spots(ri, "serve"))
         if page.evaluate(f"window.ksvLearn.still({ri}, 'rec', 'L')") != (
-            "You (L): Come back on for SUB and take your reception spot."
+            "You (L): Come back on in zone 1 and take your reception spot."
         ):
             fail(f"{tag} Reception still caption for L")
+        if page.evaluate(f"window.ksvLearn.still({ri}, 'rec', 'MB')") != (
+            "You (MB): Training convention: we lost the serve, so go back to the net in zone 4."
+        ):
+            fail(f"{tag} Reception still caption for MB")
         if page.evaluate(f"window.ksvLearn.still({ri}, 'ar', 'L')") != (
             "You (L): Go to zone 5 and defend while they play the ball."
         ):
@@ -1300,9 +1300,9 @@ def check_still_captions(page: Page) -> None:
     learn(page, 1, "ar")
     page.click("#lNext")
     got = page.evaluate(MARKERS, "#courtL .mk")
-    if not close(got["MB"], (0.17, 0.21)) or not close(got["L"], (0.83, 0.71)):
-        fail(f"R3 Rotation: MB at {got.get('MB')}, L at {got.get('L')}")
-    if "middle pair resets" not in page.inner_text("#lCap"):
+    if "L" in got or got["MB"][0] < 67 or got["MB"][1] < 42 or got["OM"][0] > 34 or got["OM"][1] > 42:
+        fail(f"R3 Rotation: MB at {got.get('MB')}, the other middle at {got.get('OM')}, L at {got.get('L')}")
+    if "Rotate to zone 1 and serve" not in page.inner_text("#lCap"):
         fail(f"R3 Rotation caption: {page.inner_text('#lCap')!r}")
     if re.search(r"go to base|rally goes on", page.inner_text("#learn"), re.I):
         fail("a rotate or 'go to base' text shows")

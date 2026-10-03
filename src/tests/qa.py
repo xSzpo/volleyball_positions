@@ -833,7 +833,9 @@ def answer_rotate(pg: Page, ctx: str, role: str, move: bool = False, wrong: bool
     order, spots = rotate_lineup(pg, ri, role)
     own = order.index(role)
     for k, mate in enumerate(order):
-        who = "you" if mate == role else "the setter (S)" if mate == "S" else mate
+        who = (
+            "you" if mate == role else "the setter (S)" if mate == "S" else "the other middle" if mate == "OM" else mate
+        )
         want = f"Tap where {who} stand{'' if mate == role else 's'}."
         prompt = pg.inner_text("#dsub")
         if prompt != want:
@@ -871,7 +873,7 @@ def answer_rotate(pg: Page, ctx: str, role: str, move: bool = False, wrong: bool
         fail(f"{ctx}: Continue not ready after placing {order}: {pg.inner_text('#dsub')!r}")
     pg.click("#nextBtn")
     grades = pg.inner_text("#fb .rotgrades")
-    right = " · ".join(f"{'You' if m == role else m}: right" for m in order)
+    right = " · ".join(f"{'You' if m == role else 'The other middle' if m == 'OM' else m}: right" for m in order)
     if not wrong and grades != right:
         fail(f"{ctx}: grades {grades!r}, expected {right!r}")
     if wrong and not (grades.startswith(f"{order[0]}: wrong") and "Not there" in pg.inner_text("#fb")):
