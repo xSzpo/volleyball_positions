@@ -2,9 +2,9 @@
 
 Checks the default mode and the role picker of each, that a stored "simple"
 or "drill" reads as Simplified, that Official needs the ``rules-official`` flag, the
-middle roles carried across a switch, the Simplified middle pair and SUB in
-Learn, the Rules switch wording, and the one-time reset of stored rules and role
-to a first visit in Official.
+middle roles carried across a switch, the Simplified middle pair and MB serving in
+R3 and R6 in Learn, the Rules switch wording, and the one-time reset of stored rules
+and role to a first visit in Official.
 
 Usage: python src/tests/rules_test.py
 """
@@ -182,30 +182,49 @@ def check_switch(page: Page) -> None:
 
 
 def check_learn(page: Page) -> None:
-    """Simplified in Learn: MB always front, the pair resets into R3, SUB serves in R3 and R6."""
+    """Simplified in Learn: MB serves from zone 1 in R3 and R6, the other middle in zone 4, L off."""
     open_app(page, "?ff=all&anim=0", {"role": "MB", "rulesMode": "simple"})
-    learn(page, 2, "start")
-    if not page.inner_text("#cue").startswith("Zone 4, front row") or "resets" not in page.inner_text("#cue"):
-        fail(f"MB in R3 Rotation: cue is not the zone 4 reset: {page.inner_text('#cue')!r}")
     for ri in (2, 5):
-        learn(page, ri, "serve")
-        shown = markers(page)
-        if "SUB" not in shown or "L" in shown or any(p in shown for p in ("MB1", "MB2")):
-            fail(f"Simplified R{ri + 1} Our serve markers: {shown}")
-        dash = page.get_attribute('#courtL .mk[data-p="SUB"] circle:not(.hit)', "stroke-dasharray")
-        if not dash:
-            fail(f"Simplified R{ri + 1}: SUB marker has no dashed edge")
+        tag = f"Simplified R{ri + 1}"
+        for phase in ("start", "serve"):
+            learn(page, ri, phase)
+            shown = markers(page)
+            if "MB" not in shown or "OM" not in shown or "L" in shown or any(p in shown for p in ("SUB", "MB1", "MB2")):
+                fail(f"{tag} {phase} markers: {shown}")
+            dash = page.get_attribute('#courtL .mk[data-p="OM"] circle:not(.hit)', "stroke-dasharray")
+            if not dash:
+                fail(f"{tag} {phase}: the other middle has no dashed edge")
+            if page.get_attribute('#courtL .mk[data-p="MB"] circle:not(.hit)', "stroke-dasharray"):
+                fail(f"{tag} {phase}: MB has a dashed edge")
+            spots = {o["p"]: o for o in page.evaluate(f"window.ksvLearn.players({ri}, '{phase}')")}
+            if phase == "start":
+                if not (spots["MB"]["x"] > 0.67 and spots["MB"]["y"] > 0.42):
+                    fail(f"{tag} Rotation: MB is not in zone 1: {spots['MB']}")
+                if not (spots["OM"]["x"] < 0.34 and spots["OM"]["y"] < 0.42):
+                    fail(f"{tag} Rotation: the other middle is not in zone 4: {spots['OM']}")
+                if not page.inner_text("#cue").startswith("Zone 1, back row"):
+                    fail(f"{tag} Rotation: MB cue {page.inner_text('#cue')!r}")
+            else:
+                if spots["OM"]["y"] > 0.42:
+                    fail(f"{tag} Our serve: the other middle is not in the front row: {spots['OM']}")
+                if "you serve" not in page.inner_text("#cue"):
+                    fail(f"{tag} Our serve: MB cue {page.inner_text('#cue')!r}")
+        if page.evaluate(f"window.ksvLearn.server({ri})") != "MB":
+            fail(f"{tag}: the server is not MB")
         learn(page, ri, "rec")
-        if "SUB" in markers(page) or "L" not in markers(page):
-            fail(f"Simplified R{ri + 1} Reception markers: {markers(page)}")
-    learn(page, 0, "serve")
-    if "SUB" in markers(page) or "L" not in markers(page):
-        fail(f"Simplified R1 Our serve markers: {markers(page)}")
+        shown = markers(page)
+        if "OM" in shown or "L" not in shown or "MB" not in shown:
+            fail(f"{tag} Reception markers: {shown}")
+    for ri in (0, 1, 3, 4):
+        learn(page, ri, "start")
+        if "OM" in markers(page) or "L" not in markers(page):
+            fail(f"Simplified R{ri + 1} Rotation markers: {markers(page)}")
     pick(page, role="L")
-    learn(page, 2, "serve")
-    cue = page.inner_text("#cue")
-    if "off court" not in cue.lower() or "SUB" not in cue:
-        fail(f"L in Simplified R3 Our serve: cue {cue!r}")
+    for phase in ("start", "serve"):
+        learn(page, 2, phase)
+        cue = page.inner_text("#cue")
+        if "off court" not in cue.lower() or "MB is in zone 1 and serves" not in cue:
+            fail(f"L in Simplified R3 {phase}: cue {cue!r}")
     pick(page, rules="official", role="MB1")
     learn(page, 2, "serve")
     shown = markers(page)

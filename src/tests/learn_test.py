@@ -3,7 +3,7 @@
 Walks every role, rotation and step of both rule sets with the Next button and
 checks the cue, the overlap boundary lines and when they count (at the
 whistle, from 1 October 2026), the Our serve rule text, that Next stays in
-view on a phone, the SUB and MB texts, the Official walk-through table of
+view on a phone, the Simplified MB and L texts, the Official walk-through table of
 docs/v2.md and the Official libero rules.
 
 Usage: python src/tests/learn_test.py
@@ -27,13 +27,12 @@ MODES = {
 PHASES = ["start", "serve", "rec", "ar"]
 PHASE_NAMES = {"start": "Rotation", "serve": "Our serve", "rec": "Reception", "ar": "Base"}
 ROUTE_KEY = {"S": "s", "OP": "op", "MB": "mb", "MB1": "mb", "MB2": "mb", "OH1": "oh", "OH2": "oh", "L": "l"}
-ROUTE_KEY["SUB"] = "sub"
+ROUTE_KEY["OM"] = "mb"
 ROTATION_NAMES = ["R1 (H1)", "R2 (H6)", "R3 (H5)", "R4 (H4)", "R5 (H3)", "R6 (H2)"]
 OLD_NAME = re.compile(r"\(S\d\)")
 # (mode, role, rotation, phase) -> (overlap sentence, partners whose limit is inside your marker)
 EXPECTED = {
     ("official", "L", 0, "start"): ("Overlap: stay behind MB1, right of OH2 and left of S.", []),
-    ("simple", "MB", 2, "start"): ("Overlap: stay in front of S and left of OH2.", []),
     ("simple", "S", 0, "rec"): ("Overlap: stay behind OH1 and right of L.", []),
     ("official", "OH2", 1, "rec"): ("Overlap: stay in front of L and left of OP.", ["L"]),
     ("simple", "L", 1, "rec"): ("Overlap: stay behind OH2 and left of S.", ["OH2", "S"]),
@@ -43,7 +42,7 @@ EXPECTED = {
     ("official", "OH2", 5, "start"): ("Overlap: stay behind OH1 and right of OP.", []),
 }
 # (mode, role, rotation): the middle who serves from zone 1 at the Rotation step and has no overlap limits.
-SERVING_MIDDLE = {("official", "MB1", 2), ("official", "MB2", 5)}
+SERVING_MIDDLE = {("official", "MB1", 2), ("official", "MB2", 5), ("simple", "MB", 2), ("simple", "MB", 5)}
 # The overlap limits count at the whistle for the serve; before 1 October 2026 they counted at the service hit.
 OLD_TIMING = re.compile(r"service hit|when the ball is served|at the serve\b|until the serve is made", re.IGNORECASE)
 THUMB_MOVE = "Once the server moves, so can you."
@@ -53,6 +52,8 @@ OVERLAP_WHEN = {
     " We serve now, so you may stand anywhere.",
     "rec": "These limits count at the whistle, not during the pass. " + WHISTLE_MOVE,
 }
+# Simplified R3/R6 Rotation: OM's zone 4 slot is MB's at the whistle for their serve, so its limit reads MB.
+OM_LIMIT = {"MB": "OM"}
 # Caption words -> the axis and direction your line must run from your marker.
 SIDE = {"behind": ("y", -1), "in front of": ("y", 1), "right of": ("x", -1), "left of": ("x", 1)}
 
@@ -129,7 +130,8 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
     elif phase in ("start", "rec") and here:
         if OVERLAP_WHEN[phase] not in state["cue"]:
             fail(f"{tag}: cue does not say when the overlap limits count: {state['cue']!r}")
-        check_overlap(tag, state, EXPECTED.get((mode, role, rotation, phase)))
+        alias = OM_LIMIT if (mode, phase) == ("simple", "start") and rotation in (2, 5) else {}
+        check_overlap(tag, state, EXPECTED.get((mode, role, rotation, phase)), alias)
         for bound in state["bounds"]:
             if bound["stroke"] != f"var(--route-{ROUTE_KEY[bound['p']]})":
                 fail(f"{tag}: line for {bound['p']} coloured {bound['stroke']}")
@@ -139,16 +141,18 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
         fail(f"{tag}: boundary lines outside Rotation and Reception or off court: {state['bounds']}")
 
 
-def check_overlap(tag: str, state: dict[str, Any], expected: tuple[str, list[str]] | None) -> None:
+def check_overlap(
+    tag: str, state: dict[str, Any], expected: tuple[str, list[str]] | None, alias: dict[str, str]
+) -> None:
     """Every partner in the caption has a line running to their side, or is named as a limit you stand at."""
     overlap = re.search(r"Overlap: stay ([^.]*)\.", state["cue"])
     if not overlap:
         fail(f"{tag}: no overlap sentence: {state['cue']!r}")
         return
     tight_match = re.search(r"You stand right at the (.*) limits?\.", state["cue"])
-    tight = tight_match.group(1).split(" and ") if tight_match else []
+    tight = [alias.get(p, p) for p in tight_match.group(1).split(" and ")] if tight_match else []
     sides = dict(
-        (partner, words)
+        (alias.get(partner, partner), words)
         for words, partner in re.findall(r"(behind|in front of|right of|left of) ([A-Z][A-Z0-9]*)", overlap.group(1))
     )
     lines = {bound["p"]: bound for bound in state["bounds"]}
@@ -322,32 +326,43 @@ def check_next_in_view(page: Page) -> None:
 
 
 def check_texts(page: Page) -> None:
-    """Simplified SUB and MB texts come from describe() for every rotation and step."""
+    """Simplified MB and L texts come from describe() for every rotation and step; MB serves in R3 and R6."""
     open_app(page, {"role": "MB", "rulesMode": "simple"})
     texts: list[dict[str, Any]] = page.evaluate(
         "roles => roles.flatMap(r => [0,1,2,3,4,5].flatMap(ri => ['start','serve','rec','ar']"
         ".map(ph => ({ r, ri, ph, ...window.ksvLearn.describe(ri, ph, r) }))))",
-        ["SUB", "MB"],
+        ["L", "MB"],
     )
     for text in texts:
         tag = f"{text['r']} R{text['ri'] + 1} {text['ph']}"
         if not text["t"] or not text["d"]:
             fail(f"{tag}: empty describe text {json.dumps(text)}")
-        if "official" in text["d"].lower():
-            fail(f"{tag}: Simplified text mentions the official rules: {text['d']!r}")
-    sub = {(t["ri"], t["ph"]): t["d"] for t in texts if t["r"] == "SUB"}
+        if "official" in text["d"].lower() or "SUB" in text["d"] or "resets" in text["d"]:
+            fail(f"{tag}: Simplified text mentions the official rules, SUB or a reset: {text['d']!r}")
+    by = {(t["r"], t["ri"], t["ph"]): t for t in texts}
     for rotation in (2, 5):
-        if "may not serve" not in sub[(rotation, "serve")]:
-            fail(f"SUB R{rotation + 1} Our serve: {sub[(rotation, 'serve')]!r}")
-        if "libero comes back" not in sub[(rotation, "rec")]:
-            fail(f"SUB R{rotation + 1} Reception: {sub[(rotation, 'rec')]!r}")
+        tag = f"R{rotation + 1}"
+        if (
+            by[("MB", rotation, "start")]["t"] != "Zone 1, back row"
+            or "serve" not in by[("MB", rotation, "start")]["d"]
+        ):
+            fail(f"MB {tag} Rotation: {by[('MB', rotation, 'start')]!r}")
+        if "you serve" not in by[("MB", rotation, "serve")]["d"]:
+            fail(f"MB {tag} Our serve: {by[('MB', rotation, 'serve')]['d']!r}")
+        for phase in ("start", "serve"):
+            text = by[("L", rotation, phase)]
+            if text["t"] != "Off court" or "MB is in zone 1 and serves" not in text["d"]:
+                fail(f"L {tag} {phase}: {text!r}")
+    for rotation in (0, 1, 3, 4):
+        if by[("MB", rotation, "start")]["t"] == "Zone 1, back row":
+            fail(f"MB R{rotation + 1} Rotation is in zone 1")
 
 
 def check_rules_of_thumb(page: Page) -> None:
     """Learn keeps only the Rules of thumb fold, closed, worded for each rule set and the whistle timing."""
     for mode, want, unwanted in (
-        ("simple", ("SUB", "MB plays the front middle"), ("MB1", "19.3")),
-        ("official", ("The libero replaces the back-row middle", "19.3"), ("SUB",)),
+        ("simple", ("MB serves from zone 1", "MB plays the front middle"), ("MB1", "19.3", "SUB")),
+        ("official", ("The libero replaces the back-row middle", "19.3"), ("SUB", "other middle")),
     ):
         open_app(page, {"role": "L", "rulesMode": mode})
         html = page.content()
@@ -431,6 +446,18 @@ def lineup_in(cell: str) -> list[str]:
     player = r"[A-Z][A-Z0-9]*(?:\([A-Z0-9]+\))?"
     m = re.search(rf"((?:{player} ){{2}}{player}) / ((?:{player} ){{2}}{player})", cell)
     return [re.sub(r"\(.*\)", "", p) for p in (m[1] + " " + m[2]).split()] if m else []
+
+
+def check_table_off(page: Page) -> None:
+    """The all-rotations table's Rotation column says who serves when L is off, and gives L's zone otherwise."""
+    for mode, server in (("simple", ("MB", "MB")), ("official", ("MB1", "MB2"))):
+        open_app(page, {"role": "L", "rulesMode": mode})
+        page.evaluate("document.querySelectorAll('details.fold').forEach(d => d.open = true)")
+        cells = page.locator("#rotTable tbody tr td:nth-child(2)").all_inner_texts()
+        for ri, cell in enumerate(cells):
+            want = f"Off ({server[ri == 5]} serves from zone 1)" if ri in (2, 5) else None
+            if (cell != want) if want else not re.fullmatch(r"Zone [1-6]", cell):
+                fail(f"{mode} L table R{ri + 1} Rotation: {cell!r}, expected {want or 'Zone <n>'}")
 
 
 def check_official_walkthrough(page: Page) -> None:
@@ -663,6 +690,7 @@ def main() -> None:
         check_texts(page)
         check_rules_of_thumb(page)
         check_rotation_names(page)
+        check_table_off(page)
         check_official_walkthrough(page)
         check_official_libero(page)
         check_hint_below_next(page)

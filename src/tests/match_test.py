@@ -222,14 +222,14 @@ def check_vis_fixed(browser: Browser) -> None:
     if shown != "Shown: Setter (70% points)":
         fail(f"end screen reads {shown!r}")
     best = page.evaluate("JSON.parse(localStorage.getItem('ksv51:gameBest'))")
-    if list(best) != ["v8|OH1|rec|ref"]:
+    if list(best) != ["v9|OH1|rec|ref"]:
         fail(f"best score saved under {list(best)}, expected the starting settings only")
     page.close()
 
 
 def check_best_key(browser: Browser) -> None:
     """Bests from another scoring are ignored, and the neighbour check has its own best."""
-    bests = '{"v5|OH1|rec": 9999, "v6|OH1|rec": 9999, "v7|OH1|rec": 500, "v8|OH1|rec": 700}'
+    bests = '{"v5|OH1|rec": 9999, "v6|OH1|rec": 9999, "v7|OH1|rec": 500, "v8|OH1|rec": 9999, "v9|OH1|rec": 700}'
     seed = f"localStorage.setItem('ksv51:gameBest', JSON.stringify({bests}))"
     page = new_page(browser, query="?ff=all,-match-rotate-name&anim=0")
     page.evaluate(seed)
@@ -247,7 +247,7 @@ def check_best_key(browser: Browser) -> None:
     setup_match(page, "OH1", ("rec",))
     text = page.inner_text("#gBest")
     if "700" not in text:
-        fail(f"best line reads {text!r}, expected the v8 best of 700")
+        fail(f"best line reads {text!r}, expected the v9 best of 700")
     page.check("#nbGame")
     text = page.inner_text("#gBest")
     if text:
@@ -344,7 +344,10 @@ def check_off_court_pill(browser: Browser) -> None:
 
 def check_libero_hint(browser: Browser) -> None:
     """The libero's hint at the R3 serve, off court, names the rule set in play."""
-    for rules, want, unwanted in (("simple", "SUB", "official rules"), ("official", "official rules", "SUB")):
+    for rules, want, unwanted in (
+        ("simple", "MB serves", "official rules"),
+        ("official", "official rules", "MB serves"),
+    ):
         page = new_page(browser, rules=rules)
         setup_match(page, "L", ("serve",))
         page.click("#gStart")
@@ -359,7 +362,7 @@ def check_libero_hint(browser: Browser) -> None:
         if want not in hint or unwanted in hint:
             fail(f"{rules} L hint at the R3 serve reads {hint!r}, expected {want!r}")
         page.close()
-    print("libero hint: Simplified names SUB, Official the libero rule", flush=True)
+    print("libero hint: Simplified names MB as the server, Official the libero rule", flush=True)
 
 
 def check_hint_rule_numbers(browser: Browser) -> None:
@@ -426,15 +429,19 @@ def fill_rotate(page: Page) -> None:
 
 
 def rotate_lineup(page: Page, ri: int, role: str) -> tuple[list[str], dict[str, tuple[float, float]]]:
-    """The markers Rotate asks for in order (setter, you, your overlap partners) and each right spot."""
+    """The markers Rotate asks for in order (setter, you, your overlap partners) and each right spot.
+
+    In R3 and R6 the middle who serves from zone 1 is nobody's overlap partner.
+    """
     spots = {
         str(o["p"]): (float(o["x"]), float(o["y"])) for o in page.evaluate(f"window.ksvLearn.players({ri}, 'start')")
     }
     order = [] if role == "S" else ["S"]
     order.append(role)
-    if role not in spots:
+    serving = page.evaluate(f"window.ksvLearn.server({ri})") if ri in (2, 5) else None
+    if role not in spots or role == serving:
         return order, spots
-    grid = {(round(x * 3 - 0.5), y > 0.42): p for p, (x, y) in spots.items()}
+    grid = {(round(x * 3 - 0.5), y > 0.42): p for p, (x, y) in spots.items() if p != serving}
     col, back = round(spots[role][0] * 3 - 0.5), spots[role][1] > 0.42
     for key in [(col, not back), (col - 1, back), (col + 1, back)]:
         mate = grid.get(key)
@@ -459,7 +466,8 @@ def answer_match_rotate(page: Page, ctx: str, ri: int, role: str, wrong: bool = 
     if page.locator("#courtG g.mk").count():
         fail(f"{ctx}: teammates shown before the answer with Show on court Everyone")
     for k, mate in enumerate(order):
-        who = "you stand" if mate == role else "the setter (S) stands" if mate == "S" else f"{mate} stands"
+        named = "the other middle" if mate == "OM" else mate
+        who = "you stand" if mate == role else "the setter (S) stands" if mate == "S" else f"{named} stands"
         if page.inner_text("#gAsk") != f"Tap where {who}.":
             fail(f"{ctx}: prompt {page.inner_text('#gAsk')!r}, expected 'Tap where {who}.'")
         if page.locator("#gNext").is_enabled():
@@ -476,7 +484,7 @@ def answer_match_rotate(page: Page, ctx: str, ri: int, role: str, wrong: bool = 
         fail(f"{ctx}: Continue not ready after placing {order}: {page.inner_text('#gAsk')!r}")
     press_next(page)
     grades = page.inner_text("#gFb .rotgrades")
-    right = " · ".join(f"{'You' if m == role else m}: right" for m in order)
+    right = " · ".join(f"{'You' if m == role else 'The other middle' if m == 'OM' else m}: right" for m in order)
     if not wrong and grades != right:
         fail(f"{ctx}: grades {grades!r}, expected {right!r}")
     if wrong and not grades.startswith(f"{order[0]}: wrong"):
@@ -2084,7 +2092,7 @@ def check_common_mistakes(browser: Browser) -> None:
             [
                 (0.3, 0.73, "Overlap fault: at the whistle you must stand right of MB."),
                 (0.84, 0.72, ""),
-                (None, None, "Only the libero goes off, while SUB serves"),
+                (None, None, "Only the libero goes off, while MB serves"),
             ],
         ),
         ("OH1", "official", ("rec",), "?ff=all&anim=0", [(None, None, "the middle it replaces go off")]),
