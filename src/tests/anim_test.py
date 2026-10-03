@@ -650,6 +650,21 @@ def check_build_stages(page: Page, mode: str, ri: int) -> None:
             fail(f"{tag} as {role}: the caption plan is {plan}, expected {line!r} once")
 
 
+def check_build_off_court(page: Page) -> None:
+    """The middle the libero replaces stays off court through the build: the pill solid, no ring of yours."""
+    for ri in (0, 3):
+        role = back_middle(ri, "official")
+        tag = f"official R{ri + 1} Rotation build as {role}"
+        open_app(page, "?ff=all", {"role": role, "rulesMode": "official"})
+        learn(page, ri, "start")
+        for k in range(7):
+            page.click("#lStep")
+            wait_paused(page)
+            pill = page.locator("#courtL .offpill")
+            if pill.get_attribute("stroke-dasharray") is not None or page.locator("#courtL .me-ring").count():
+                fail(f"{tag}: after {k + 1} Step(s) you show on court, though the libero replaces you")
+
+
 def check_rotation_build(page: Page) -> None:
     """Rotation builds its lineup from the setter in every rotation and both rule sets.
 
@@ -1518,6 +1533,14 @@ def check_reduced(browser: Browser) -> None:
         want = "\n".join(t for t in (still, line) if t)
         if page.locator("#lCap ol").count() or page.inner_text("#lCap").strip() != want or page.is_visible("#lAnim"):
             fail(f"{label} Rotation: the caption is {page.inner_text('#lCap')!r}, expected {want!r} and no list")
+        if label == "reduced motion":
+            open_app(page, query, {"role": "OH1", "rulesMode": "official"})
+            learn(page, 2, "start")
+            cap = page.inner_text("#lCap")
+            if WALK_LINE not in cap or cap.count("serves") != 1:
+                fail(f"{label} official R3 Rotation: the caption is {cap!r}, expected the walk and one serving line")
+            open_app(page, query, {"role": "OH1", "rulesMode": "simple"})
+            learn(page, 0, "start")
         for phase in ("serve", "rec"):
             page.click("#lNext")
             if anim(page) or page.locator("#courtL .am").count():
@@ -1826,6 +1849,7 @@ def main() -> None:
         check_no_autoplay(page)
         check_static(page)
         check_rotation_build(page)
+        check_build_off_court(page)
         check_reception_stages(page)
         check_reception_ends(page)
         check_quick_in_front(page)

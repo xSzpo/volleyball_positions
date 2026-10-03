@@ -3683,8 +3683,9 @@
         BUILD_HOLD_MS = 300;
       // Two lines on a 390 px phone: the list starts at the setter, so the line does not say so.
       const WALK_LINE = "Against the rotation: Setter, Outside, Middle, Opposite, Outside, Middle.";
+      const WALK_SERVES = "The zone 1 middle serves, libero off.";
       const walkLine = (ri) =>
-        `${WALK_LINE} ${players(ri, "start").some((o) => o.p === "L") ? "The libero replaces the back middle." : "The zone 1 middle serves, libero off."}`;
+        `${WALK_LINE} ${players(ri, "start").some((o) => o.p === "L") ? "The libero replaces the back middle." : WALK_SERVES}`;
       // 1 unit is 9 m; with a quarter of the glide spent speeding up and a quarter slowing down, the top speed is about 4.8 m/s.
       const MS_PER_UNIT = 2500,
         EASE_PART = 0.25,
@@ -4448,7 +4449,11 @@
         const still = restCaption(ri, phase, role);
         const list = tr.stages.map((st) => stageCaption(st, role));
         if (tr.build && restList === `${rulesMode}|${ri}|${phase}`) return walkLine(ri);
-        if (tr.build && !animated()) return [still, walkLine(ri)].filter(Boolean).join("<br>");
+        if (tr.build && !animated()) {
+          const walk = walkLine(ri);
+          const line = still?.includes("serves") && walk.endsWith(WALK_SERVES) ? WALK_LINE : walk;
+          return [still, line].filter(Boolean).join("<br>");
+        }
         if (animated()) {
           if (restList !== `${rulesMode}|${ri}|${phase}` || !list.length) return still;
           return `${still}<div class="then"><b>Then:</b>${numbered(list)}</div>`;
@@ -4639,7 +4644,7 @@
         const tr = phaseStages(ri, phase);
         if (!tr.stages.length) return false;
         const { s, trails } = playMarkup(tr, role, learnPassTags(ri, learnPlayers(ri, phase)));
-        $("courtL").innerHTML = DEFS + courtBase(!tr.from[role]) + s;
+        $("courtL").innerHTML = DEFS + courtBase(!(tr.build ? tr.end : tr.from)[role]) + s;
         anim = {
           tr,
           t: 0,
@@ -4679,7 +4684,8 @@
           .forEach((p) => {
             s += mark(p, false);
           });
-        if (tr.players.includes(r)) s += mark(r, true);
+        // The middle the libero replaces shows in the build, but you are off court there: no ring.
+        if (tr.players.includes(r)) s += mark(r, !tr.build || !!tr.end[r]);
         return { s: s + BALL_SVG, trails };
       }
       function playEls(svg, trails) {
