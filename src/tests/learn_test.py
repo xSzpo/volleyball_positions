@@ -331,6 +331,18 @@ def lineup_in(cell: str) -> list[str]:
     return [re.sub(r"\(.*\)", "", p) for p in (m[1] + " " + m[2]).split()] if m else []
 
 
+def check_table_off(page: Page) -> None:
+    """The all-rotations table's Rotation column says who serves when L is off, and gives L's zone otherwise."""
+    for mode, server in (("simple", ("MB", "MB")), ("official", ("MB1", "MB2"))):
+        open_app(page, {"role": "L", "rulesMode": mode})
+        page.evaluate("document.querySelectorAll('details.fold').forEach(d => d.open = true)")
+        cells = page.locator("#rotTable tbody tr td:nth-child(2)").all_inner_texts()
+        for ri, cell in enumerate(cells):
+            want = f"Off ({server[ri == 5]} serves from zone 1)" if ri in (2, 5) else None
+            if (cell != want) if want else not re.fullmatch(r"Zone [1-6]", cell):
+                fail(f"{mode} L table R{ri + 1} Rotation: {cell!r}, expected {want or 'Zone <n>'}")
+
+
 def check_official_walkthrough(page: Page) -> None:
     """The app matches the Official walk-through table for all six rotations."""
     open_app(page, {"role": "OH1", "rulesMode": "official"})
@@ -560,6 +572,7 @@ def main() -> None:
         check_texts(page)
         check_rules_of_thumb(page)
         check_rotation_names(page)
+        check_table_off(page)
         check_official_walkthrough(page)
         check_official_libero(page)
         check_hint_below_next(page)

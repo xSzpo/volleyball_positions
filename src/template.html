@@ -4930,8 +4930,12 @@
       }
       function renderFolds() {
         const rows = ROWS.map((r, i) => {
-          const z = zoneOf(i, role, "start");
-          return `<tr><td class="r">${r.name}</td><td>${z ? `Zone ${z}` : `Off (libero in zone ${zoneOf(i, "L")})`}</td>${["serve", "rec", "ar"].map((ph) => `<td>${describe(i, ph, role).t}</td>`).join("")}</tr>`;
+          const z = lineupAt(i, "start").includes(role) && zoneOf(i, role, "start");
+          const off =
+            role === "L"
+              ? `Off (${server(i)} serves from zone 1)`
+              : `Off (libero in zone ${zoneOf(i, "L")})`;
+          return `<tr><td class="r">${r.name}</td><td>${z ? `Zone ${z}` : off}</td>${["serve", "rec", "ar"].map((ph) => `<td>${describe(i, ph, role).t}</td>`).join("")}</tr>`;
         }).join("");
         const thumbs = THUMB.map(
           (t, i) =>
