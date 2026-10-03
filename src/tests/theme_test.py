@@ -131,7 +131,10 @@ def run(scheme: Literal["light", "dark"], shots: Path | None) -> None:
         ).new_page()
         errors: list[str] = []
         page.on("pageerror", lambda error: errors.append(str(error)))
-        page.add_init_script("localStorage.setItem('ksv51:role', JSON.stringify('OH1'))")
+        page.add_init_script(
+            "localStorage.setItem('ksv51:role', JSON.stringify('OH1'));"
+            " localStorage.setItem('ksv51:officialReset', JSON.stringify('1'))"
+        )
         page.goto(URL)
         page.wait_for_timeout(300)
         if page.locator("#themeBtn").count() == 0:

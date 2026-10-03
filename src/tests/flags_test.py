@@ -22,7 +22,10 @@ from playwright.sync_api import Browser, BrowserContext, Page, Route, sync_playw
 
 ROOT = Path(__file__).resolve().parents[2]
 # A stored role skips the first-visit role sheet, which covers the page.
-SEED_ROLE = "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"
+SEED_ROLE = (
+    "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'));"
+    " localStorage.setItem('ksv51:officialReset', JSON.stringify('1'))"
+)
 URL = (ROOT / "index.html").as_uri()
 PAGES_URL = "https://xszpo.github.io/volleyball_positions/"
 FAIL: list[str] = []
@@ -341,6 +344,11 @@ def check_rules_restored(page: Page) -> None:
         "() => { ['rulesMode', 'mpPlayers', 'gPlayers'].forEach((k) => localStorage.removeItem('ksv51:' + k));"
         " localStorage.setItem('ksv51:role', JSON.stringify('OH1')); }"
     )
+    for query, want in (("?ff=reset,-rules-official", "simple"), ("?ff=reset", "official")):
+        open_app(page, query)
+        checked = page.get_attribute('.rulesmode [aria-checked="true"]', "data-rm")
+        if checked != want or page.evaluate("localStorage.getItem('ksv51:rulesMode')") is not None:
+            fail(f"rules: no stored rules with {query} reads as {checked!r}, expected {want} and nothing stored")
     open_app(page)
 
 

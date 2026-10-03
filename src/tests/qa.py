@@ -140,7 +140,7 @@ def check_header(pg: Page, tag: str) -> None:
         pg.get_attribute("#roleChip", "aria-label") or ""
     ):
         fail(f"{tag} role button does not show the role")
-    want = "OH1 · S" if pg.evaluate("innerWidth") < 480 else "Outside 1 · Simplified"
+    want = "OH1 · O" if pg.evaluate("innerWidth") < 480 else "Outside 1 · Official"
     if " ".join(pg.inner_text("#roleChip").split()) != want:
         fail(f"{tag} role button text is {pg.inner_text('#roleChip')!r}")
     chip = pg.locator("#roleChip").bounding_box()
@@ -173,6 +173,12 @@ def check_header(pg: Page, tag: str) -> None:
     )
     if covered or pg.evaluate("document.querySelector('.wrap').inert"):
         fail(f"{tag} the open list has a backdrop or blocks the page")
+    order = pg.eval_on_selector_all(
+        ".rulesmode [data-rm]",
+        "els => els.map(e => [e.dataset.rm, e.tabIndex, Math.round(e.getBoundingClientRect().left)])",
+    )
+    if [o[0] for o in order] != ["official", "simple"] or order[0][2] >= order[1][2] or order[0][1] != order[1][1]:
+        fail(f"{tag} the Rules switch is not Official then Simplified in view and tab order: {order}")
     pg.click('.rulesmode [data-rm="official"]')
     if pg.is_visible("#setupPanel") or pg.evaluate("document.activeElement.id") != "roleChip":
         fail(f"{tag} a rules pick did not close the list and focus the button")
@@ -200,6 +206,9 @@ def check_header(pg: Page, tag: str) -> None:
         fail(f"{tag} Escape did not close the list and focus the button")
     pg.click("#roleChip")
     pg.focus('.rulesmode [data-rm="official"]')
+    pg.keyboard.press("Tab")
+    if pg.evaluate("document.activeElement.dataset.rm") != "simple":
+        fail(f"{tag} Tab from Official did not move to Simplified")
     pg.keyboard.press("Tab")
     if pg.is_visible("#setupPanel") or pg.evaluate("document.activeElement.id") != "themeBtn":
         fail(f"{tag} Tab past the list did not close it and move on")
@@ -452,7 +461,10 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
     """The Drill steps picker: asks only the picked steps, is stored, keeps one step on and fits a 390 x 664 phone."""
     section("DRILL steps picker")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     errs: list[str] = []
     pg.on("pageerror", collect_errors(errs))
@@ -577,7 +589,10 @@ def check_learn_fit(browser: Browser, tag: str, quick: bool) -> None:
     """
     section("LEARN fit 390 x 664 and tap targets")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     pg.goto(URL)
     wait_ready(pg)
@@ -601,7 +616,10 @@ def check_learn_fit(browser: Browser, tag: str, quick: bool) -> None:
     check_targets(pg, tag + " 390 x 664")
     ctx.close()
     ctx = browser.new_context(viewport={"width": 1280, "height": 800})
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     pg.goto(URL)
     wait_ready(pg)
@@ -651,7 +669,10 @@ def check_zones(browser: Browser, tag: str) -> None:
     """Zone numbers on every court, on by default, one setting for Learn, Drill and Match, kept across reloads."""
     section("zone numbers")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     pg.goto(URL)
     wait_ready(pg)
@@ -868,6 +889,7 @@ def check_drill_rotate(browser: Browser, tag: str, quick: bool) -> None:
     ctx.add_init_script(
         "if (!localStorage.getItem('ksv51:role')) {"
         " localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"');"
         " localStorage.setItem('ksv51:drillSteps', '[\"start\"]'); }"
     )
     pg = ctx.new_page()
@@ -953,7 +975,10 @@ def check_drill_reset(browser: Browser, tag: str) -> None:
     """Reset next to the Drill score: in view without a fold, 44 px, two taps to reset, back after a timeout."""
     section("DRILL reset")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     errs: list[str] = []
     pg.on("pageerror", collect_errors(errs))
@@ -1033,7 +1058,10 @@ def check_drill_h_names(browser: Browser, tag: str) -> None:
     """Drill and Match name every rotation H<n> only (question, feedback, weak spots, review); Learn R<n> (H<n>)."""
     section("DRILL names by the setter")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     errs: list[str] = []
     pg.on("pageerror", collect_errors(errs))
