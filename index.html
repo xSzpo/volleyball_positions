@@ -3560,7 +3560,7 @@
         animCancel();
         $("rots").innerHTML = ROWS.map(
           (r, i) =>
-            `<button class="rot" aria-pressed="${i === ri}" data-i="${i}" aria-label="${r.name}">${r.short}</button>`,
+            `<button class="rot" aria-pressed="${i === ri}" data-i="${i}" aria-label="${r.name}">H${r.setter}</button>`,
         ).join("");
         $("rots")
           .querySelectorAll(".rot")
