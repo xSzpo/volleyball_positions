@@ -1164,3 +1164,35 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `flags` now holds two device settings that help when reading a report: `animation` (false with `?anim=0` or reduced motion) and `zones` (the zone numbers shown). The rules stay as they are.
 - **Alternatives:** make `flags` optional in `infra/database.rules.json` and drop it, which breaks reports until the rules are applied; a fixed placeholder such as `{v2: true}`.
 - **Reversible by:** `reportContext()` in `src/template.html`.
+
+### 156. Below 480 px the role button stacks the role code over the rules name
+
+- **Issue:** none (UX and usability audits, 2026-10-03)
+- **Problem:** Below 480 px the role button read "MB1 · O", and the "O" reads as a zero. "MB1 · Official" on one line is about 140 px and pushes the header off a 360 px screen.
+- **Decision:** Below 480 px the button shows two lines: the role code with the arrow, and the rules name spelled out under it at 13 px ("OH2 ▾" over "Simplified"), about 66 px wide. The header stays one row with the theme button and the report icon at 44 px down to 320 px, so no shorter form is needed. From 480 px it stays "Outside 1 · Simplified ▾".
+- **Alternatives:** "MB1 · Off."/"Simp."; dropping the rules from the button.
+- **Reversible by:** the `.rolechip` rules under `@media (max-width: 479px)` and `renderSetupSummary()` in `src/template.html`.
+
+### 157. The role list: rules first, nothing ticked before a pick, and Close
+
+- **Issue:** none (UX and usability audits, 2026-10-03)
+- **Problem:** The Rules switch sat below the roles and was hidden on the first visit; the first visit ticked MB1 before any pick; the list had no visible way to close it.
+- **Decision:** The list opens with its title ("Pick your role" until a role is picked, then "Your role") and a 44 px Close, then the Rules switch with its note, then the roles, on every visit. The chosen rules show a tick as well as the fill. On the first visit no role is ticked; the app still runs as MB1 behind the list. A rules pick applies and closes the list as before; the list keeps asking ("Pick your role" and the nudge) until a role is picked. Close, Escape and a tap outside close it without storing a role, so it opens again on the next visit.
+- **Alternatives:** keep the list open after a rules pick on the first visit; store MB1 on Close.
+- **Reversible by:** `#setupPanel` markup, `picked`, `renderRoles()` and `setSetupOpen()` in `src/template.html`.
+
+### 158. A one-line rules note after a switch
+
+- **Issue:** none (UX and usability audits, 2026-10-03)
+- **Problem:** After a rules switch nothing said what changed for you.
+- **Decision:** A status line (`#rulesNote`, `role="status"`) under the role button says it in one sentence per rule set for three kinds of role: a middle, the libero, and everyone else ("Your own spots stay the same", which holds: the setter, outsides and opposite stand on the same spots in both rule sets). It does not catch taps, and goes on the next tap or key, or after 8 s.
+- **Alternatives:** a line inside the list (the list closes on the pick); a text per role.
+- **Reversible by:** `RULES_NOTE`, `showRulesNote()` and `hideRulesNote()` in `src/template.html`.
+
+### 159. The middle cycle line in the Learn cue
+
+- **Issue:** none (UX and usability audits, 2026-10-03)
+- **Problem:** The middle cycle (#148, #150) showed only in Drill feedback and Rules of thumb; a middle in Learn did not see where it is in the cycle.
+- **Decision:** For MB1 and MB2 in Official, the Learn cue adds `cycleLine()` under the explanation on every screen. Base uses the Reception wording, so at zone 1 in the serving rotation it says the libero plays for you. None for other roles or in Simplified.
+- **Alternatives:** in the caption above the court (it would push the court down on a phone); only at Rotation.
+- **Reversible by:** the `cue` markup in `renderLearn()` in `src/template.html`.

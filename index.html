@@ -217,7 +217,6 @@
     .roles {
       display: grid;
       gap: 4px;
-      margin-bottom: 12px;
     }
     .role {
       display: flex;
@@ -334,19 +333,32 @@
     .rolechip .rcshort {
       display: none;
     }
+    /* The rules name stays a word on a second line: one letter ("O") reads as a zero. */
     @media (max-width: 479px) {
-      .rolechip .rclong {
+      .rolechip {
+        display: grid;
+        grid-template-areas: "role arrow" "rules rules";
+        align-content: center;
+        justify-content: center;
+        gap: 1px 4px;
+        padding: 0 8px;
+        line-height: 1;
+      }
+      .rolechip::after {
+        grid-area: arrow;
+      }
+      .rolechip .rclong,
+      .rolechip .rcdot {
         display: none;
       }
       .rolechip .rcshort {
         display: inline;
+        grid-area: role;
       }
-    }
-    @media (max-width: 359px) {
-      .rolechip {
-        gap: 4px;
-        padding: 0 8px;
-        font-size: 15px;
+      .rolechip .rcrules {
+        grid-area: rules;
+        font-size: 13px;
+        text-align: center;
       }
     }
     .menu {
@@ -427,9 +439,40 @@
       flex: 1;
       min-height: 44px;
     }
+    .menuhead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
     .menu h2 {
-      margin: 0 0 8px;
+      margin: 0;
       font-size: 20px;
+    }
+    #setupClose {
+      min-height: 44px;
+      padding: 0 14px;
+    }
+    .rulesnote {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 29;
+      width: min(340px, calc(100vw - 32px));
+      margin: 0;
+      padding: 10px 12px;
+      border: var(--edge);
+      border-left: 6px solid var(--accent);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--ink);
+      font-size: 14px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      pointer-events: none;
+    }
+    .rulesnote:empty {
+      display: none;
     }
     #setupNudge {
       margin: 0 0 8px;
@@ -1290,8 +1333,9 @@
       align-items: center;
       gap: 4px;
       flex-wrap: wrap;
-      padding-top: 10px;
-      border-top: 1px solid var(--muted);
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--muted);
     }
     .rulesmode .vislabel {
       flex-basis: 100%;
@@ -1313,9 +1357,12 @@
       cursor: pointer;
     }
     .rulesmode button[aria-checked="true"] {
-      border-color: var(--ink);
-      background: var(--ink);
-      color: var(--panel);
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--on-accent);
+    }
+    .rulesmode button[aria-checked="true"]::before {
+      content: "\2713  ";
     }
     .rulesmode button:disabled {
       opacity: 0.6;
@@ -1824,11 +1871,13 @@
           ></button>
           <div class="menu" id="setup" hidden>
             <div id="setupPanel" role="group" aria-labelledby="setupTitle">
-              <h2 id="setupTitle">Pick your role</h2>
+              <div class="menuhead">
+                <h2 id="setupTitle">Pick your role</h2>
+                <button type="button" class="btn" id="setupClose">Close</button>
+              </div>
               <p id="setupNudge" hidden>
                 Pick the role you play today. Change it any time with the button at the top.
               </p>
-              <div class="roles" id="roles"></div>
               <div class="rulesmode" role="radiogroup" aria-label="Rules">
                 <span class="vislabel">Rules</span>
                 <button
@@ -1844,8 +1893,10 @@
                 </button>
                 <small id="rmSub"></small>
               </div>
+              <div class="roles" id="roles"></div>
             </div>
           </div>
+          <p class="rulesnote" id="rulesNote" role="status"></p>
           <button type="button" class="themebtn" id="themeBtn" aria-label="Switch to dark mode">
             <svg
               class="moon"
@@ -3275,6 +3326,8 @@
       paintThemeButton();
       const firstVisit = !ALL_ROLES.includes(store.get("role", null));
       let role = roleIn(rulesMode, firstVisit ? "MB" : store.get("role", "MB"));
+      // Until the first pick no role is ticked, though the app runs as `role`.
+      let picked = !firstVisit;
       let ri = 0,
         phase = "rec",
         stats = store.get("stats2", {});
@@ -3283,7 +3336,7 @@
         $("roles").innerHTML = roles()
           .map(
             (r) =>
-              `<button class="role" aria-pressed="${r === role}" data-r="${r}"${ON && ON.meta.state !== "lobby" ? " disabled" : ""}><i style="background:${COLORS[r]}"></i>${NAMES[r]}</button>`,
+              `<button class="role" aria-pressed="${picked && r === role}" data-r="${r}"${ON && ON.meta.state !== "lobby" ? " disabled" : ""}><i style="background:${COLORS[r]}"></i>${NAMES[r]}</button>`,
           )
           .join("");
         $("roles")
@@ -3291,6 +3344,7 @@
           .forEach((b) => {
             b.onclick = () => {
               role = b.dataset.r;
+              picked = true;
               store.set("role", role);
               track("role_picked", { role });
               renderRoles();
@@ -3316,7 +3370,7 @@
       function renderSetupSummary() {
         const chip = $("roleChip");
         chip.dataset.role = role;
-        chip.innerHTML = `<span class="rclong">${NAMES[role]}</span><span class="rcshort">${role}</span><span aria-hidden="true">·</span><span class="rcrules"><span class="rclong">${RULES_NAME[rulesMode]}</span><span class="rcshort">${RULES_NAME[rulesMode][0]}</span></span>`;
+        chip.innerHTML = `<span class="rclong">${NAMES[role]}</span><span class="rcshort">${role}</span><span class="rcdot" aria-hidden="true">·</span><span class="rcrules">${RULES_NAME[rulesMode]}</span>`;
         chip.setAttribute(
           "aria-label",
           `Playing as ${NAMES[role]}, ${RULES_NAME[rulesMode]} rules. Change`,
@@ -3324,17 +3378,19 @@
       }
       function setSetupOpen(open, focus = true) {
         const wasOpen = !$("setup").hidden;
-        if (!open) $("setupNudge").hidden = true;
-        const first = !$("setupNudge").hidden;
-        $("setupTitle").textContent = first ? "Pick your role" : "Your role";
-        document.querySelector(".rulesmode").hidden = first;
+        $("setupNudge").hidden = picked;
+        $("setupTitle").textContent = picked ? "Your role" : "Pick your role";
         $("setup").hidden = !open;
         $("roleChip").setAttribute("aria-expanded", open);
         if (!focus) return;
-        if (open) document.querySelector('.role[aria-pressed="true"]')?.focus();
+        if (open)
+          (
+            document.querySelector('.role[aria-pressed="true"]') || document.querySelector(".role")
+          )?.focus();
         else if (wasOpen) $("roleChip").focus({ preventScroll: true });
       }
       $("roleChip").onclick = () => setSetupOpen($("setup").hidden);
+      $("setupClose").onclick = () => setSetupOpen(false);
       const inMenu = (el) => $("setup").contains(el) || $("roleChip").contains(el);
       let swallow = null;
       function swallowTap() {
@@ -3371,7 +3427,6 @@
         if (!$("setup").hidden && e.key === "Escape") setSetupOpen(false);
       });
       $("subtitle").hidden = !firstVisit;
-      $("setupNudge").hidden = !firstVisit;
       setSetupOpen(firstVisit, false);
       function setTab(t, quiet) {
         if (!quiet) track("tab_viewed", { tab: t });
@@ -3461,7 +3516,7 @@
             : "";
         const passers = phase === "rec" ? `<p class="passers">${PASSERS_LINE}</p>` : "";
         $("cue").innerHTML =
-          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${passers}${guide}${libero}`;
+          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${cycleLine(ri, role, phase === "ar" ? "rec" : phase)}${passers}${guide}${libero}`;
         const at = PHASES.findIndex(([k]) => k === phase);
         const upNext = at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1];
         $("lNext").textContent = `${phase === "rec" ? upNext : `Next: ${upNext}`} ▸`;
@@ -8343,6 +8398,43 @@
         });
         renderMp();
       }
+      const RULES_NOTE = {
+        official: {
+          middle:
+            "Official: MB1 and MB2; the libero is in for the back-row middle; in your serving rotation you serve and the libero stays off.",
+          L: "Official: two middles, MB1 and MB2; you are in for the back-row middle, but you may not serve, so you are off while a middle serves.",
+          other:
+            "Official: two middles, MB1 and MB2, and the libero may not serve. Your own spots stay the same.",
+        },
+        simple: {
+          middle:
+            "Simplified: you are MB, always the front middle; the libero plays the back middle; in R3 and R6 you serve from zone 1.",
+          L: "Simplified: one middle, MB; you always play the back middle, and you are off while MB serves in R3 and R6.",
+          other:
+            "Simplified: one middle, MB, at the net, and the libero in the back row. Your own spots stay the same.",
+        },
+      };
+      const RULES_NOTE_MS = 8000;
+      let rulesNoteTimer = 0;
+      function rulesNoteText(mode, who) {
+        const kind = who === "L" ? "L" : roleIn("simple", who) === "MB" ? "middle" : "other";
+        return RULES_NOTE[mode][kind];
+      }
+      function hideRulesNote() {
+        clearTimeout(rulesNoteTimer);
+        $("rulesNote").textContent = "";
+        document.removeEventListener("pointerdown", hideRulesNote, true);
+        document.removeEventListener("keydown", hideRulesNote, true);
+      }
+      // Says what the switch changed for your role, until the next tap or key, or for 8 s.
+      function showRulesNote() {
+        hideRulesNote();
+        $("rulesNote").textContent = rulesNoteText(rulesMode, role);
+        rulesNoteTimer = setTimeout(hideRulesNote, RULES_NOTE_MS);
+        // The pick's own pointerdown and keydown have passed by its click.
+        document.addEventListener("pointerdown", hideRulesNote, true);
+        document.addEventListener("keydown", hideRulesNote, true);
+      }
       function renderRulesMode() {
         const locked = !!G?.online || (!!ON && !ON.isHost);
         document.querySelectorAll(".rulesmode [data-rm]").forEach((b) => {
@@ -8378,7 +8470,10 @@
             cur = null;
             newQuestion();
           }
+          // On a first visit the list stays open until a role is picked.
+          if (!picked) return;
           setSetupOpen(false);
+          showRulesNote();
         };
       });
       renderRulesMode();
