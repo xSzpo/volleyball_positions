@@ -2094,7 +2094,7 @@ def check_common_mistakes(browser: Browser) -> None:
             [
                 (0.3, 0.73, "Overlap fault: at the whistle you must stand right of MB."),
                 (0.84, 0.72, ""),
-                (None, None, "Only the libero goes off, when SUB serves"),
+                (None, None, "Only the libero goes off, while SUB serves"),
             ],
         ),
         ("OH1", "official", ("rec",), "?ff=all&anim=0", [(None, None, "the middle it replaces go off")]),
