@@ -46,6 +46,7 @@ EXPECTED = {
 SERVING_MIDDLE = {("official", "MB1", 2), ("official", "MB2", 5)}
 # The overlap limits count at the whistle for the serve; before 1 October 2026 they counted at the service hit.
 OLD_TIMING = re.compile(r"service hit|when the ball is served|at the serve\b|until the serve is made", re.IGNORECASE)
+THUMB_MOVE = "Once the server moves, so can you."
 WHISTLE_MOVE = "From the server's first movement you may move."
 OVERLAP_WHEN = {
     "start": "This is your rotation order. It counts at the whistle when the other team serves."
@@ -250,7 +251,7 @@ def check_rules_of_thumb(page: Page) -> None:
     """Learn keeps only the Rules of thumb fold, closed, worded for each rule set and the whistle timing."""
     for mode, want, unwanted in (
         ("simple", ("SUB", "MB plays the front middle"), ("MB1", "19.3")),
-        ("official", ("MB1", "MB2", "19.3"), ("SUB",)),
+        ("official", ("The libero replaces the back-row middle", "19.3"), ("SUB",)),
     ):
         open_app(page, {"role": "L", "rulesMode": mode})
         html = page.content()
@@ -260,7 +261,7 @@ def check_rules_of_thumb(page: Page) -> None:
         if page.get_attribute("#thumbsBox", "open") is not None:
             fail(f"{mode}: Rules of thumb open by default")
         text = " ".join((page.text_content("#thumbsBox") or "").split())
-        if "whistle" not in text or WHISTLE_MOVE not in text:
+        if "whistle" not in text or THUMB_MOVE not in text:
             fail(f"{mode} Rules of thumb lack the whistle timing: {text!r}")
         if OLD_TIMING.search(text):
             fail(f"{mode} Rules of thumb use the old overlap timing: {text!r}")
@@ -277,6 +278,18 @@ def check_rules_of_thumb(page: Page) -> None:
         middles = page.locator("#thumbs li", has_text="middle").last.inner_text()
         if us_libero_rule(middles):
             fail(f"{mode} the middles rule of thumb teaches a US libero rule: {middles!r}")
+        titles = page.locator("#thumbs li > b").all_text_contents()
+        if titles[:2] != ["Walk from the setter", "Same job, opposite corners"] or "H in" not in titles[-1]:
+            fail(f"{mode}: Rules of thumb do not start with the walk and the corners and end with H: {titles}")
+        first = " ".join(" ".join((page.locator("#thumbs li").nth(i).text_content() or "").split()) for i in (0, 1))
+        for word in (
+            "count up",
+            "Setter, Outside, Middle, Opposite, Outside, Middle",
+            "The libero replaces whichever middle is in the back row.",
+            "diagonally opposite",
+        ):
+            if word not in first:
+                fail(f"{mode}: the walk and corners rules lack {word!r}: {first!r}")
         mine = page.locator("#thumbs li.mine b").all_text_contents()
         if not any("middle" in title for title in mine):
             fail(f"{mode} L: the middles rule is not marked as your rule: {mine}")
