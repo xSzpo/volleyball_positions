@@ -336,6 +336,7 @@ def play(rules: str) -> None:
         pg.click("#tabGame")
         assert pg.is_visible("#gPass"), "role change at the top ended the same-device match"
         pg.click("#pQuit")
+        pg.click("#pQuit")
         assert pg.evaluate("localStorage.getItem('ksv51:gPlayers')") == '"mp"', "same-device choice not stored"
         wait_stored(pg, ["ksv51:gPlayers", "ksv51:mpPlayers"])
         pg.reload()

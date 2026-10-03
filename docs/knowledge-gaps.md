@@ -1164,3 +1164,35 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `flags` now holds two device settings that help when reading a report: `animation` (false with `?anim=0` or reduced motion) and `zones` (the zone numbers shown). The rules stay as they are.
 - **Alternatives:** make `flags` optional in `infra/database.rules.json` and drop it, which breaks reports until the rules are applied; a fixed placeholder such as `{v2: true}`.
 - **Reversible by:** `reportContext()` in `src/template.html`.
+
+### 160. Quit takes two taps everywhere in Match
+
+- **Issue:** none (usability audit, owner approved, 2026-10-03)
+- **Problem:** One tap on Quit ended a match at once, and it sits close to Continue on a phone. The audit asked for a confirm in solo and same-device play and the same arm online.
+- **Decision:** Quit on the play screen (`#gQuit`), the pass screen (`#pQuit`) and the reveal (`#rQuit`) works like Drill Reset: the first tap reads "Sure?" (aria-label "Tap again to quit") for 3 s (`RESET_ARM_MS`) with the button width fixed, so nothing moves; the second tap quits. Online keeps what Quit does (reset for the host, bench for a guest) behind the same two taps. Leaving the view disarms it.
+- **Alternatives:** a confirm dialog; two taps only offline.
+- **Reversible by:** `quitArm()` and `quitDisarm()` in `src/template.html`.
+
+### 161. Only a solo match is kept through a reload
+
+- **Issue:** none (usability audit, owner approved, 2026-10-03)
+- **Problem:** A reload or a phone killing the tab lost a solo match. The audit left same-device persistence optional and did not say when to save or what to do when the settings change.
+- **Decision:** A solo match is saved in `ksv51:match` at the start of each moment, so a reload mid-answer asks that moment again. Match setup shows "Resume match (moment 7 of 24)" with Resume and Discard at the top; there is no automatic switch to the Match tab. Finish, Quit, Discard, another role, a settings change (`gKey()`) and a stored value that does not validate drop it. Replay my mistakes is saved too. Same-device play is not saved: the phone is passed round and a half-played turn would leak answers.
+- **Alternatives:** save after each answer; also save same-device play.
+- **Reversible by:** `gSave()`, `gSaved()` and `gResumeRender()` in `src/template.html`.
+
+### 162. Mistake pictures on the end screen and after a Drill review
+
+- **Issue:** none (usability audit, owner approved, 2026-10-03)
+- **Problem:** The end screen listed mistakes as text only. The audit did not say what a Rotate mistake or an online mistake shows.
+- **Decision:** Each mistake gets a small court (two per row at 390 px) with your tap (`circle.yourtap`) and the right spot as a ring, joined by a dashed line. An off-court answer shows the solid pill with your dot beside it; a Rotate mistake shows every marker you placed and where it belongs. Online mistakes have no picture, because the room keeps no tap per miss. Drill's Review done shows a picture for every reviewed item, right or not, and hides the empty court so Back to drill is in view.
+- **Alternatives:** pictures only for wrong items in the review; storing the taps online.
+- **Reversible by:** `picOf()` and `answerPic()` in `src/template.html`.
+
+### 163. Same-device reveal taps carry an initial or a number
+
+- **Issue:** none (usability audit, owner approved, 2026-10-03)
+- **Problem:** Every tap on the reveal court read "P" with the default names Player 1, Player 2.
+- **Decision:** A tap carries the player's initial; when two players share an initial, each carries their number in the list instead, and the list shows it after the name ("Player 1 (1)").
+- **Alternatives:** always the number; two letters.
+- **Reversible by:** `tapKeys()` in `src/template.html`.
