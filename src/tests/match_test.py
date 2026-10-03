@@ -1,10 +1,15 @@
 """Playwright test of solo match scoring and the Attack step picture in index.html.
 
-Usage: python src/tests/match_test.py
+Usage: python src/tests/match_test.py [--shard K/N] [--list]
+
+--shard 1/4 runs one quarter of the checks; the four quarters together run each check once.
 """
 
+import argparse
 import re
 import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +17,7 @@ from playwright.sync_api import Browser, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from data import ATTACK_LINE, RULES_MODES, SETS, UNCONFIRMED_SETS, Row, lineup  # noqa: E402
+from data import ATTACK_LINE, RULES_MODES, SETS, UNCONFIRMED_SETS, Row, RulesMode, lineup  # noqa: E402
 
 # The app opens in Simplified KSV.
 ROWS = [lineup(ri, "simple") for ri in range(6)]
@@ -533,52 +538,55 @@ def r_name_in_game(page: Page, ctx: str) -> bool:
     return bool(found)
 
 
-def check_match_h_names(browser: Browser) -> None:
+def check_match_h_names(browser: Browser, rules: RulesMode, role: str) -> None:
     """Every Match text names a rotation H<n> only: setup, story, title, hints, feedback, mistakes and end screen."""
-    for rules in RULES_MODES:
-        for role in ("OH1", "L", "S", "MB" if rules == "simple" else "MB2"):
-            ctx = f"{rules} {role}"
-            page = new_page(browser, rules)
-            setup_match(page, role, ("start", "serve", "rec", "ar"))
-            if r_name_in_game(page, f"{ctx} setup"):
-                page.close()
-                continue
-            page.click("#gStart")
-            moments = 0
-            while not page.is_visible("#gEnd") and moments < 30:
-                page.wait_for_selector("#gOff:enabled")
-                moments += 1
-                if not re.fullmatch(r"H[1-6]", page.inner_text("#gTitle")):
-                    fail(f"{ctx}: title {page.inner_text('#gTitle')!r}, expected H<n>")
-                if page.inner_text("#gStepName").startswith("Rotation"):
-                    fill_rotate(page)
-                else:
-                    for _ in range(2):
-                        if page.is_enabled("#gHelp"):
-                            page.click("#gHelp")
-                    if r_name_in_game(page, f"{ctx} moment {moments} hint"):
-                        break
-                    page.click("#gOff")
-                    if not page.locator("#gNext").is_enabled():
-                        page.click("#gOff")
-                press_next(page)
-                if r_name_in_game(page, f"{ctx} moment {moments} feedback"):
-                    break
-                if page.is_visible("#gNext") and page.is_enabled("#gNext"):
-                    press_next(page)
-            if not page.is_visible("#gEnd"):
-                page.close()
-                continue
-            if not page.locator("#gMist li").count():
-                fail(f"{ctx}: no mistakes listed on the end screen")
-            r_name_in_game(page, f"{ctx} end screen")
-            page.close()
+    ctx = f"{rules} {role}"
+    page = new_page(browser, rules)
+    setup_match(page, role, ("start", "serve", "rec", "ar"))
+    if r_name_in_game(page, f"{ctx} setup"):
+        page.close()
+        return
+    page.click("#gStart")
+    moments = 0
+    while not page.is_visible("#gEnd") and moments < 30:
+        page.wait_for_selector("#gOff:enabled")
+        moments += 1
+        if not re.fullmatch(r"H[1-6]", page.inner_text("#gTitle")):
+            fail(f"{ctx}: title {page.inner_text('#gTitle')!r}, expected H<n>")
+        if page.inner_text("#gStepName").startswith("Rotation"):
+            fill_rotate(page)
+        else:
+            for _ in range(2):
+                if page.is_enabled("#gHelp"):
+                    page.click("#gHelp")
+            if r_name_in_game(page, f"{ctx} moment {moments} hint"):
+                break
+            page.click("#gOff")
+            if not page.locator("#gNext").is_enabled():
+                page.click("#gOff")
+        press_next(page)
+        if r_name_in_game(page, f"{ctx} moment {moments} feedback"):
+            break
+        if page.is_visible("#gNext") and page.is_enabled("#gNext"):
+            press_next(page)
+    if not page.is_visible("#gEnd"):
+        page.close()
+        return
+    if not page.locator("#gMist li").count():
+        fail(f"{ctx}: no mistakes listed on the end screen")
+    r_name_in_game(page, f"{ctx} end screen")
+    page.close()
+    print(f"match names {ctx}: H<n> only in every Match text", flush=True)
+
+
+def check_learn_keeps_r_names(browser: Browser) -> None:
+    """Learn keeps the full R<n> (H<n>) name that Match drops."""
     page = new_page(browser)
     page.click("#tabLearn")
     if not re.match(r"R[1-6] \(H[1-6]\) · ", page.inner_text("#learnTag")):
         fail(f"Learn lost the R<n> (H<n>) name: {page.inner_text('#learnTag')!r}")
     page.close()
-    print("match names: H<n> only in every Match text, Learn keeps R<n> (H<n>)", flush=True)
+    print("match names: Learn keeps R<n> (H<n>)", flush=True)
 
 
 def check_match_order(browser: Browser) -> None:
@@ -1235,72 +1243,68 @@ def check_tap_line(pic: dict[str, Any], row: Row, role: str, spot: tuple[float, 
         fail(f"{tag}: the tap line runs {line}, not from {start} to the tap")
 
 
-def check_attack_match(browser: Browser) -> None:
+def check_attack_match(browser: Browser, rules: RulesMode, vis: str) -> None:
     """Match Attack: the reception picture for every Show on court value, the tap line and scoring at ×1."""
-    for rules in RULES_MODES:
-        rows = [lineup(ri, rules) for ri in range(6)]
-        for vis in ("none", "ref", "all"):
-            page = new_page(browser, rules)
-            setup_match(page, "OH1", ("ar",), vis, sets=False)
-            page.click("#gStart")
-            for ri in range(6):
-                tag = f"match {rules} {vis} R{ri + 1}"
-                page.wait_for_selector("#gOff:enabled")
-                check_from_picture(court_picture(page, "courtG"), rows[ri], ri, "OH1", tag)
-                story = page.inner_text("#gStory")
-                if not story.endswith(attack_question(ri, "OH1", rows[ri])):
-                    fail(f"{tag}: question reads {story!r}")
-                lands = pass_lands(page, ri)
-                spot = lands["OH1"]
-                tap_at(page, *spot)
-                check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, tag)
-                press_next(page)
-                check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, f"{tag} feedback")
-                picture = court_picture(page, "courtG")
-                check_ball_at_setter(picture, rows[ri], lands, f"{tag} feedback", page, ri, "OH1")
-                line = page.inner_text("#gBd")
-                parts, total = breakdown_total(line)
-                if "%" in line or not parts == total == points(page) or total < 100:
-                    fail(f"{tag}: Attack scored {line!r}, expected full points")
-                press_next(page)
-            page.wait_for_selector("#gEnd", state="visible")
-            page.close()
+    rows = [lineup(ri, rules) for ri in range(6)]
+    page = new_page(browser, rules)
+    setup_match(page, "OH1", ("ar",), vis, sets=False)
+    page.click("#gStart")
+    for ri in range(6):
+        tag = f"match {rules} {vis} R{ri + 1}"
+        page.wait_for_selector("#gOff:enabled")
+        check_from_picture(court_picture(page, "courtG"), rows[ri], ri, "OH1", tag)
+        story = page.inner_text("#gStory")
+        if not story.endswith(attack_question(ri, "OH1", rows[ri])):
+            fail(f"{tag}: question reads {story!r}")
+        lands = pass_lands(page, ri)
+        spot = lands["OH1"]
+        tap_at(page, *spot)
+        check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, tag)
+        press_next(page)
+        check_tap_line(court_picture(page, "courtG"), rows[ri], "OH1", spot, f"{tag} feedback")
+        picture = court_picture(page, "courtG")
+        check_ball_at_setter(picture, rows[ri], lands, f"{tag} feedback", page, ri, "OH1")
+        line = page.inner_text("#gBd")
+        parts, total = breakdown_total(line)
+        if "%" in line or not parts == total == points(page) or total < 100:
+            fail(f"{tag}: Attack scored {line!r}, expected full points")
+        press_next(page)
+    page.wait_for_selector("#gEnd", state="visible")
+    page.close()
     print("match Attack: reception picture, ball, tap line, full points", flush=True)
 
 
-def check_attack_grading(browser: Browser) -> None:
+def check_attack_grading(browser: Browser, rules: RulesMode, role: str) -> None:
     """Attack grades everyone where Learn has them as the pass lands, the covers on cover, and rings them there."""
     checked = 0
-    for rules in RULES_MODES:
-        for role in MODE_ROLES[rules]:
-            page = new_page(browser, rules)
-            setup_match(page, role, ("ar",), sets=False)
-            page.click("#gStart")
-            for ri in range(6):
-                tag = f"attack grading {rules} {role} R{ri + 1}"
-                row = lineup(ri, rules)
-                page.wait_for_selector("#gOff:enabled")
-                lands = pass_lands(page, ri)
-                if not any(p == role for p, _, _, _ in row["ar"]):
-                    page.click("#gOff")
-                    press_next(page)
-                    press_next(page)
-                    continue
-                spot = lands[role]
-                if role in row["front"] and role.startswith("MB") and spot[1] > 0.25:
-                    fail(f"{tag}: Learn has the middle at {spot} as the pass lands, not at the net")
-                tap_at(page, *spot)
-                press_next(page)
-                if "Spot on" not in page.inner_text("#gFb"):
-                    fail(f"{tag}: a tap where Learn has you {spot} reads {page.inner_text('#gFb')!r}")
-                pic = court_picture(page, "courtG")
-                me = next(m for m in pic["markers"] if m["me"])
-                if dist((me["x"], me["y"]), (spot[0] * 100, spot[1] * 100)) > 0.5:
-                    fail(f"{tag}: feedback rings you at ({me['x']}, {me['y']}), not at {spot}")
-                check_ball_at_setter(pic, row, lands, tag, page, ri, role)
-                checked += 1
-                press_next(page)
-            page.close()
+    page = new_page(browser, rules)
+    setup_match(page, role, ("ar",), sets=False)
+    page.click("#gStart")
+    for ri in range(6):
+        tag = f"attack grading {rules} {role} R{ri + 1}"
+        row = lineup(ri, rules)
+        page.wait_for_selector("#gOff:enabled")
+        lands = pass_lands(page, ri)
+        if not any(p == role for p, _, _, _ in row["ar"]):
+            page.click("#gOff")
+            press_next(page)
+            press_next(page)
+            continue
+        spot = lands[role]
+        if role in row["front"] and role.startswith("MB") and spot[1] > 0.25:
+            fail(f"{tag}: Learn has the middle at {spot} as the pass lands, not at the net")
+        tap_at(page, *spot)
+        press_next(page)
+        if "Spot on" not in page.inner_text("#gFb"):
+            fail(f"{tag}: a tap where Learn has you {spot} reads {page.inner_text('#gFb')!r}")
+        pic = court_picture(page, "courtG")
+        me = next(m for m in pic["markers"] if m["me"])
+        if dist((me["x"], me["y"]), (spot[0] * 100, spot[1] * 100)) > 0.5:
+            fail(f"{tag}: feedback rings you at ({me['x']}, {me['y']}), not at {spot}")
+        check_ball_at_setter(pic, row, lands, tag, page, ri, role)
+        checked += 1
+        press_next(page)
+    page.close()
     print(
         f"Attack: graded where Learn has everyone as the pass lands, the covers on cover, on {checked} courts",
         flush=True,
@@ -1330,81 +1334,77 @@ COVER_WORDS = {
 }
 
 
-def check_attack_texts(browser: Browser) -> None:
+def check_attack_texts(browser: Browser, rules: RulesMode, role: str) -> None:
     """At Attack, the hint, the feedback and the caption of L, the deep OH and the back OP name the cover graded."""
     checked = 0
-    for rules in RULES_MODES:
-        for role in ("L", "OH1", "OH2", "OP"):
-            page = new_page(browser, rules)
-            setup_match(page, role, ("ar",), sets=False)
-            page.click("#gStart")
-            for ri in range(6):
-                tag = f"attack text {rules} {role} R{ri + 1}"
-                row = lineup(ri, rules)
-                job = cover_job(row, role)
-                page.wait_for_selector("#gOff:enabled")
-                if not job:
-                    page.click("#gOff")
-                    press_next(page)
-                    press_next(page)
-                    continue
-                lands = pass_lands(page, ri)
-                page.click("#gHelp")
-                hint = page.inner_text("#gFb")
-                tap_at(page, *lands[role])
-                press_next(page)
-                feedback = page.inner_text("#gFb")
-                caption = row["move"]["ar"][role]
-                hint_words, feedback_words = COVER_WORDS[job]
-                if hint_words not in hint.lower():
-                    fail(f"{tag}: hint {hint!r} does not say {hint_words!r}")
-                if feedback_words not in feedback:
-                    fail(f"{tag}: feedback {feedback!r} does not say {feedback_words!r}")
-                if "cover" not in caption:
-                    fail(f"{tag}: caption {caption!r} does not name the cover")
-                for text in (hint, feedback, caption):
-                    if "zone 1" in text or "straight" in text.lower():
-                        fail(f"{tag}: graded at the {job} cover, the text reads {text!r}")
-                checked += 1
-                press_next(page)
-            page.close()
+    page = new_page(browser, rules)
+    setup_match(page, role, ("ar",), sets=False)
+    page.click("#gStart")
+    for ri in range(6):
+        tag = f"attack text {rules} {role} R{ri + 1}"
+        row = lineup(ri, rules)
+        job = cover_job(row, role)
+        page.wait_for_selector("#gOff:enabled")
+        if not job:
+            page.click("#gOff")
+            press_next(page)
+            press_next(page)
+            continue
+        lands = pass_lands(page, ri)
+        page.click("#gHelp")
+        hint = page.inner_text("#gFb")
+        tap_at(page, *lands[role])
+        press_next(page)
+        feedback = page.inner_text("#gFb")
+        caption = row["move"]["ar"][role]
+        hint_words, feedback_words = COVER_WORDS[job]
+        if hint_words not in hint.lower():
+            fail(f"{tag}: hint {hint!r} does not say {hint_words!r}")
+        if feedback_words not in feedback:
+            fail(f"{tag}: feedback {feedback!r} does not say {feedback_words!r}")
+        if "cover" not in caption:
+            fail(f"{tag}: caption {caption!r} does not name the cover")
+        for text in (hint, feedback, caption):
+            if "zone 1" in text or "straight" in text.lower():
+                fail(f"{tag}: graded at the {job} cover, the text reads {text!r}")
+        checked += 1
+        press_next(page)
+    page.close()
     print(f"Attack texts: the cover graded named in hint, feedback and caption on {checked} courts", flush=True)
 
 
-def check_cover_moment(browser: Browser) -> None:
+def check_cover_moment(browser: Browser, rules: RulesMode, role: str) -> None:
     """A cover is asked about its cover spot at the spike, and the feedback shows everyone and the ball at the spike."""
     checked = 0
-    for rules in RULES_MODES:
-        for role in MODE_ROLES[rules]:
-            page = new_page(browser, rules)
-            setup_match(page, role, ("ar",), "all", sets=False)
-            page.click("#gStart")
-            for ri in range(6):
-                tag = f"cover moment {rules} {role} R{ri + 1}"
-                row = lineup(ri, rules)
-                page.wait_for_selector("#gOff:enabled")
-                if not cover_job(row, role):
-                    page.click("#gOff")
-                    press_next(page)
-                    press_next(page)
-                    continue
-                story = page.inner_text("#gStory")
-                hitter = zone4_hitter(row)
-                if "as it arrives" in story or not story.endswith(attack_question(ri, role, row)):
-                    fail(f"{tag}: question reads {story!r}")
-                tap_at(page, *pass_lands(page, ri)[role])
-                press_next(page)
-                if f"cover spot as {hitter} spikes" not in page.inner_text("#gFb"):
-                    fail(f"{tag}: feedback {page.inner_text('#gFb')!r} does not name the cover spot at the spike")
-                team, _ = spike_picture(page, ri)
-                pic = court_picture(page, "courtG")
-                for m in pic["markers"]:
-                    if m["p"] in team and dist((m["x"], m["y"]), team[m["p"]]) > 0.5:
-                        fail(f"{tag}: {m['p']} drawn at ({m['x']}, {m['y']}), not where it is at the spike")
-                check_ball_at_setter(pic, row, {}, tag, page, ri, role)
-                checked += 1
-                press_next(page)
-            page.close()
+    page = new_page(browser, rules)
+    setup_match(page, role, ("ar",), "all", sets=False)
+    page.click("#gStart")
+    for ri in range(6):
+        tag = f"cover moment {rules} {role} R{ri + 1}"
+        row = lineup(ri, rules)
+        page.wait_for_selector("#gOff:enabled")
+        if not cover_job(row, role):
+            page.click("#gOff")
+            press_next(page)
+            press_next(page)
+            continue
+        story = page.inner_text("#gStory")
+        hitter = zone4_hitter(row)
+        if "as it arrives" in story or not story.endswith(attack_question(ri, role, row)):
+            fail(f"{tag}: question reads {story!r}")
+        tap_at(page, *pass_lands(page, ri)[role])
+        press_next(page)
+        if f"cover spot as {hitter} spikes" not in page.inner_text("#gFb"):
+            fail(f"{tag}: feedback {page.inner_text('#gFb')!r} does not name the cover spot at the spike")
+        team, _ = spike_picture(page, ri)
+        pic = court_picture(page, "courtG")
+        for m in pic["markers"]:
+            if m["p"] in team and dist((m["x"], m["y"]), team[m["p"]]) > 0.5:
+                fail(f"{tag}: {m['p']} drawn at ({m['x']}, {m['y']}), not where it is at the spike")
+        check_ball_at_setter(pic, row, {}, tag, page, ri, role)
+        checked += 1
+        press_next(page)
+    page.close()
     print(f"Attack covers: asked and shown at the spike on {checked} courts", flush=True)
 
 
@@ -1436,81 +1436,75 @@ def check_cover_set_call(browser: Browser) -> None:
 HIT_IN = 0.08
 
 
-def check_hitter_approach(browser: Browser) -> None:
+def check_hitter_approach(browser: Browser, rules: RulesMode, role: str) -> None:
     """The zone 4 hitter's dashed approach ends inside its start, where Learn's outside-in run hits."""
     checked = 0
-    for rules in RULES_MODES:
-        for role in MODE_ROLES[rules]:
-            page = new_page(browser, rules)
-            setup_match(page, role, ("ar",), sets=False)
-            page.click("#gStart")
-            for ri in range(6):
-                row = lineup(ri, rules)
-                page.wait_for_selector("#gOff:enabled")
-                if zone4_hitter(row) != role:
-                    page.click("#gOff")
-                    press_next(page)
-                    press_next(page)
-                    continue
-                tap_at(page, *pass_lands(page, ri)[role])
-                press_next(page)
-                ends: list[float] = page.eval_on_selector_all(
-                    f'#courtG g.rt[data-p="{role}"] line.route[stroke-dasharray]',
-                    "els => els.map(l => l.x2.baseVal.value)",
-                )
-                start = next(x for p, x, _, _ in row["ar"] if p == role)
-                if len(ends) != 1 or abs(ends[0] - (start + HIT_IN) * 100) > 0.01:
-                    fail(
-                        f"hitter approach {rules} {role} R{ri + 1}: ends at x {ends}, not {(start + HIT_IN) * 100:.1f}"
-                    )
-                checked += 1
-                press_next(page)
-            page.close()
+    page = new_page(browser, rules)
+    setup_match(page, role, ("ar",), sets=False)
+    page.click("#gStart")
+    for ri in range(6):
+        row = lineup(ri, rules)
+        page.wait_for_selector("#gOff:enabled")
+        if zone4_hitter(row) != role:
+            page.click("#gOff")
+            press_next(page)
+            press_next(page)
+            continue
+        tap_at(page, *pass_lands(page, ri)[role])
+        press_next(page)
+        ends: list[float] = page.eval_on_selector_all(
+            f'#courtG g.rt[data-p="{role}"] line.route[stroke-dasharray]',
+            "els => els.map(l => l.x2.baseVal.value)",
+        )
+        start = next(x for p, x, _, _ in row["ar"] if p == role)
+        if len(ends) != 1 or abs(ends[0] - (start + HIT_IN) * 100) > 0.01:
+            fail(f"hitter approach {rules} {role} R{ri + 1}: ends at x {ends}, not {(start + HIT_IN) * 100:.1f}")
+        checked += 1
+        press_next(page)
+    page.close()
     print(f"Attack: the zone 4 hitter's approach ends outside-in on {checked} courts", flush=True)
 
 
-def check_from_label(browser: Browser) -> None:
+def check_from_label(browser: Browser, rules: RulesMode, role: str) -> None:
     """The "from" label stays clear of every marker, the ball and the court edge, for every rotation and role."""
     checked = 0
-    for rules in RULES_MODES:
-        for role in MODE_ROLES[rules]:
-            page = new_page(browser, rules)
-            setup_match(page, role, ("ar",), sets=False)
-            page.click("#gStart")
-            for ri in range(6):
-                page.wait_for_selector("#gOff:enabled")
-                clash = page.evaluate(
-                    """() => {
-                        const svg = document.getElementById('courtG'), label = svg.querySelector('text.from');
-                        if (!label) return 'no label';
-                        const b = label.getBBox();
-                        const discs = [...svg.querySelectorAll('g.mk')].map((g) => {
-                            const c = g.querySelector('circle[fill^="var(--role"]');
-                            const ring = g.querySelector('.me-ring circle');
-                            return {p: g.dataset.p, x: +c.getAttribute('cx'), y: +c.getAttribute('cy'),
-                                    r: ring ? +ring.getAttribute('r') + 0.6 : +c.getAttribute('r') + 0.5};
-                        });
-                        const ball = svg.querySelector('g.ball');
-                        const at = ball && /translate[(]([-0-9.]+) ([-0-9.]+)[)] scale[(]([0-9.]+)[)]/
-                            .exec(ball.getAttribute('transform'));
-                        if (at) discs.push({p: 'ball', x: +at[1], y: +at[2], r: +at[3]});
-                        const hit = discs.filter((d) => {
-                            const dx = Math.max(b.x - d.x, 0, d.x - b.x - b.width),
-                                dy = Math.max(b.y - d.y, 0, d.y - b.y - b.height);
-                            return Math.hypot(dx, dy) < d.r;
-                        }).map((d) => d.p);
-                        if (b.x < -4 || b.x + b.width > 104 || b.y < -14 || b.y + b.height > 103) hit.push('edge');
-                        return hit.join(', ');
-                    }"""
-                )
-                on_court = any(p == role for p, _, _ in lineup(ri, rules)["rec"])
-                if clash and (clash != "no label" or on_court):
-                    fail(f"from label {rules} {role} R{ri + 1}: covers {clash}")
-                checked += on_court
-                page.click("#gOff")
-                press_next(page)
-                press_next(page)
-            page.close()
+    page = new_page(browser, rules)
+    setup_match(page, role, ("ar",), sets=False)
+    page.click("#gStart")
+    for ri in range(6):
+        page.wait_for_selector("#gOff:enabled")
+        clash = page.evaluate(
+            """() => {
+                const svg = document.getElementById('courtG'), label = svg.querySelector('text.from');
+                if (!label) return 'no label';
+                const b = label.getBBox();
+                const discs = [...svg.querySelectorAll('g.mk')].map((g) => {
+                    const c = g.querySelector('circle[fill^="var(--role"]');
+                    const ring = g.querySelector('.me-ring circle');
+                    return {p: g.dataset.p, x: +c.getAttribute('cx'), y: +c.getAttribute('cy'),
+                            r: ring ? +ring.getAttribute('r') + 0.6 : +c.getAttribute('r') + 0.5};
+                });
+                const ball = svg.querySelector('g.ball');
+                const at = ball && /translate[(]([-0-9.]+) ([-0-9.]+)[)] scale[(]([0-9.]+)[)]/
+                    .exec(ball.getAttribute('transform'));
+                if (at) discs.push({p: 'ball', x: +at[1], y: +at[2], r: +at[3]});
+                const hit = discs.filter((d) => {
+                    const dx = Math.max(b.x - d.x, 0, d.x - b.x - b.width),
+                        dy = Math.max(b.y - d.y, 0, d.y - b.y - b.height);
+                    return Math.hypot(dx, dy) < d.r;
+                }).map((d) => d.p);
+                if (b.x < -4 || b.x + b.width > 104 || b.y < -14 || b.y + b.height > 103) hit.push('edge');
+                return hit.join(', ');
+            }"""
+        )
+        on_court = any(p == role for p, _, _ in lineup(ri, rules)["rec"])
+        if clash and (clash != "no label" or on_court):
+            fail(f"from label {rules} {role} R{ri + 1}: covers {clash}")
+        checked += on_court
+        page.click("#gOff")
+        press_next(page)
+        press_next(page)
+    page.close()
     print(f"from label clear of markers, ball and edge on {checked} Attack courts", flush=True)
 
 
@@ -1518,30 +1512,33 @@ def limit_lines(page: Page, court: str) -> int:
     return int(page.locator(f"#{court} g.bnd").count())
 
 
-def check_receive_limits(browser: Browser) -> None:
+def check_receive_limits(browser: Browser, rules: RulesMode, role: str) -> None:
     """Receive feedback draws your overlap limits as Learn does, only after the answer and the neighbour check."""
     checked = 0
-    for rules in RULES_MODES:
-        for role in MODE_ROLES[rules]:
-            page = new_page(browser, rules)
-            setup_match(page, role, ("rec",))
-            page.click("#gStart")
-            for ri in range(6):
-                tag = f"limits match {rules} {role} R{ri + 1}"
-                page.wait_for_selector("#gOff:enabled")
-                tap_spot(page, role, ri, "rec", check=False)
-                if limit_lines(page, "courtG"):
-                    fail(f"{tag}: limit lines before the answer")
-                press_next(page)
-                want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
-                if limit_lines(page, "courtG") != want:
-                    fail(f"{tag}: {limit_lines(page, 'courtG')} limit lines, Learn draws {want}")
-                on_court = any(p == role for p, _, _ in lineup(ri, rules)["rec"])
-                if on_court != ("Overlap: stay" in page.inner_text("#gFb")):
-                    fail(f"{tag}: feedback reads {page.inner_text('#gFb')!r}")
-                checked += 1
-                press_next(page)
-            page.close()
+    page = new_page(browser, rules)
+    setup_match(page, role, ("rec",))
+    page.click("#gStart")
+    for ri in range(6):
+        tag = f"limits match {rules} {role} R{ri + 1}"
+        page.wait_for_selector("#gOff:enabled")
+        tap_spot(page, role, ri, "rec", check=False)
+        if limit_lines(page, "courtG"):
+            fail(f"{tag}: limit lines before the answer")
+        press_next(page)
+        want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
+        if limit_lines(page, "courtG") != want:
+            fail(f"{tag}: {limit_lines(page, 'courtG')} limit lines, Learn draws {want}")
+        on_court = any(p == role for p, _, _ in lineup(ri, rules)["rec"])
+        if on_court != ("Overlap: stay" in page.inner_text("#gFb")):
+            fail(f"{tag}: feedback reads {page.inner_text('#gFb')!r}")
+        checked += 1
+        press_next(page)
+    page.close()
+    print(f"Receive limits {rules} {role}: after the answer as in Learn on {checked} Match courts", flush=True)
+
+
+def check_receive_limits_elsewhere(browser: Browser) -> None:
+    """Receive limits wait for the neighbour check in Match, and show after the answer in Drill."""
     page = new_page(browser)
     setup_match(page, "OH1", ("rec",), neighbour=True)
     page.click("#gStart")
@@ -1604,46 +1601,40 @@ def check_receive_limits(browser: Browser) -> None:
     if limit_lines(page, "courtD") != want or "Overlap: stay" not in page.inner_text("#fb"):
         fail(f"limits drill: {limit_lines(page, 'courtD')} limit lines after the neighbour check, Learn draws {want}")
     page.close()
-    print(
-        f"Receive limits: after the answer as in Learn on {checked} Match courts, Drill and after the neighbour check"
-    )
+    print("Receive limits: in Drill and after the neighbour check", flush=True)
 
 
-def check_middle_route(browser: Browser) -> None:
+def check_middle_route(browser: Browser, rules: RulesMode, role: str) -> None:
     """Match Attack feedback: the front middle's route never reaches the 3 m line, and its dashed approach shows."""
     checked = 0
-    for rules in RULES_MODES:
-        for role in MIDDLE_ROLES[rules]:
-            page = new_page(browser, rules)
-            setup_match(page, role, ("ar",), sets=False)
-            page.click("#gStart")
-            for ri in range(6):
-                page.wait_for_selector("#gOff:enabled")
-                if role not in lineup(ri, rules)["front"]:
-                    page.click("#gOff")
-                    press_next(page)
-                    press_next(page)
-                    continue
-                tap_at(page, *pass_lands(page, ri)[role])
-                press_next(page)
-                ys: list[float] = page.eval_on_selector_all(
-                    f'#courtG g.rt[data-p="{role}"] line',
-                    "els => els.flatMap(l => [Number(l.getAttribute('y1')), Number(l.getAttribute('y2'))])",
-                )
-                if not ys or max(ys) >= (ATTACK_LINE - 0.05) * 100:
-                    fail(
-                        f"attack route {rules} {role} R{ri + 1}: the middle's route reaches y {max(ys, default=0):.1f}"
-                    )
-                dashes: list[float] = page.eval_on_selector_all(
-                    f'#courtG g.rt[data-p="{role}"] line.route[stroke-dasharray]',
-                    "els => els.map(l => Math.hypot(l.x2.baseVal.value - l.x1.baseVal.value,"
-                    " l.y2.baseVal.value - l.y1.baseVal.value))",
-                )
-                if len(dashes) != 1 or dashes[0] < 5:
-                    fail(f"attack route {rules} {role} R{ri + 1}: the dashed approach is {dashes} units long")
-                checked += 1
-                press_next(page)
-            page.close()
+    page = new_page(browser, rules)
+    setup_match(page, role, ("ar",), sets=False)
+    page.click("#gStart")
+    for ri in range(6):
+        page.wait_for_selector("#gOff:enabled")
+        if role not in lineup(ri, rules)["front"]:
+            page.click("#gOff")
+            press_next(page)
+            press_next(page)
+            continue
+        tap_at(page, *pass_lands(page, ri)[role])
+        press_next(page)
+        ys: list[float] = page.eval_on_selector_all(
+            f'#courtG g.rt[data-p="{role}"] line',
+            "els => els.flatMap(l => [Number(l.getAttribute('y1')), Number(l.getAttribute('y2'))])",
+        )
+        if not ys or max(ys) >= (ATTACK_LINE - 0.05) * 100:
+            fail(f"attack route {rules} {role} R{ri + 1}: the middle's route reaches y {max(ys, default=0):.1f}")
+        dashes: list[float] = page.eval_on_selector_all(
+            f'#courtG g.rt[data-p="{role}"] line.route[stroke-dasharray]',
+            "els => els.map(l => Math.hypot(l.x2.baseVal.value - l.x1.baseVal.value,"
+            " l.y2.baseVal.value - l.y1.baseVal.value))",
+        )
+        if len(dashes) != 1 or dashes[0] < 5:
+            fail(f"attack route {rules} {role} R{ri + 1}: the dashed approach is {dashes} units long")
+        checked += 1
+        press_next(page)
+    page.close()
     print(
         f"Attack: the front middle's route stays in front of the 3 m line, its approach at least 5 units,"
         f" on {checked} courts",
@@ -1654,45 +1645,44 @@ def check_middle_route(browser: Browser) -> None:
 MIDDLE_ROLES = {"simple": ("MB",), "official": ("MB1", "MB2")}
 
 
-def check_attack_drill(browser: Browser) -> None:
+def check_attack_drill(browser: Browser, rules: RulesMode) -> None:
     """Drill Attack: the reception picture in every rotation, both rule sets and every Show on court value.
 
     Two taps on Reset draw each next question, so the weights stay even and every rotation comes up.
     """
-    for rules in RULES_MODES:
-        rows = [lineup(ri, rules) for ri in range(6)]
-        page = new_page(browser, rules)
-        pick_role(page, "OH1")
-        page.click("#tabDrill")
-        if page.get_attribute("#dOpts", "open") is None:
-            page.click("#dOpts > summary")
-        page.set_checked("#nbDrill", False)
-        for vis in ("none", "ref", "all"):
-            page.click(f'.vis[data-vis="drill"] [data-v="{vis}"]')
-            seen: set[int] = set()
-            for _ in range(400):
-                if len(seen) == 6:
-                    break
-                question = page.inner_text("#dq")
-                if not question.endswith("· Attack"):
-                    page.dblclick("#dReset")
-                    continue
-                ri = drill_ri(question)
-                tag = f"drill {rules} {vis} R{ri + 1}"
-                seen.add(ri)
-                check_from_picture(court_picture(page, "courtD"), rows[ri], ri, "OH1", tag)
-                if page.inner_text("#dsub") != attack_question(ri, "OH1", rows[ri]):
-                    fail(f"{tag}: question reads {page.inner_text('#dsub')!r}")
-                lands = pass_lands(page, ri)
-                spot = lands["OH1"]
-                tap_at(page, *spot, court="courtD")
-                check_tap_line(court_picture(page, "courtD"), rows[ri], "OH1", spot, tag)
-                picture = court_picture(page, "courtD")
-                check_ball_at_setter(picture, rows[ri], lands, f"{tag} feedback", page, ri, "OH1")
+    rows = [lineup(ri, rules) for ri in range(6)]
+    page = new_page(browser, rules)
+    pick_role(page, "OH1")
+    page.click("#tabDrill")
+    if page.get_attribute("#dOpts", "open") is None:
+        page.click("#dOpts > summary")
+    page.set_checked("#nbDrill", False)
+    for vis in ("none", "ref", "all"):
+        page.click(f'.vis[data-vis="drill"] [data-v="{vis}"]')
+        seen: set[int] = set()
+        for _ in range(400):
+            if len(seen) == 6:
+                break
+            question = page.inner_text("#dq")
+            if not question.endswith("· Attack"):
                 page.dblclick("#dReset")
-            if len(seen) < 6:
-                fail(f"drill {rules} {vis}: Attack came up only in {sorted(seen)}")
-        page.close()
+                continue
+            ri = drill_ri(question)
+            tag = f"drill {rules} {vis} R{ri + 1}"
+            seen.add(ri)
+            check_from_picture(court_picture(page, "courtD"), rows[ri], ri, "OH1", tag)
+            if page.inner_text("#dsub") != attack_question(ri, "OH1", rows[ri]):
+                fail(f"{tag}: question reads {page.inner_text('#dsub')!r}")
+            lands = pass_lands(page, ri)
+            spot = lands["OH1"]
+            tap_at(page, *spot, court="courtD")
+            check_tap_line(court_picture(page, "courtD"), rows[ri], "OH1", spot, tag)
+            picture = court_picture(page, "courtD")
+            check_ball_at_setter(picture, rows[ri], lands, f"{tag} feedback", page, ri, "OH1")
+            page.dblclick("#dReset")
+        if len(seen) < 6:
+            fail(f"drill {rules} {vis}: Attack came up only in {sorted(seen)}")
+    page.close()
     print("drill Attack: reception picture, ball, tap line", flush=True)
 
 
@@ -2069,46 +2059,138 @@ def check_reveal_motion(browser: Browser) -> None:
     print("same-device reveal: glide and Watch the move", flush=True)
 
 
+# Rough seconds per unit, from a sharded run; they only balance the shards.
+COST = {
+    "attack_drill": 8,
+    "breakdown": 14,
+    "cover_set_call": 12,
+    "hint_rule_numbers": 11,
+    "match_h_names": 24,
+    "set_call_neutral": 13,
+    "set_calls": 61,
+    "vis_scoring": 19,
+    "watch_move": 16,
+}
+DEFAULT_COST = 6
+
+
+def units() -> list[tuple[str, Callable[[Browser], None]]]:
+    """Every check in run order, the heavy ones split by rule set and role or Show on court, for the shards."""
+    whole: list[Callable[..., None]] = [
+        check_vis_scoring,
+        check_vis_fixed,
+        check_best_key,
+        check_our_serve,
+        check_off_court_pill,
+        check_match_order,
+        check_match_rotate,
+    ]
+    found: list[tuple[str, Callable[[Browser], None]]] = []
+
+    def add(check: Callable[..., None], *args: str) -> None:
+        def unit(browser: Browser) -> None:
+            check(browser, *args)
+
+        found.append((" ".join((check.__name__.removeprefix("check_"), *args)), unit))
+
+    for check in whole:
+        add(check)
+    for rules in RULES_MODES:
+        for role in ("OH1", "L", "S", "MB" if rules == "simple" else "MB2"):
+            add(check_match_h_names, rules, role)
+    for check in (
+        check_learn_keeps_r_names,
+        check_libero_hint,
+        check_hint_rule_numbers,
+        check_hints_without_guides,
+        check_set_calls,
+        check_sets_tab,
+        check_set_quiz_neutral,
+        check_set_call_neutral,
+        check_set_labels,
+        check_tap_then_continue,
+        check_breakdown,
+        check_end_screen,
+        check_court_not_covered,
+        check_double_check,
+    ):
+        add(check)
+    for rules in RULES_MODES:
+        for vis in ("none", "ref", "all"):
+            add(check_attack_match, rules, vis)
+    for check, roles in (
+        (check_attack_grading, MODE_ROLES),
+        (check_attack_texts, {rules: ("L", "OH1", "OH2", "OP") for rules in RULES_MODES}),
+        (check_cover_moment, MODE_ROLES),
+    ):
+        for rules in RULES_MODES:
+            for role in roles[rules]:
+                add(check, rules, role)
+    add(check_cover_set_call)
+    for check, roles in (
+        (check_hitter_approach, MODE_ROLES),
+        (check_middle_route, MIDDLE_ROLES),
+        (check_from_label, MODE_ROLES),
+    ):
+        for rules in RULES_MODES:
+            for role in roles[rules]:
+                add(check, rules, role)
+    for rules in RULES_MODES:
+        add(check_attack_drill, rules)
+    for rules in RULES_MODES:
+        for role in MODE_ROLES[rules]:
+            add(check_receive_limits, rules, role)
+    for check in (
+        check_receive_limits_elsewhere,
+        check_answer_glide,
+        check_zones_courts,
+        check_watch_move,
+        check_reveal_motion,
+    ):
+        add(check)
+    return found
+
+
+def shard_of(names: list[str], count: int) -> list[int]:
+    """The shard of each unit: the costliest first, each to the shard with the least work so far."""
+    load = [0.0] * count
+    shard = [0] * len(names)
+    by_cost = sorted(range(len(names)), key=lambda i: -COST.get(names[i].split()[0], DEFAULT_COST))
+    for i in by_cost:
+        shard[i] = load.index(min(load))
+        load[shard[i]] += COST.get(names[i].split()[0], DEFAULT_COST)
+    return shard
+
+
+def parse_shard(text: str) -> tuple[int, int]:
+    """Reads "K/N" (1 <= K <= N) as a zero-based shard index and the shard count."""
+    m = re.fullmatch(r"([1-9][0-9]*)/([1-9][0-9]*)", text)
+    if not m or int(m.group(1)) > int(m.group(2)):
+        raise argparse.ArgumentTypeError(f"expected K/N with 1 <= K <= N, got {text!r}")
+    return int(m.group(1)) - 1, int(m.group(2))
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Solo match scoring and the Attack step picture.")
+    parser.add_argument("--shard", type=parse_shard, default=(0, 1), help="run only shard K of N, e.g. 1/4")
+    parser.add_argument("--list", action="store_true", help="print the units of the shard and stop")
+    args = parser.parse_args()
+    index, count = args.shard
+    every = units()
+    shard = shard_of([name for name, _ in every], count)
+    mine = [(name, check) for (name, check), k in zip(every, shard, strict=True) if k == index]
+    if args.list:
+        print("\n".join(name for name, _ in mine))
+        return
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
-        check_vis_scoring(browser)
-        check_vis_fixed(browser)
-        check_best_key(browser)
-        check_our_serve(browser)
-        check_off_court_pill(browser)
-        check_match_order(browser)
-        check_match_rotate(browser)
-        check_match_h_names(browser)
-        check_libero_hint(browser)
-        check_hint_rule_numbers(browser)
-        check_hints_without_guides(browser)
-        check_set_calls(browser)
-        check_sets_tab(browser)
-        check_set_quiz_neutral(browser)
-        check_set_call_neutral(browser)
-        check_set_labels(browser)
-        check_tap_then_continue(browser)
-        check_breakdown(browser)
-        check_end_screen(browser)
-        check_court_not_covered(browser)
-        check_double_check(browser)
-        check_attack_match(browser)
-        check_attack_grading(browser)
-        check_attack_texts(browser)
-        check_cover_moment(browser)
-        check_cover_set_call(browser)
-        check_hitter_approach(browser)
-        check_middle_route(browser)
-        check_from_label(browser)
-        check_attack_drill(browser)
-        check_receive_limits(browser)
-        check_answer_glide(browser)
-        check_zones_courts(browser)
-        check_watch_move(browser)
-        check_reveal_motion(browser)
+        for name, check in mine:
+            start = time.monotonic()
+            check(browser)
+            print(f"unit {name}: {time.monotonic() - start:.0f} s", flush=True)
         browser.close()
-    print("MATCH TEST:", "ok" if not FAIL else f"{len(FAIL)} failures", flush=True)
+    label = f"MATCH TEST (shard {index + 1}/{count}):" if count > 1 else "MATCH TEST:"
+    print(label, "ok" if not FAIL else f"{len(FAIL)} failures", flush=True)
     sys.exit(1 if FAIL else 0)
 
 
