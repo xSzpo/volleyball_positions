@@ -77,7 +77,7 @@ python src/tests/match_test.py        # solo scoring and set call check (~16 min
 python src/tests/qa.py m && python src/tests/qa.py d   # slow (~2 min each); expect "TOTAL FAILURES: 0"; --all-combos plays all 15 match step combos
 ```
 
-Before review, run `src/tests/fast.sh` plus the one Playwright test that covers the change. Run `src/tests/full.sh` (~7 min) once per ticket, after review fixes; it exits non-zero on any failure. A qa failure prints its seed; replay it with `--seed N`. Agents run any command longer than about 5 minutes (full.sh, a full qa sweep) in the background (`run_in_background`) and poll for it, rather than blocking, to stay clear of the 600 s watchdog.
+Before review, run `src/tests/fast.sh` plus the one Playwright test that covers the change. Run `src/tests/full.sh` (~6 min) once per ticket, after review fixes; it exits non-zero on any failure. A qa failure prints its seed; replay it with `--seed N`. Agents run any command longer than about 5 minutes (full.sh, a full qa sweep) in the background (`run_in_background`) and poll for it, rather than blocking, to stay clear of the 600 s watchdog.
 
 Deploy = open a PR to `main`; merging needs the `checks` job to pass (ruleset on `main`, no direct pushes). Merging deploys; Pages updates in 1-2 minutes. Phones cache aggressively; tell the user to reload or reopen the tab.
 
