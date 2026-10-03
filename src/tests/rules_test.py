@@ -154,6 +154,9 @@ def check_switch(page: Page) -> None:
     if checked_rules(page) != "simple":
         fail(f"stored drill reads as {checked_rules(page)}, expected simple")
     open_setup(page)
+    order = page.eval_on_selector_all(".rulesmode [data-rm]", "els => els.map(e => e.dataset.rm)")
+    if order != ["official", "simple"]:
+        fail(f"the Rules switch reads {order}, expected Official then Simplified")
     if "training convention" not in page.inner_text("#rmSub"):
         fail(f"Simplified switch text does not say it is a training convention: {page.inner_text('#rmSub')!r}")
     if page.get_attribute("#roleChip", "data-role") != "MB":

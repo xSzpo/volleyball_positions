@@ -173,6 +173,12 @@ def check_header(pg: Page, tag: str) -> None:
     )
     if covered or pg.evaluate("document.querySelector('.wrap').inert"):
         fail(f"{tag} the open list has a backdrop or blocks the page")
+    order = pg.eval_on_selector_all(
+        ".rulesmode [data-rm]",
+        "els => els.map(e => [e.dataset.rm, e.tabIndex, Math.round(e.getBoundingClientRect().left)])",
+    )
+    if [o[0] for o in order] != ["official", "simple"] or order[0][2] >= order[1][2] or order[0][1] != order[1][1]:
+        fail(f"{tag} the Rules switch is not Official then Simplified in view and tab order: {order}")
     pg.click('.rulesmode [data-rm="official"]')
     if pg.is_visible("#setupPanel") or pg.evaluate("document.activeElement.id") != "roleChip":
         fail(f"{tag} a rules pick did not close the list and focus the button")
@@ -200,6 +206,9 @@ def check_header(pg: Page, tag: str) -> None:
         fail(f"{tag} Escape did not close the list and focus the button")
     pg.click("#roleChip")
     pg.focus('.rulesmode [data-rm="official"]')
+    pg.keyboard.press("Tab")
+    if pg.evaluate("document.activeElement.dataset.rm") != "simple":
+        fail(f"{tag} Tab from Official did not move to Simplified")
     pg.keyboard.press("Tab")
     if pg.is_visible("#setupPanel") or pg.evaluate("document.activeElement.id") != "themeBtn":
         fail(f"{tag} Tab past the list did not close it and move on")
