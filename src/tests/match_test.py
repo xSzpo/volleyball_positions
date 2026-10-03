@@ -2066,6 +2066,98 @@ def check_reveal_motion(browser: Browser) -> None:
     print("same-device reveal: glide and Watch the move", flush=True)
 
 
+def mistake_after(page: Page, x: float | None, y: float | None = None) -> str:
+    """Taps (x, y), or I'm off court when x is None, presses Continue and returns the Common mistake line."""
+    page.wait_for_selector("#gOff:enabled")
+    if x is None:
+        page.click("#gOff")
+    else:
+        tap_at(page, x, float(y or 0))
+    press_next(page)
+    page.wait_for_selector("#gFb .pts")
+    lines = page.locator("#gFb .mistake")
+    return lines.inner_text() if lines.count() else ""
+
+
+def check_common_mistakes(browser: Browser) -> None:
+    """Solo Match names a common mistake after a wrong or close answer, picked from the tap, and none when exact."""
+    cases: list[tuple[str, tuple[str, ...], str, list[tuple[float | None, float | None, str]]]] = [
+        (
+            "OH1",
+            ("rec",),
+            "?ff=all&anim=0",
+            [
+                (0.3, 0.73, "Overlap fault: at the whistle you must stand right of MB."),
+                (0.84, 0.72, ""),
+                (None, None, "You are on court here"),
+            ],
+        ),
+        ("OH1", ("serve",), "?ff=all&anim=0", [(0.15, 0.8, "Wrong row: you are front row here")]),
+        ("S", ("rec",), "?ff=all&anim=0", [(0.75, 0.8, "In a passing lane"), (0.58, 0.31, "")]),
+        (
+            "OH1",
+            ("start",),
+            "?ff=all,-match-rotate-name&anim=0",
+            [(0.5, 0.71, "You counted along the arrows")],
+        ),
+    ]
+    for role, steps, query, taps in cases:
+        page = new_page(browser, query=query)
+        setup_match(page, role, steps)
+        page.click("#gStart")
+        for k, (x, y, want) in enumerate(taps):
+            if k:
+                press_next(page)
+            got = mistake_after(page, x, y)
+            ctx = f"{role} {steps[0]} R{k + 1} tap {x},{y}"
+            if not want and got:
+                fail(f"{ctx}: an exact answer shows {got!r}")
+            if want and not got.startswith("Common mistake:"):
+                fail(f"{ctx}: no Common mistake line, expected {want!r}")
+            if want and want not in got:
+                fail(f"{ctx}: line {got!r}, expected {want!r}")
+            if len(got) > len("Common mistake: ") + 90:
+                fail(f"{ctx}: line longer than 90 characters: {got!r}")
+        page.close()
+    page = new_page(browser)
+    setup_match(page, "OH1", ("start",))
+    page.click("#gStart")
+    page.wait_for_selector("#gAsk")
+    order, spots = rotate_lineup(page, 0, "OH1")
+    taken = {"S": spots["S"], "OH1": (0.5, 0.71)}
+    free = [z for z in ZONE_SPOTS if all(abs(z[0] - t[0]) + abs(z[1] - t[1]) > 0.1 for t in taken.values())]
+    for mate in order:
+        tap_at(page, *(taken[mate] if mate in taken else free.pop(0)))
+    press_next(page)
+    got = page.locator("#gFb .mistake").inner_text() if page.locator("#gFb .mistake").count() else ""
+    if "You counted along the arrows" not in got:
+        fail(f"Match Rotate counted along the arrows: line {got!r}")
+    page.close()
+    page = new_page(browser, query="?ff=all,-common-mistakes&anim=0")
+    setup_match(page, "OH1", ("rec",))
+    page.click("#gStart")
+    if mistake_after(page, 0.3, 0.73):
+        fail("a Common mistake line with common-mistakes off")
+    page.close()
+    page = drill_page(browser, ["rec"], query="?ff=all&anim=0")
+    for _ in range(3):
+        if page.locator("#courtD .ptag").count():
+            fail("a pass tag on the Drill court before the answer")
+        tap_far(page)
+        page.wait_for_selector("#fb b", state="attached")
+        if page.locator("#courtD .ptag").count():
+            fail("a pass tag on the Drill court after the answer")
+        if not page.locator("#fb .mistake").count():
+            fail(f"a wrong Drill answer has no Common mistake line: {page.inner_text('#fb')!r}")
+        page.click("#nextBtn")
+    page.close()
+    print(
+        "common mistakes: overlap, row, off court, lane and along the arrows lines; none when exact or off; "
+        "no pass tag in Drill",
+        flush=True,
+    )
+
+
 def main() -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -2104,6 +2196,7 @@ def main() -> None:
         check_zones_courts(browser)
         check_watch_move(browser)
         check_reveal_motion(browser)
+        check_common_mistakes(browser)
         browser.close()
     print("MATCH TEST:", "ok" if not FAIL else f"{len(FAIL)} failures", flush=True)
     sys.exit(1 if FAIL else 0)

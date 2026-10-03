@@ -194,6 +194,27 @@ def check_answer_glide(page: Page) -> None:
         fail("answer-glide on: a Watch the move box missing")
 
 
+def check_passers_and_mistakes(page: Page) -> None:
+    """passer-tag and common-mistakes off leave no pass tag, passers line or Common mistake line."""
+    page.goto(URL)
+    page.evaluate("localStorage.setItem('ksv51:drillSteps', JSON.stringify(['rec']))")
+    for query, want in (("?ff=reset,-passer-tag,-common-mistakes&anim=0", False), ("?ff=reset&anim=0", True)):
+        open_app(page, query)
+        page.click('.rot[data-i="0"]')
+        page.click('.ph[data-k="rec"]')
+        if (page.locator("#courtL .ptag").count() == 3) != want or (page.locator("#cue .passers").count() == 1) != want:
+            fail(f"{query}: pass tags or the passers line {'missing' if want else 'still shown'}")
+        page.click("#tabDrill")
+        page.click("#offBtn")
+        page.wait_for_selector("#fb b", state="attached")
+        if (page.locator("#fb .mistake").count() == 1) != want:
+            fail(f"{query}: Common mistake line {'missing' if want else 'still shown'} after a wrong Drill answer")
+    open_app(page, "?ff=reset,-learn-tab")
+    if values(page)["passer-tag"] or not values(page)["common-mistakes"]:
+        fail("learn-tab off: passer-tag still on or common-mistakes switched off")
+    page.evaluate("localStorage.removeItem('ksv51:drillSteps'); localStorage.removeItem('ksv51:ffOverride')")
+
+
 def check_override_storage(page: Page) -> None:
     open_app(page, "?ff=reset,-sets-quiz")
     open_app(page)
@@ -420,6 +441,7 @@ def main() -> None:
             check_off_leaves_no_trace,
             check_zones_off,
             check_answer_glide,
+            check_passers_and_mistakes,
             check_override_storage,
             check_tabs,
             check_players_mode_restored,

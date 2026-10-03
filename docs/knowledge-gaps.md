@@ -1058,3 +1058,19 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** OH1 is always one zone on from the setter (6 wraps to 1), so the caption says "Outside hitter 1 serves next after the setter, one zone on: zone <n+1>." It names the serving order, as `relation()` does, rather than "next to", which on court can mean either side.
 - **Alternatives:** "OH1 is next to the setter"; count the zones as in `relation()` ("count 1 zone on").
 - **Reversible by:** `buildRotation()` in `src/template.html`.
+
+### 139. The pass tag reuses the title tag colours and hides at the pass
+
+- **Issue:** #152
+- **Problem:** The "pass" tag needed colours with enough contrast on the court in both themes, and a rule for when it shows during the Reception play.
+- **Decision:** The tag uses `--tag` (fill) and `--tag-ink` (text and outline), the colours of the Learn title tag, so no new tokens; `theme_test.py` checks the text at 4.5 and the fill or outline against every court band at 3. It sits beside each receiver on the side clear of the zone numbers, the markers, your overlap lines and the other tags (`passTagSpots()`), moves with its marker in the play and hides once the pass is in the air (stage 2). Watch the move in Drill and Match shows no tag, as no tag shows there before the answer.
+- **Alternatives:** new `--pass-*` tokens; keep the tag through the whole play; a fixed offset below each marker.
+- **Reversible by:** `passTag()`, `passTagSpots()` and `paintPlay()` in `src/template.html`.
+
+### 140. Which common mistake a tap gets
+
+- **Issue:** #152
+- **Problem:** The issue lists the mistakes to name but not how to tell them apart, or which one wins when a tap makes more than one.
+- **Decision:** `mistakeText()` checks in this order and names the first that fits: off court versus on (and the libero off at its serve); at Rotate a count along the rotation arrows (the tap is in the zone mirrored round the setter); an overlap fault against the real positions (Rotate and Receive); a passing lane at Receive (anyone but OH1, OH2 and L tapping between y 0.55 and 0.88 within 0.2 of a receiver); the wrong row at Rotate and Our serve (by the 3 m line); a back-row attacker in front of the 3 m line at Attack; the wrong side (the other half and more than 0.3 across); too deep or too close to the net (more than 0.08 and mostly in depth; the front middle at Attack "near the net, ready for the quick"); else one line for the step. Match Rotate and Drill Rotate name the arrows for any wrong marker counted along them, else your own marker's mistake. Same-device and online show none, as they show no verdict per turn.
+- **Alternatives:** name every mistake that fits; a line only for the listed cases and none otherwise.
+- **Reversible by:** `MISTAKES` and `mistakeText()` in `src/template.html`.
