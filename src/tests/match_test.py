@@ -222,14 +222,14 @@ def check_vis_fixed(browser: Browser) -> None:
     if shown != "Shown: Setter (70% points)":
         fail(f"end screen reads {shown!r}")
     best = page.evaluate("JSON.parse(localStorage.getItem('ksv51:gameBest'))")
-    if list(best) != ["v8|OH1|rec|ref"]:
+    if list(best) != ["v9|OH1|rec|ref"]:
         fail(f"best score saved under {list(best)}, expected the starting settings only")
     page.close()
 
 
 def check_best_key(browser: Browser) -> None:
     """Bests from another scoring are ignored, and the neighbour check has its own best."""
-    bests = '{"v5|OH1|rec": 9999, "v6|OH1|rec": 9999, "v7|OH1|rec": 500, "v8|OH1|rec": 700}'
+    bests = '{"v5|OH1|rec": 9999, "v6|OH1|rec": 9999, "v7|OH1|rec": 500, "v8|OH1|rec": 9999, "v9|OH1|rec": 700}'
     seed = f"localStorage.setItem('ksv51:gameBest', JSON.stringify({bests}))"
     page = new_page(browser, query="?ff=all,-match-rotate-name&anim=0")
     page.evaluate(seed)
@@ -247,7 +247,7 @@ def check_best_key(browser: Browser) -> None:
     setup_match(page, "OH1", ("rec",))
     text = page.inner_text("#gBest")
     if "700" not in text:
-        fail(f"best line reads {text!r}, expected the v8 best of 700")
+        fail(f"best line reads {text!r}, expected the v9 best of 700")
     page.check("#nbGame")
     text = page.inner_text("#gBest")
     if text:
@@ -344,7 +344,10 @@ def check_off_court_pill(browser: Browser) -> None:
 
 def check_libero_hint(browser: Browser) -> None:
     """The libero's hint at the R3 serve, off court, names the rule set in play."""
-    for rules, want, unwanted in (("simple", "SUB", "official rules"), ("official", "official rules", "SUB")):
+    for rules, want, unwanted in (
+        ("simple", "MB serves", "official rules"),
+        ("official", "official rules", "MB serves"),
+    ):
         page = new_page(browser, rules=rules)
         setup_match(page, "L", ("serve",))
         page.click("#gStart")
@@ -359,7 +362,7 @@ def check_libero_hint(browser: Browser) -> None:
         if want not in hint or unwanted in hint:
             fail(f"{rules} L hint at the R3 serve reads {hint!r}, expected {want!r}")
         page.close()
-    print("libero hint: Simplified names SUB, Official the libero rule", flush=True)
+    print("libero hint: Simplified names MB as the server, Official the libero rule", flush=True)
 
 
 def check_hint_rule_numbers(browser: Browser) -> None:
@@ -426,15 +429,19 @@ def fill_rotate(page: Page) -> None:
 
 
 def rotate_lineup(page: Page, ri: int, role: str) -> tuple[list[str], dict[str, tuple[float, float]]]:
-    """The markers Rotate asks for in order (setter, you, your overlap partners) and each right spot."""
+    """The markers Rotate asks for in order (setter, you, your overlap partners) and each right spot.
+
+    In R3 and R6 the middle who serves from zone 1 is nobody's overlap partner.
+    """
     spots = {
         str(o["p"]): (float(o["x"]), float(o["y"])) for o in page.evaluate(f"window.ksvLearn.players({ri}, 'start')")
     }
     order = [] if role == "S" else ["S"]
     order.append(role)
-    if role not in spots:
+    serving = page.evaluate(f"window.ksvLearn.server({ri})") if ri in (2, 5) else None
+    if role not in spots or role == serving:
         return order, spots
-    grid = {(round(x * 3 - 0.5), y > 0.42): p for p, (x, y) in spots.items()}
+    grid = {(round(x * 3 - 0.5), y > 0.42): p for p, (x, y) in spots.items() if p != serving}
     col, back = round(spots[role][0] * 3 - 0.5), spots[role][1] > 0.42
     for key in [(col, not back), (col - 1, back), (col + 1, back)]:
         mate = grid.get(key)
@@ -459,7 +466,8 @@ def answer_match_rotate(page: Page, ctx: str, ri: int, role: str, wrong: bool = 
     if page.locator("#courtG g.mk").count():
         fail(f"{ctx}: teammates shown before the answer with Show on court Everyone")
     for k, mate in enumerate(order):
-        who = "you stand" if mate == role else "the setter (S) stands" if mate == "S" else f"{mate} stands"
+        named = "the other middle" if mate == "OM" else mate
+        who = "you stand" if mate == role else "the setter (S) stands" if mate == "S" else f"{named} stands"
         if page.inner_text("#gAsk") != f"Tap where {who}.":
             fail(f"{ctx}: prompt {page.inner_text('#gAsk')!r}, expected 'Tap where {who}.'")
         if page.locator("#gNext").is_enabled():
@@ -476,7 +484,7 @@ def answer_match_rotate(page: Page, ctx: str, ri: int, role: str, wrong: bool = 
         fail(f"{ctx}: Continue not ready after placing {order}: {page.inner_text('#gAsk')!r}")
     press_next(page)
     grades = page.inner_text("#gFb .rotgrades")
-    right = " · ".join(f"{'You' if m == role else m}: right" for m in order)
+    right = " · ".join(f"{'You' if m == role else 'The other middle' if m == 'OM' else m}: right" for m in order)
     if not wrong and grades != right:
         fail(f"{ctx}: grades {grades!r}, expected {right!r}")
     if wrong and not grades.startswith(f"{order[0]}: wrong"):
@@ -2059,10 +2067,121 @@ def check_reveal_motion(browser: Browser) -> None:
     print("same-device reveal: glide and Watch the move", flush=True)
 
 
+def mistake_after(page: Page, x: float | None, y: float | None = None) -> str:
+    """Taps (x, y), or I'm off court when x is None, presses Continue and returns the Common mistake line."""
+    page.wait_for_selector("#gOff:enabled")
+    if x is None:
+        page.click("#gOff")
+    else:
+        tap_at(page, x, float(y or 0))
+    press_next(page)
+    page.wait_for_selector("#gFb .pts")
+    lines = page.locator("#gFb .mistake")
+    return lines.inner_text() if lines.count() else ""
+
+
+def check_common_mistakes(browser: Browser) -> None:
+    """Solo Match names a common mistake after a wrong or close answer, picked from the tap, and none when exact."""
+    # A want of None skips the check, and "!text" means the line must not say it.
+    cases: list[tuple[str, str, tuple[str, ...], str, list[tuple[float | None, float | None, str | None]]]] = [
+        (
+            "OH1",
+            "simple",
+            ("rec",),
+            "?ff=all&anim=0",
+            [
+                (0.3, 0.73, "Overlap fault: at the whistle you must stand right of MB."),
+                (0.84, 0.72, ""),
+                (None, None, "Only the libero goes off, while MB serves"),
+            ],
+        ),
+        ("OH1", "official", ("rec",), "?ff=all&anim=0", [(None, None, "the middle it replaces go off")]),
+        ("OH1", "simple", ("serve",), "?ff=all&anim=0", [(0.15, 0.8, "Wrong row: you are front row here")]),
+        ("S", "simple", ("rec",), "?ff=all&anim=0", [(0.75, 0.8, "!In a passing lane"), (0.58, 0.31, "")]),
+        ("MB", "simple", ("rec",), "?ff=all&anim=0", [(0.5, 0.65, "In a passing lane")]),
+        (
+            "OP",
+            "simple",
+            ("ar",),
+            "?ff=all&anim=0",
+            [(0.5, 0.5, None), (0.5, 0.5, None), (0.5, 0.5, None), (0.8, 0.3, "!A back-row attacker")],
+        ),
+        (
+            "OH1",
+            "simple",
+            ("start",),
+            "?ff=all,-match-rotate-name&anim=0",
+            [(0.5, 0.71, "You counted along the arrows")],
+        ),
+    ]
+    for role, rules, steps, query, taps in cases:
+        page = new_page(browser, rules=rules, query=query)
+        setup_match(page, role, steps, sets=False)
+        page.click("#gStart")
+        for k, (x, y, want) in enumerate(taps):
+            if k:
+                press_next(page)
+            got = mistake_after(page, x, y)
+            ctx = f"{role} {rules} {steps[0]} R{k + 1} tap {x},{y}"
+            if want is None:
+                continue
+            if want.startswith("!"):
+                if want[1:] in got:
+                    fail(f"{ctx}: line {got!r} should not say {want[1:]!r}")
+                continue
+            if not want and got:
+                fail(f"{ctx}: an exact answer shows {got!r}")
+            if want and not got.startswith("Common mistake:"):
+                fail(f"{ctx}: no Common mistake line, expected {want!r}")
+            if want and want not in got:
+                fail(f"{ctx}: line {got!r}, expected {want!r}")
+            if len(got) > len("Common mistake: ") + 90:
+                fail(f"{ctx}: line longer than 90 characters: {got!r}")
+        page.close()
+    page = new_page(browser)
+    setup_match(page, "OH1", ("start",))
+    page.click("#gStart")
+    page.wait_for_selector("#gAsk")
+    order, spots = rotate_lineup(page, 0, "OH1")
+    taken = {"S": spots["S"], "OH1": (0.5, 0.71)}
+    free = [z for z in ZONE_SPOTS if all(abs(z[0] - t[0]) + abs(z[1] - t[1]) > 0.1 for t in taken.values())]
+    for mate in order:
+        tap_at(page, *(taken[mate] if mate in taken else free.pop(0)))
+    press_next(page)
+    got = page.locator("#gFb .mistake").inner_text() if page.locator("#gFb .mistake").count() else ""
+    if "You counted along the arrows" not in got:
+        fail(f"Match Rotate counted along the arrows: line {got!r}")
+    page.close()
+    page = new_page(browser, query="?ff=all,-common-mistakes&anim=0")
+    setup_match(page, "OH1", ("rec",))
+    page.click("#gStart")
+    if mistake_after(page, 0.3, 0.73):
+        fail("a Common mistake line with common-mistakes off")
+    page.close()
+    page = drill_page(browser, ["rec"], query="?ff=all&anim=0")
+    for _ in range(3):
+        if page.locator("#courtD .ptag").count():
+            fail("a pass tag on the Drill court before the answer")
+        tap_far(page)
+        page.wait_for_selector("#fb b", state="attached")
+        if page.locator("#courtD .ptag").count():
+            fail("a pass tag on the Drill court after the answer")
+        if not page.locator("#fb .mistake").count():
+            fail(f"a wrong Drill answer has no Common mistake line: {page.inner_text('#fb')!r}")
+        page.click("#nextBtn")
+    page.close()
+    print(
+        "common mistakes: overlap, row, off court, lane and along the arrows lines; none when exact or off; "
+        "no pass tag in Drill",
+        flush=True,
+    )
+
+
 # Rough seconds per unit, from a sharded run; they only balance the shards.
 COST = {
     "attack_drill": 8,
     "breakdown": 14,
+    "common_mistakes": 40,
     "cover_set_call": 12,
     "hint_rule_numbers": 11,
     "match_h_names": 24,
@@ -2146,6 +2265,7 @@ def units() -> list[tuple[str, Callable[[Browser], None]]]:
         check_zones_courts,
         check_watch_move,
         check_reveal_motion,
+        check_common_mistakes,
     ):
         add(check)
     return found

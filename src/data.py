@@ -373,6 +373,8 @@ RulesMode = Literal["simple", "official"]
 RULES_MODES: tuple[RulesMode, ...] = ("simple", "official")
 ZONE_ORDER = [4, 3, 2, 5, 6, 1]
 MIDDLES = ("MB1", "MB2")
+# Simplified R3 and R6: the middle on court in zone 4 while MB serves from zone 1.
+OTHER_MIDDLE = "OM"
 
 
 def rotation_zones(row: Row) -> dict[int, str]:
@@ -381,7 +383,7 @@ def rotation_zones(row: Row) -> dict[int, str]:
 
 
 def middle_pair(ri: int) -> tuple[int, int]:
-    """Returns the zones of the front-row middle slot and the back-row middle slot.
+    """Returns the zones of the front-row middle slot and the back-row middle slot in reception.
 
     The back slot is where the libero stands for the back-row middle. In
     Simplified KSV, MB always takes the front slot and L the back slot.
@@ -393,37 +395,63 @@ def middle_pair(ri: int) -> tuple[int, int]:
 
 
 def server(ri: int, mode: RulesMode) -> str:
-    """Returns who serves from zone 1: the libero may not, so a middle (Official) or SUB (Simplified) does."""
+    """Returns who serves from zone 1: the libero may not, so the middle in zone 1 does (MB in Simplified)."""
     player = ROWS[ri]["back"][2]
     if player != "L":
         return player
-    return ROWS[ri]["liberofor"] if mode == "official" else "SUB"
+    return ROWS[ri]["liberofor"] if mode == "official" else "MB"
 
 
 def lineup(ri: int, mode: RulesMode) -> Row:
     """Returns rotation ri under a rule set, derived from the official data.
 
-    Simplified renames the front-row middle to MB and the back-row middle,
-    who is on court only at our serve in R3 and R6, to SUB.
+    Simplified renames the front-row middle to MB. In R3 and R6, where a
+    middle serves, MB takes the serving middle's place at our serve and the
+    front-row middle becomes the other middle (OTHER_MIDDLE); the rotation
+    and reception lineups keep MB in the front-row middle slot.
     """
     row = ROWS[ri]
     if mode == "official":
         return row
     front_zone, _ = middle_pair(ri)
-    rename = {rotation_zones(row)[front_zone]: "MB", row["liberofor"]: "SUB"}
+    front_middle = rotation_zones(row)[front_zone]
+    rename = {front_middle: "MB"}
+    at_serve = rename
+    if row["back"][2] == "L":
+        at_serve = {row["liberofor"]: "MB", front_middle: OTHER_MIDDLE}
 
-    def name(player: str) -> str:
-        return rename.get(player, player)
+    def name(player: str, names: dict[str, str] = rename) -> str:
+        return names.get(player, player)
+
+    def phase_names(phase: str) -> dict[str, str]:
+        return at_serve if phase == "serve" else rename
 
     return Row(
         name=row["name"],
         setter=row["setter"],
-        liberofor="SUB" if server(ri, mode) == "SUB" else "",
+        liberofor="",
         front=[name(p) for p in row["front"]],
         back=[name(p) for p in row["back"]],
         rec=[(name(p), x, y) for p, x, y in row["rec"]],
         ar=[(name(p), x, y, kind) for p, x, y, kind in row["ar"]],
-        serve=([name(p) for p in row["serve"][0]], [name(p) for p in row["serve"][1]]),
+        serve=([name(p, at_serve) for p in row["serve"][0]], [name(p, at_serve) for p in row["serve"][1]]),
         note=row["note"],
-        move={phase: {name(p): text for p, text in notes.items()} for phase, notes in row["move"].items()},
+        move={
+            phase: {name(p, phase_names(phase)): text for p, text in notes.items()}
+            for phase, notes in row["move"].items()
+        },
     )
+
+
+def rotation_lineup(ri: int, mode: RulesMode) -> list[str]:
+    """Returns who stands where at the Rotation step, zones 4 3 2 5 6 1.
+
+    When the libero would be in zone 1, the middle who serves is on and L is
+    off; in Simplified that is MB, and the other middle plays zone 4.
+    """
+    r = lineup(ri, mode)
+    if r["back"][2] != "L":
+        return r["front"] + r["back"]
+    serving = server(ri, mode)
+    front = [OTHER_MIDDLE if p == serving else p for p in r["front"]]
+    return front + [serving if p == "L" else p for p in r["back"]]

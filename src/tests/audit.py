@@ -1,6 +1,6 @@
 """Check the rotation data for consistency, under both rule sets.
 
-Covers rotation order, the Simplified middle-pair reset into R3 and R6,
+Covers rotation order, the Simplified middle pair (MB serving in R3 and R6),
 overlap legality of every reception shape, the serve lineups, the base
 defence spots, the Learn move captions and the walk-through tables in
 docs/v2.md section 5. Prints
@@ -17,6 +17,7 @@ from data import ATTACK_LINE as AL  # noqa: E402
 from data import (  # noqa: E402
     BASE_DEF,
     MIDDLES,
+    OTHER_MIDDLE,
     QUICK_START_Y,
     ROWS,
     RULES_MODES,
@@ -27,12 +28,13 @@ from data import (  # noqa: E402
     RulesMode,
     lineup,
     middle_pair,
+    rotation_lineup,
     rotation_zones,
     server,
 )
 
 ORDER = ZONE_ORDER
-BASE_ZONE = {"OH1": 4, "OH2": 4, "MB": 3, "MB1": 3, "MB2": 3, "S": 2, "OP": 2}
+BASE_ZONE = {"OH1": 4, "OH2": 4, "MB": 3, "MB1": 3, "MB2": 3, OTHER_MIDDLE: 3, "S": 2, "OP": 2}
 RESETS = (2, 5)
 issues: list[str] = []
 
@@ -49,12 +51,15 @@ def zones(r: Row, real: bool = True) -> dict[int, str]:
 
 
 def check_rotation_order(mode: RulesMode) -> None:
-    """Everyone moves one zone clockwise, except the Simplified middle pair when it resets."""
+    """Everyone still on court moves one zone clockwise from reception into the next Rotation step."""
     for i in range(6):
         a, b = lineup(i, mode), lineup((i + 1) % 6, mode)
-        za, zb = zones(a, real=mode == "official"), zones(b, real=mode == "official")
+        if mode == "official":
+            za, zb = zones(a), zones(b)
+        else:
+            za, zb = rotation_zones(a), dict(zip(ORDER, rotation_lineup((i + 1) % 6, mode), strict=True))
         for zz, p in za.items():
-            if mode == "simple" and p in ("MB", "L"):
+            if mode == "simple" and p not in zb.values():
                 continue
             if zb[next_zone(zz)] != p:
                 issues.append(
@@ -64,7 +69,7 @@ def check_rotation_order(mode: RulesMode) -> None:
 
 
 def check_middle_pair() -> None:
-    """Simplified: MB always front, L always back; the pair rotates, and resets into R3 and R6."""
+    """Simplified reception: MB always front, L always back; the pair rotates, and resets into R3 and R6."""
     for i in range(6):
         r = lineup(i, "simple")
         front, back = middle_pair(i)
@@ -78,7 +83,7 @@ def check_middle_pair() -> None:
         prev_front, prev_back = middle_pair((i + 5) % 6)
         if i in RESETS:
             if (prev_front, prev_back, front, back) != (2, 5, 4, 1):
-                issues.append(f"simple {r['name']}: middle pair should reset from 2/5 to 4/1")
+                issues.append(f"simple {r['name']}: reception middle pair should reset from 2/5 to 4/1")
         elif (front, back) != (next_zone(prev_front), next_zone(prev_back)):
             issues.append(f"simple {r['name']}: middle pair did not rotate")
 
@@ -96,8 +101,8 @@ def check_row(i: int, mode: RulesMode) -> None:
         other = "MB1" if r["liberofor"] == "MB2" else "MB2"
         if other not in r["front"]:
             issues.append(f"{tag}: other middle not front row")
-    elif r["liberofor"] not in ("", "SUB") or (r["liberofor"] == "SUB") != (i in RESETS):
-        issues.append(f"{tag}: libero replaces {r['liberofor']!r}, expected SUB only in R3 and R6")
+    elif r["liberofor"]:
+        issues.append(f"{tag}: libero replaces {r['liberofor']!r}, expected nobody named")
     # overlap in reception
     zp = rotation_zones(r)
     pos = {p: (x, y) for p, x, y in r["rec"]}
@@ -130,16 +135,17 @@ def check_row(i: int, mode: RulesMode) -> None:
     # serve
     sf, sb = r["serve"]
     serving = server(i, mode)
-    on = set(r["front"] + r["back"])
-    if zp[1] == "L":
-        on = (on - {"L"}) | {serving}
+    rotation = rotation_lineup(i, mode)
+    on = set(rotation)
+    if zp[1] == "L" and ("L" in on or serving not in rotation[3:]):
+        issues.append(f"{tag}: Rotation step should have {serving} on in zone 1 and L off")
     if serving == "L":
         issues.append(f"{tag}: the libero serves")
     if serving != zones(r, real=False)[1] and zp[1] != "L":
         issues.append(f"{tag}: server {serving} is not in zone 1")
     if set(sf + sb) != on:
         issues.append(f"{tag}: serve players {set(sf + sb)} != expected {on}")
-    if set(sf) != set(r["front"]):
+    if set(sf) != set(rotation[:3]):
         issues.append(f"{tag}: serve front row differs from rotation front row")
     for p, z in zip(sf, [4, 3, 2], strict=False):
         if BASE_ZONE[p] != z:
@@ -153,8 +159,8 @@ def check_row(i: int, mode: RulesMode) -> None:
         issues.append(f"{tag} serve: {serving} serves for the libero but does not take its zone 5")
     if zp[1] == "L" and base[6] not in ("OH1", "OH2"):
         issues.append(f"{tag} serve: back-row outside hitter not in zone 6")
-    if mode == "simple" and ("SUB" in base.values()) != (i in RESETS):
-        issues.append(f"{tag} serve: SUB should be on court only in R3 and R6")
+    if mode == "simple" and (serving == "MB" and OTHER_MIDDLE in sf) != (i in RESETS):
+        issues.append(f"{tag} serve: MB should serve with {OTHER_MIDDLE} in front only in R3 and R6")
     if base[1 if r["setter"] in (1, 6, 5) else 2] != "S":
         issues.append(f"{tag} serve: setter in the wrong base zone")
 
@@ -222,22 +228,13 @@ def check_walkthrough(mode: RulesMode, heading: str) -> None:
     for i, cells in enumerate(table):
         r = lineup(i, mode)
         rotation, serve = cell_lineup(cells[1]), cell_lineup(cells[2])
-        rot_real = r["front"] + r["back"]
-        if mode == "official" and i in RESETS:
-            rot_real = [server(i, mode) if p == "L" else p for p in rot_real]
+        rot_real = rotation_lineup(i, mode)
         if rotation is not None and rotation != rot_real:
             issues.append(f"walk-through {heading} {r['name']}: rotation {rotation} != {rot_real}")
         if serve is not None and serve != r["serve"][0] + r["serve"][1]:
             issues.append(f"walk-through {heading} {r['name']}: serve {serve} != {r['serve'][0] + r['serve'][1]}")
-        reset = re.search(r"MB (\d) → (\d), L (\d) → (\d)", cells[1])
-        if mode == "simple" and (reset is not None) != (i in RESETS):
-            issues.append(f"walk-through {heading} {r['name']}: pair reset text only in R3 and R6")
-        if reset:
-            (pf, pb), (f, b) = middle_pair(i - 1), middle_pair(i)
-            if [int(x) for x in reset.groups()] != [pf, f, pb, b]:
-                issues.append(f"walk-through {heading} {r['name']}: reset {reset[0]} != MB {pf} → {f}, L {pb} → {b}")
-        if mode == "simple" and i in RESETS and "SUB" not in cells[2]:
-            issues.append(f"walk-through {heading} {r['name']}: SUB should serve")
+        if mode == "simple" and ("MB serves" in cells[2]) != (i in RESETS):
+            issues.append(f"walk-through {heading} {r['name']}: 'MB serves' only in R3 and R6")
 
 
 for mode in RULES_MODES:

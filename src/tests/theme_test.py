@@ -16,8 +16,8 @@ URL = (ROOT / "index.html").as_uri() + "?ff=all&anim=0"
 FAIL: list[str] = []
 OPPOSITE = {"light": "dark", "dark": "light"}
 COURT = ("--court-g0", "--court-g1", "--court-g2")
-ROLE_FILLS = ("--role-s", "--role-op", "--role-mb", "--role-oh", "--role-sub")
-ROUTES = ("--route-s", "--route-op", "--route-mb", "--route-oh", "--route-l", "--route-sub")
+ROLE_FILLS = ("--role-s", "--role-op", "--role-mb", "--role-oh")
+ROUTES = ("--route-s", "--route-op", "--route-mb", "--route-oh", "--route-l")
 SET_FAMILIES = ("--set-left", "--set-mid", "--set-right", "--set-back")
 RGB = tuple[float, float, float]
 
@@ -89,6 +89,10 @@ def check_contrast(page: Page, tag: str) -> None:
         need(f"--ring on {band}", colour["--ring"], colour[band], 3)
         for route in ROUTES:
             need(f"{route} over --halo on {band}", colour[route], over(raw["--halo"], colour[band]), 3)
+        # The pass tag stands out by its fill or its --tag-ink outline.
+        tag_edge = max(ratio(colour["--tag"], colour[band]), ratio(colour["--tag-ink"], colour[band]))
+        if tag_edge < 3:
+            fail(f"{tag}: pass tag on {band} contrast {tag_edge:.2f} < 3")
     for fill in ROLE_FILLS:
         need(f"--role-ink on {fill}", colour["--role-ink"], colour[fill], 4.5)
     need("--role-l-ink on --role-l", colour["--role-l-ink"], colour["--role-l"], 4.5)

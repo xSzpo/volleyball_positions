@@ -54,7 +54,6 @@
       --role-mb: #ae2500;
       --role-oh: #3f7d14;
       --role-l: #ffc600;
-      --role-sub: #5b6470;
       --role-ink: #ffffff;
       --role-l-ink: #3a2a00;
       --route-s: #c24e00;
@@ -62,7 +61,6 @@
       --route-mb: #ae2500;
       --route-oh: #3f7d14;
       --route-l: #9a7600;
-      --route-sub: #5b6470;
       --set-left: #27598c;
       --set-mid: #c2410c;
       --set-right: #222222;
@@ -93,7 +91,6 @@
       --route-mb: #ff7a5c;
       --route-oh: #7cc24a;
       --route-l: #ffc600;
-      --route-sub: #c3cad3;
       --accent: #6c9cf5;
       --accent-ink: #6c9cf5;
       --on-accent: #0c1210;
@@ -2367,7 +2364,7 @@
         OH1: "var(--role-oh)",
         OH2: "var(--role-oh)",
         L: "var(--role-l)",
-        SUB: "var(--role-sub)",
+        OM: "var(--role-mb)",
       };
       const NAMES = {
         S: "Setter",
@@ -2378,7 +2375,7 @@
         OH1: "Outside 1",
         OH2: "Outside 2",
         L: "Libero",
-        SUB: "Substitute",
+        OM: "Other middle",
       };
       const ROLE_SETS = {
         simple: ["MB", "OH1", "OH2", "OP", "S", "L"],
@@ -2421,11 +2418,7 @@
           ...f.map((p, i) => ({ p, x: XS[i], y: FY })),
           ...b.map((p, i) => ({ p, x: XS[i], y: BY })),
         ];
-        if (phase === "start")
-          return grid(
-            r.front,
-            middleServes(ri) ? r.back.map((p) => (p === "L" ? server(ri) : p)) : r.back,
-          );
+        if (phase === "start") return grid(r.start.slice(0, 3), r.start.slice(3));
         if (phase === "rec") return r.rec.map(([p, x, y]) => ({ p, x, y }));
         if (phase === "serve") {
           const sv = r.serve;
@@ -2439,20 +2432,28 @@
       function server(ri) {
         return ROWS[ri].server;
       }
-      // Official R3/R6: the zone 1 middle serves, so the Rotation step has them on and the libero off.
+      // R3/R6: the zone 1 middle serves, so the Rotation step has them on and the libero off.
       function middleServes(ri) {
         const r = ROWS[ri];
-        return rulesMode === "official" && r.back.includes("L") && !r.serve.flat().includes("L");
+        return r.back.includes("L") && !r.serve.flat().includes("L");
       }
-      function zoneOf(ri, role) {
+      // Rotation and Our serve use the Rotation lineup (Simplified R3/R6: MB in zone 1, OM in zone 4).
+      function lineupAt(ri, phase) {
         const r = ROWS[ri];
-        const i = [...r.front, ...r.back].indexOf(role);
+        return phase === "start" || phase === "serve" ? r.start : [...r.front, ...r.back];
+      }
+      function zoneOf(ri, role, phase = "rec") {
+        const r = ROWS[ri];
+        let i = lineupAt(ri, phase).indexOf(role);
+        if (i < 0) i = [...r.front, ...r.back].indexOf(role);
         if (i < 0 && middleServes(ri) && role === server(ri)) return ORDER[3 + r.back.indexOf("L")];
         return i < 0 ? null : ORDER[i];
       }
-      function isFront(ri, role) {
-        return ROWS[ri].front.includes(role);
+      function isFront(ri, role, phase = "rec") {
+        return lineupAt(ri, phase).slice(0, 3).includes(role);
       }
+      // OM is a marker label, not a role: captions name it in words.
+      const who = (p) => (p === "OM" ? "the other middle" : p);
       function cap(s) {
         return s[0].toUpperCase() + s.slice(1);
       }
@@ -2473,20 +2474,12 @@
         const r = ROWS[ri];
         const pl = answerSpots(ri, phase, role);
         const me = pl.find((o) => o.p === role);
-        const z = zoneOf(ri, role);
-        if (!me && role === "SUB")
-          return {
-            t: "Off court",
-            d:
-              r.liberofor === "SUB"
-                ? "You come on only for our serve here, because the libero may not serve. When we lose the serve, the libero comes back on for you."
-                : "You play only in R3 (H5) and R6 (H2), to serve when the libero is in zone 1.",
-          };
+        const z = zoneOf(ri, role, phase);
         if (!me) {
           if (role === "L" && rulesMode === "simple")
             return {
               t: "Off court",
-              d: "You are in zone 1, but the libero may never serve. A substitute (SUB) comes on, serves, then defends zone 5. If we win the rally, SUB serves again. When we lose the serve, you come back on for SUB and take SUB's zone.",
+              d: "MB is in zone 1 and serves: the libero may never serve. The other middle plays zone 4. If we win the rally, MB serves again and you stay off. When we lose the serve, by our training convention MB goes back to the net, the other middle goes off and you come on in zone 1.",
             };
           if (role === "L") {
             const m = server(ri);
@@ -2534,7 +2527,7 @@
                   : "deep, near the end line";
         if (phase === "start")
           return {
-            t: `Zone ${z}, ${isFront(ri, role) ? "front row" : "back row"}`,
+            t: `Zone ${z}, ${isFront(ri, role, phase) ? "front row" : "back row"}`,
             d: relation(ri, role),
           };
         if (phase === "rec") {
@@ -2601,10 +2594,11 @@
         let d = `${job} Stand here already before the serve: the serving team has no overlap rule.`;
         if (role === server(ri)) {
           d = `Serve, then run to zone ${zz}. ${job}`;
-          if (role === "SUB")
-            d = `You come on for the libero, who may not serve. Serve, then run to zone ${zz}, deep. If we win the rally, you serve again. When we lose the serve, the libero comes back on for you.`;
-          else if (r.liberofor === role)
-            d = `You are in zone 1, so you serve: the libero may not serve under the official rules. Serve, then run to zone ${zz}, deep. If we win the rally, you serve again. When we lose the serve, the libero comes back in for you.`;
+          if (middleServes(ri))
+            d =
+              rulesMode === "official"
+                ? `You are in zone 1, so you serve: the libero may not serve under the official rules. Serve, then run to zone ${zz}, deep. If we win the rally, you serve again. When we lose the serve, the libero comes back in for you.`
+                : `You are in zone 1, so you serve: the libero may not serve. Serve, then run to zone ${zz}, deep. If we win the rally, you serve again. When we lose the serve, you go back to the net and the libero comes on.`;
         }
         return { t, d };
       }
@@ -2623,7 +2617,7 @@
         OH1: "oh",
         OH2: "oh",
         L: "l",
-        SUB: "sub",
+        OM: "mb",
       };
       const fillOf = (p) => `var(--role-${ROLE_KEY[p]})`;
       const routeOf = (p) => `var(--route-${ROLE_KEY[p]})`;
@@ -2663,7 +2657,7 @@
         if (me)
           s += `<g class="me-ring"><circle cx="${X}" cy="${Y}" r="8.3" fill="none" stroke="var(--ring)" stroke-width="1.2"/><circle cx="${X}" cy="${Y}" r="7.1" fill="none" stroke="var(--ring-gap)" stroke-width="1.2"/></g>`;
         if (!dim) s += `<circle class="hit" cx="${X}" cy="${Y}" r="6.7" fill="transparent"/>`;
-        s += `<circle cx="${X}" cy="${Y}" r="${r}" fill="${fillOf(o.p)}" stroke="var(--marker-edge)" stroke-width="1"${o.p === "SUB" ? ' stroke-dasharray="1.6 1"' : ""}/>`;
+        s += `<circle cx="${X}" cy="${Y}" r="${r}" fill="${fillOf(o.p)}" stroke="var(--marker-edge)" stroke-width="1"${o.p === "OM" ? ' stroke-dasharray="1.6 1"' : ""}/>`;
         return (
           s +
           `<text x="${X}" y="${Y + r * 0.31}" text-anchor="middle" font-size="${r * 0.87}" font-weight="700" fill="${ink}" font-family="Barlow Condensed,sans-serif">${o.p}</text></g>`
@@ -2907,13 +2901,13 @@
       ];
       // Your overlap partners at the whistle for their serve: the player in your column and your row neighbours.
       function partners(ri, role, phase) {
-        const z = zoneOf(ri, role);
+        const z = zoneOf(ri, role, phase);
         if (!z) return [];
         // The serving middle is off court when they serve (the libero is in), so it sets no limits.
         const serving = phase === "start" && middleServes(ri);
         if (serving && role === server(ri)) return [];
         const zp = {};
-        [...ROWS[ri].front, ...ROWS[ri].back].forEach((p, i) => {
+        lineupAt(ri, phase).forEach((p, i) => {
           zp[ORDER[i]] = p;
         });
         const front = [4, 3, 2].includes(z);
@@ -2922,8 +2916,10 @@
           i = row.indexOf(z);
         if (i > 0) out.push({ p: zp[row[i - 1]], side: "left" });
         if (i < 2) out.push({ p: zp[row[i + 1]], side: "right" });
-        return serving ? out.filter((o) => o.p !== "L") : out;
+        return serving ? out.filter((o) => o.p !== server(ri)) : out;
       }
+      // At the whistle for their serve OM's zone 4 slot is MB's: name the limit MB, keep OM's spot.
+      const limitName = (p) => (p === "OM" ? "MB" : p);
       function overlapText(ri, role, phase) {
         const words = {
           behind: "in front of",
@@ -2931,14 +2927,14 @@
           left: "right of",
           right: "left of",
         };
-        const parts = partners(ri, role, phase).map((o) => `${words[o.side]} ${o.p}`);
+        const parts = partners(ri, role, phase).map((o) => `${words[o.side]} ${limitName(o.p)}`);
         if (!parts.length) return "";
         const last = parts.pop();
         return `Overlap: stay ${parts.length ? `${parts.join(", ")} and ${last}` : last}.`;
       }
       // Each line runs from your marker to the line a partner sets, in that partner's colour.
       function boundLines(ri, pl, role, phase) {
-        const out = { lines: [], tight: [] };
+        const out = { lines: [], tight: [], segs: [] };
         const me = pl.find((o) => o.p === role);
         if (!me) return out;
         const gap = MARKER_R + 0.5;
@@ -2957,11 +2953,9 @@
             out.tight.push(p);
             return;
           }
-          out.lines.push(
-            vertical
-              ? route(mx, start, mx, end, p, { cls: "bnd" })
-              : route(start, my, end, my, p, { cls: "bnd" }),
-          );
+          const seg = vertical ? [mx, start, mx, end] : [start, my, end, my];
+          out.segs.push(seg);
+          out.lines.push(route(...seg, p, { cls: "bnd" }));
         });
         return out;
       }
@@ -2970,7 +2964,7 @@
           lines.length ? " Each line ends at a limit you may not cross." : ""
         }${
           tight.length
-            ? ` You stand right at the ${tight.join(" and ")} limit${tight.length > 1 ? "s" : ""}.`
+            ? ` You stand right at the ${tight.map(limitName).join(" and ")} limit${tight.length > 1 ? "s" : ""}.`
             : ""
         }`;
       }
@@ -2987,6 +2981,109 @@
           boundLines(ri, players(ri, "rec"), role, "rec"),
         );
         return `<p class="lim" style="margin:4px 0 0">${text}${when ? ` ${OVERLAP_WHEN.rec}` : ""}</p>`;
+      }
+      // One line after a wrong or close answer, picked from what the tap did.
+      const MISTAKES = {
+        offWhenOn: "You are on court here. Only the libero and the middle it replaces go off.",
+        offWhenOnSimple: "You are on court here. Only the libero goes off, while MB serves.",
+        liberoServes: "The libero may not serve: wait off court while the middle serves.",
+        liberoIn: "The libero is in for you in the back row: wait off court.",
+        arrows: "You counted along the arrows: count on from the setter's zone, 1→2→3→4→5→6.",
+        overlap: (words, p) => `Overlap fault: at the whistle you must stand ${words} ${p}.`,
+        lane: "In a passing lane: only OH1, OH2 and L pass, so keep clear of them.",
+        front: "Wrong row: you are front row here, in front of the 3 m line.",
+        back: "Wrong row: you are back row here, behind the 3 m line.",
+        backAttack: "A back-row attacker takes off behind the 3 m line.",
+        side: (side) => `Wrong side: your spot is on the ${side} half of the court.`,
+        quick: "Too deep: as the pass lands, the middle is near the net, ready for the quick.",
+        deep: "Too deep: your spot is closer to the net.",
+        shallow: "Too close to the net: your spot is deeper.",
+        start: "Find the setter's zone from the name, then count on in serving order.",
+        serve: "At our serve, go to your base spot: front row by job, back row deep.",
+        rec: "Find the setter first, then check your overlap partners.",
+        ar: "As the pass lands, attackers get ready to approach and covers move in.",
+      };
+      const OVERLAP_WORDS = {
+        behind: "in front of",
+        front: "behind",
+        left: "right of",
+        right: "left of",
+      };
+      function zoneAt(tap) {
+        return ZONE_ROWS[tap.y < AL ? 0 : 1][Math.min(2, Math.max(0, Math.floor(tap.x * 3)))];
+      }
+      // Serving order runs 1→2→3 round the zones, against the rotation arrows; the mirror zone is a count along them.
+      function alongArrows(ri, p, tap) {
+        const z = zoneOf(ri, p),
+          zs = zoneOf(ri, "S");
+        if (!z || !zs) return false;
+        const k = (z - zs + 6) % 6;
+        return k !== 0 && k !== 3 && zoneAt(tap) === ((((zs - 1 - k) % 6) + 6) % 6) + 1;
+      }
+      function mistakeText(ri, phase, role, tap) {
+        const right = answerSpots(ri, phase, role).find((o) => o.p === role);
+        if (!right && !tap) return "";
+        if (!right) return role === "L" ? MISTAKES.liberoServes : MISTAKES.liberoIn;
+        if (!tap) return rulesMode === "official" ? MISTAKES.offWhenOn : MISTAKES.offWhenOnSimple;
+        if (phase === "start" && alongArrows(ri, role, tap)) return MISTAKES.arrows;
+        if (phase === "start" || phase === "rec") {
+          const pl = players(ri, phase);
+          const fault = partners(ri, role, phase).find(({ p, side }) => {
+            const q = pl.find((o) => o.p === p);
+            if (!q) return false;
+            if (side === "behind") return tap.y >= q.y;
+            if (side === "front") return tap.y <= q.y;
+            return side === "left" ? tap.x <= q.x : tap.x >= q.x;
+          });
+          if (fault) return MISTAKES.overlap(OVERLAP_WORDS[fault.side], fault.p);
+        }
+        if (
+          phase === "rec" &&
+          !RECEIVERS.includes(role) &&
+          tap.y > 0.55 &&
+          tap.y < 0.88 &&
+          Math.hypot(tap.x - right.x, tap.y - right.y) >= 0.24 &&
+          players(ri, "rec").some(
+            (o) =>
+              RECEIVERS.includes(o.p) && tap.y < o.y && Math.hypot(o.x - tap.x, o.y - tap.y) < 0.2,
+          )
+        )
+          return MISTAKES.lane;
+        if (phase === "start" || phase === "serve") {
+          const front = [4, 3, 2].includes(zoneOf(ri, role));
+          if (front && right.y < AL && tap.y >= AL) return MISTAKES.front;
+          if (!front && right.y >= AL && tap.y < AL) return MISTAKES.back;
+        }
+        if (phase === "ar" && right.kind === "back" && !right.spike && !right.cover && tap.y < AL)
+          return MISTAKES.backAttack;
+        const dx = tap.x - right.x,
+          dy = tap.y - right.y;
+        if ((tap.x - 0.5) * (right.x - 0.5) < 0 && Math.abs(dx) > 0.3)
+          return MISTAKES.side(right.x < 0.5 ? "left" : "right");
+        if (phase !== "start" && Math.abs(dy) > 0.08 && Math.abs(dy) > Math.abs(dx)) {
+          if (dy > 0) return right.turn ? MISTAKES.quick : MISTAKES.deep;
+          return MISTAKES.shallow;
+        }
+        return MISTAKES[phase];
+      }
+      function mistakeHtml(text) {
+        return feature("common-mistakes") && text
+          ? `<p class="mistake" style="margin:4px 0 0">Common mistake: ${text}</p>`
+          : "";
+      }
+      function mistakeLine(ri, phase, role, tap) {
+        return feature("common-mistakes") ? mistakeHtml(mistakeText(ri, phase, role, tap)) : "";
+      }
+      // Rotate: a count along the arrows for any marker, else your own marker's mistake, else the step's line.
+      function rotMistake(r, grades) {
+        if (!feature("common-mistakes") || grades.every((o) => o.g === "right")) return "";
+        const tapOf = (p) => (p === r.role && r.off ? null : r.spots[p]);
+        if (grades.some(({ p, g }) => g === "wrong" && tapOf(p) && alongArrows(r.ri, p, tapOf(p))))
+          return mistakeHtml(MISTAKES.arrows);
+        const mine = grades.find((o) => o.p === r.role);
+        return mine?.g === "wrong"
+          ? mistakeLine(r.ri, "start", r.role, tapOf(r.role))
+          : mistakeHtml(MISTAKES.start);
       }
       const SERVE_SPOT = [0.88, 1.1];
       function serveLayer(ri, pl, role) {
@@ -3113,6 +3210,8 @@
         "sets-quiz": true,
         "after-dig": false,
         "bug-report": true,
+        "passer-tag": true,
+        "common-mistakes": true,
       };
       const FEATURE_NEEDS = {
         "learn-animation": ["learn-tab"],
@@ -3132,6 +3231,7 @@
         "match-online": ["match-same-device"],
         "sets-quiz": ["sets-tab"],
         "after-dig": ["match-solo"],
+        "passer-tag": ["learn-tab"],
       };
       const FEATURE_ELEMENTS = {
         "learn-tab": ["tabLearn", "learn"],
@@ -3267,6 +3367,7 @@
         buildMs: () => BUILD_MS,
         describe: (ri, phase, r) => describe(ri, phase, r),
         players: (ri, phase) => players(ri, phase),
+        server: (ri) => server(ri),
         captions: (ri, phase, r) =>
           phaseStages(ri, phase).stages.map((st) => stageCaption(st, r).replace(/<[^>]+>/g, "")),
         still: (ri, phase, r) => restCaption(ri, phase, r).replace(/<[^>]+>/g, ""),
@@ -3459,7 +3560,7 @@
         animCancel();
         $("rots").innerHTML = ROWS.map(
           (r, i) =>
-            `<button class="rot" aria-pressed="${i === ri}" data-i="${i}" aria-label="${r.name}">${r.short}</button>`,
+            `<button class="rot" aria-pressed="${i === ri}" data-i="${i}" aria-label="${r.name}">H${r.setter}</button>`,
         ).join("");
         $("rots")
           .querySelectorAll(".rot")
@@ -3491,6 +3592,10 @@
             : { lines: [], tight: [] };
         s += bounds.lines.join("");
         if (me) s += chip(me, { me: true });
+        Object.entries(learnPassTags(ri, pl)).forEach(([p, [dx, dy]]) => {
+          const o = pl.find((q) => q.p === p);
+          s += passTag(o.x * W + dx, o.y * H + dy, p);
+        });
         if (ball) s += ballSvg(ball);
         $("courtL").innerHTML = s;
         $("learnTag").textContent = `${ROWS[ri].name} · ${LEARN_NAME[phase]}`;
@@ -3510,12 +3615,14 @@
         const { tight } = bounds;
         const serverNow = phase === "start" && middleServes(ri) && role === server(ri);
         const overlap = serverNow
-          ? " You serve now, so you have no overlap limits. When they serve, the libero is in for you."
+          ? ` You serve now, so you have no overlap limits. When they serve, ${rulesMode === "official" ? "the libero is in for you" : "you are at the net and the libero is in zone 1"}.`
           : me && (phase === "start" || phase === "rec")
             ? ` ${limitsSentence(ri, role, phase, bounds)} ${OVERLAP_WHEN[phase]}`
             : "";
+        const passers =
+          phase === "rec" && feature("passer-tag") ? `<p class="passers">${PASSERS_LINE}</p>` : "";
         $("cue").innerHTML =
-          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${guide}${libero}`;
+          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${passers}${guide}${libero}`;
         const at = PHASES.findIndex(([k]) => k === phase);
         const upNext = at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1];
         $("lNext").textContent = `${phase === "rec" ? upNext : `Next: ${upNext}`} ▸`;
@@ -3578,6 +3685,7 @@
       const PASS_TEXT = "Pass the serve high to the setter at the net.";
       const PASS_ATTACK = "Pass high to the setter, then get out to the 3 m line to attack.";
       const SERVE_TO = "Their serve comes to you: get behind the ball and pass it.";
+      const PASSERS_LINE = "OH1, OH2 and L pass; everyone else keeps out of the lanes.";
       const SET_TEXT = (passer) =>
         `Take ${passer}'s pass at the setting spot: you play the second contact.`;
       const OFF_SERVE = (sv) =>
@@ -3593,6 +3701,92 @@
       // Guide rule 01: the two outside hitters and the libero receive. One passer per rotation, so each takes two.
       const RECEIVERS = ["OH1", "OH2", "L"];
       const PASSER = ["L", "OH2", "OH1", "L", "OH1", "OH2"];
+      const PASS_TAG_W = 10.4,
+        PASS_TAG_H = 4.6;
+      const PASS_TAG_DIRS = [
+        [0, 1],
+        [0, -1],
+        [1, 0],
+        [-1, 0],
+        [1, 1],
+        [-1, 1],
+        [1, -1],
+        [-1, -1],
+      ];
+      function passTag(x, y, p) {
+        return `<g class="ptag" data-p="${p}" pointer-events="none"><rect x="${x - PASS_TAG_W / 2}" y="${y - PASS_TAG_H / 2}" width="${PASS_TAG_W}" height="${PASS_TAG_H}" rx="${PASS_TAG_H / 2}" fill="var(--tag)" stroke="var(--tag-ink)" stroke-width="0.4"/><text x="${x}" y="${y + 1.2}" text-anchor="middle" font-size="3.4" font-weight="700" fill="var(--tag-ink)" font-family="Barlow,sans-serif">pass</text></g>`;
+      }
+      // Each receiver's tag offset: the first spot round its marker clear of the zone numbers, the markers, your
+      // overlap lines (with their T-bars) and the tags placed before; else the spot with the fewest clashes.
+      function passTagSpots(pl, role, segs = []) {
+        const reach = (o) => (o.p === role ? 9 : MARKER_R + 0.6);
+        const zones = ZONE_SPOTS.map(([, x, y]) => [
+          x * W - 3,
+          y * H - 3.6,
+          x * W + 3,
+          y * H + 3.6,
+        ]);
+        const lines = segs.flatMap(([x1, y1, x2, y2]) => [
+          [x1, y1, x2, y2],
+          x1 === x2 ? [x2 - 3.2, y2, x2 + 3.2, y2] : [x2, y2 - 3.2, x2, y2 + 3.2],
+        ]);
+        const hitsCircle = ([a, b, c, d], x, y, r) =>
+          Math.hypot(Math.max(a, Math.min(c, x)) - x, Math.max(b, Math.min(d, y)) - y) < r;
+        const hitsBox = ([a, b, c, d], [e, f, g, h]) => a < g && e < c && b < h && f < d;
+        const hitsLine = ([a, b, c, d], [x1, y1, x2, y2]) => {
+          const n = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 0.5) + 1;
+          for (let i = 0; i <= n; i++) {
+            const x = x1 + ((x2 - x1) * i) / n,
+              y = y1 + ((y2 - y1) * i) / n;
+            if (x > a - 1.4 && x < c + 1.4 && y > b - 1.4 && y < d + 1.4) return true;
+          }
+          return false;
+        };
+        const placed = [],
+          out = {};
+        pl.filter((o) => RECEIVERS.includes(o.p)).forEach((o) => {
+          const X = o.x * W,
+            Y = o.y * H,
+            R = reach(o);
+          let best = null,
+            least = Infinity;
+          PASS_TAG_DIRS.forEach(([ux, uy]) => {
+            const near = ux && uy ? R * 0.72 : R + 0.6;
+            const dx = ux * (near + PASS_TAG_W / 2),
+              dy = uy * (near + PASS_TAG_H / 2);
+            const box = [
+              X + dx - PASS_TAG_W / 2,
+              Y + dy - PASS_TAG_H / 2,
+              X + dx + PASS_TAG_W / 2,
+              Y + dy + PASS_TAG_H / 2,
+            ];
+            let cost = box[0] < -3.5 || box[2] > W + 3.5 || box[1] < 1.6 || box[3] > H + 3 ? 10 : 0;
+            pl.forEach((q) => {
+              if (q !== o && hitsCircle(box, q.x * W, q.y * H, reach(q) + 0.3)) cost++;
+            });
+            zones.forEach((z) => {
+              if (hitsBox(box, z)) cost++;
+            });
+            lines.forEach((l) => {
+              if (hitsLine(box, l)) cost++;
+            });
+            placed.forEach((t) => {
+              if (hitsBox(box, t)) cost++;
+            });
+            if (cost < least) {
+              least = cost;
+              best = { dx, dy, box };
+            }
+          });
+          placed.push(best.box);
+          out[o.p] = [best.dx, best.dy];
+        });
+        return out;
+      }
+      function learnPassTags(ri, pl) {
+        if (phase !== "rec" || !feature("passer-tag")) return {};
+        return passTagSpots(pl, role, boundLines(ri, pl, role, "rec").segs);
+      }
       // The 3-2 cover: three close covers about 3 m from the hitter, in an arc behind and inside, at least GAP clear of
       // the hitter's lane; two deep covers behind the gaps between them.
       const COVER = {
@@ -3714,11 +3908,10 @@
             .filter((p) => from[p])
             .forEach((p) => {
               const was = zoneOf(fromRi, p),
-                now = zoneOf(ri, p);
+                now = zoneOf(ri, p, "start");
               if (!was || !now || now === nextZone(was)) return;
-              const way = isFront(ri, p) ? "along the net" : "across the back";
-              const why = rulesMode === "simple" ? ": the middle pair resets" : "";
-              notes[p] = `Walk ${way} from zone ${was} to zone ${now}${why}.`;
+              const way = isFront(ri, p, "start") ? "along the net" : "across the back";
+              notes[p] = `Walk ${way} from zone ${was} to zone ${now}.`;
             });
         }
         if (leave.length || enter.length) {
@@ -3727,17 +3920,23 @@
             notes[p] = off();
           });
           enter.forEach((p) => {
-            notes[p] = on(leave.join(" and "), zoneOf(ri, p));
+            notes[p] = on(leave.map(who).join(" and "), zoneOf(ri, p, phase));
           });
         }
         let team = "";
         if (phase === "start" && middleServes(ri) && enter.length) {
           const sv = server(ri),
             on = enter[0],
-            z = zoneOf(ri, on);
-          notes.L = `Go off at the sideline: ${on} comes on in zone ${z} and ${sv} serves from zone 1.`;
+            z = zoneOf(ri, on, "start");
+          notes.L = `Go off${on === "OM" ? "" : " at the sideline"}: ${who(on)} comes on in zone ${z} and ${sv} serves from zone 1.`;
           notes[sv] = "Rotate to zone 1 and serve: the libero may not serve, so you stay on.";
-          team = `The libero leaves; ${on} comes on in zone ${z}. ${sv} is in zone 1 and serves.`;
+          team = `The libero leaves; ${who(on)} comes on in zone ${z}. ${sv} is in zone 1 and serves.`;
+        }
+        if (phase === "rec" && rulesMode === "simple" && middleServes(ri)) {
+          notes.MB = "Training convention: we lost the serve, so go back to the net in zone 4.";
+          notes.L = "Come back on in zone 1 and take your reception spot.";
+          team =
+            "Training convention: we lost the serve, so the other middle goes off, MB goes back to the net and L comes on.";
         }
         if (phase === "serve" && !order.includes("L") && !from.L) notes.L = OFF_SERVE(server(ri));
         return { notes, team, swap: leave.length + enter.length > 0 };
@@ -3961,7 +4160,7 @@
             return `Zone ${z}: next is a middle; in the back row the libero replaces it.`;
           if (swap && p === server(ri))
             return `Zone ${z}: next is a middle, ${p}; it serves, so the libero is off.`;
-          return `Zone ${z}: next is a middle, ${p}.`;
+          return `Zone ${z}: next is ${p === "OM" ? "the other middle" : `a middle, ${p}`}.`;
         };
         const steps = [
           () =>
@@ -3978,7 +4177,7 @@
         const order = [];
         const lines = steps.map((text, k) => {
           const z = ((n - 1 + k) % 6) + 1;
-          const p = list.find((o) => zoneOf(ri, o.p) === z).p;
+          const p = list.find((o) => zoneOf(ri, o.p, "start") === z).p;
           order.push(p);
           return [p, text(z, p)];
         });
@@ -4325,6 +4524,9 @@
           el.setAttribute("opacity", 0.6 * fade);
           el.setAttribute("visibility", "visible");
         });
+        a.tags.forEach((el) => {
+          el.setAttribute("visibility", a.t < a.tagsUntil ? "visible" : "hidden");
+        });
         a.ball.setAttribute("opacity", ball ? 1 : 0);
         if (ball) {
           const x = (ball.from.x + (ball.to.x - ball.from.x) * ball.u) * W,
@@ -4439,11 +4641,12 @@
         restList = null;
         const tr = phaseStages(ri, phase);
         if (!tr.stages.length) return false;
-        const { s, trails } = playMarkup(tr, role);
+        const { s, trails } = playMarkup(tr, role, learnPassTags(ri, learnPlayers(ri, phase)));
         $("courtL").innerHTML = DEFS + courtBase(!tr.from[role]) + s;
         anim = {
           tr,
           t: 0,
+          tagsUntil: tr.stages[1]?.start ?? tr.total,
           ...playEls($("courtL"), trails),
           stage: null,
           total: tr.total,
@@ -4456,9 +4659,9 @@
         return true;
       }
       // A play's trails, markers (yours on top) and ball, drawn at their start.
-      function playMarkup(tr, r) {
+      function playMarkup(tr, r, tags = {}) {
         const mark = (p, me) =>
-          `<g class="am" data-p="${p}">${chip({ p, x: 0, y: 0 }, { me })}</g>`;
+          `<g class="am" data-p="${p}">${chip({ p, x: 0, y: 0 }, { me })}${tags[p] ? passTag(...tags[p], p) : ""}</g>`;
         let s = "";
         const trails = [];
         tr.stages.forEach((st, k) => {
@@ -4492,6 +4695,7 @@
           trails: [...svg.querySelectorAll(".trail")].map((el, i) => ({ el, ...trails[i] })),
           walks: [...svg.querySelectorAll(".walk")],
           ball: svg.querySelector(".ball"),
+          tags: [...svg.querySelectorAll(".ptag")],
         };
       }
       // Plays the current phase from its start to the rest picture; with step, only the first stage.
@@ -4972,14 +5176,18 @@
             : "MB plays the front middle, L the back",
           "@THUMB_MIDDLES_D": off
             ? "Only while the ball is out of play. The libero never serves: in R3 and R6 the middle in zone 1 serves and stays on until we lose the serve (FIVB 19.3)."
-            : "A training convention, not in the guide. Into R3 and R6, MB moves from zone 2 to 4, L from 5 to 1. The libero never serves: in R3 and R6 SUB serves and defends zone 5.",
+            : "A training convention, not in the guide. The libero never serves: in R3 and R6 MB serves from zone 1, the other middle plays zone 4 and L is off until we lose the serve.",
         };
         return lab(x in T ? T[x] : x);
       }
       function renderFolds() {
         const rows = ROWS.map((r, i) => {
-          const z = zoneOf(i, role);
-          return `<tr><td class="r">${r.name}</td><td>${z ? `Zone ${z}` : `Off (libero in zone ${zoneOf(i, "L")})`}</td>${["serve", "rec", "ar"].map((ph) => `<td>${describe(i, ph, role).t}</td>`).join("")}</tr>`;
+          const z = lineupAt(i, "start").includes(role) && zoneOf(i, role, "start");
+          const off =
+            role === "L"
+              ? `Off (${server(i)} serves from zone 1)`
+              : `Off (libero in zone ${zoneOf(i, "L")})`;
+          return `<tr><td class="r">${r.name}</td><td>${z ? `Zone ${z}` : off}</td>${["serve", "rec", "ar"].map((ph) => `<td>${describe(i, ph, role).t}</td>`).join("")}</tr>`;
         }).join("");
         const thumbs = THUMB.map(
           (t, i) =>
@@ -5000,19 +5208,21 @@
         if (vis === "ref") return pl.filter((o) => o.p === refOf(me));
         return [];
       }
-      function relation(ri, r) {
+      function relation(ri, r, phase = "start") {
         const sz = zoneOf(ri, "S"),
           k = LINEUP.indexOf(r);
         if (r === "S") return `You are the setter: the name ${ROWS[ri].name} tells you your zone.`;
-        const reset = ri === 2 || ri === 5;
+        const serving = phase === "start" && middleServes(ri);
         if (r === "L" && rulesMode === "simple")
-          return `You play the back-row middle spot, opposite MB: zone ${zoneOf(ri, "L")}.${reset ? ` The middle pair resets into ${ROWS[ri].name}: you walk across the back from zone 5 to zone 1.` : ""}`;
+          return serving
+            ? "MB is in zone 1 and serves: the libero may not serve, so you are off until we lose the serve."
+            : `You play the back-row middle spot, opposite MB: zone ${zoneOf(ri, "L", phase)}.`;
         if (r === "L")
           return `You replace the back-row middle, ${ROWS[ri].liberofor}, so you take ${ROWS[ri].liberofor}'s zone ${zoneOf(ri, "L")}.`;
         if (r === "MB")
-          return reset
-            ? `You are always in the front row. The middle pair resets into ${ROWS[ri].name}: you walk along the net from zone 2 to zone 4.`
-            : `You are always in the front row, in the middle slot: zone ${zoneOf(ri, "MB")}.${ri === 1 || ri === 4 ? " Into the next rotation the middle pair resets: you walk along the net from zone 2 to zone 4." : ""}`;
+          return serving
+            ? "You rotate to zone 1 and serve: the libero may not serve. The other middle plays zone 4. When we lose the serve, you go back to the net in zone 4."
+            : `You play the front-row middle: zone ${zoneOf(ri, "MB", phase)}.${ri === 1 || ri === 4 ? " In the next rotation you rotate to zone 1 and serve." : ""}`;
         if (k === 3)
           return `The setter is in zone ${sz}. You are always directly opposite the setter, three zones away.`;
         return `The setter is in zone ${sz}. In the serving order you come ${k} after the setter, so count ${k} zone${k > 1 ? "s" : ""} on from the setter's zone (1→2→3→4→5→6).`;
@@ -5250,9 +5460,9 @@
       function rotPrompt(r) {
         const p = rotNext(r);
         if (!p) return "All placed. Tap a marker to move it, or press Continue.";
-        const who =
-          p === r.role ? "you stand" : p === "S" ? "the setter (S) stands" : `${p} stands`;
-        return `Tap where ${who}.`;
+        const ask =
+          p === r.role ? "you stand" : p === "S" ? "the setter (S) stands" : `${who(p)} stands`;
+        return `Tap where ${ask}.`;
       }
       // Once your partners are asked, your own marker stays put: moving it would move their limits.
       function rotLocked(r, p) {
@@ -5298,7 +5508,7 @@
         }));
       }
       function rotGradesHtml(grades, you) {
-        return `<p class="rotgrades" style="margin:4px 0 0">${grades.map(({ p, g }) => `${p === you ? "You" : p}: ${g}`).join(" · ")}</p>`;
+        return `<p class="rotgrades" style="margin:4px 0 0">${grades.map(({ p, g }) => `${p === you ? "You" : cap(who(p))}: ${g}`).join(" · ")}</p>`;
       }
       function rotLimitsHtml(ri, role) {
         const pl = players(ri, "start");
@@ -5318,7 +5528,9 @@
         feedback(ok ? "good" : "bad", ok ? "Spot on" : "Not there");
         $("fb").insertAdjacentHTML(
           "beforeend",
-          rotGradesHtml(grades, cur.role) + rotLimitsHtml(cur.ri, cur.role),
+          rotGradesHtml(grades, cur.role) +
+            rotMistake(rot, grades) +
+            rotLimitsHtml(cur.ri, cur.role),
         );
       }
       function rotRefresh() {
@@ -5527,6 +5739,11 @@
         watchMount("dWatch", "courtD", cur.ri, cur.phase, cur.role, () => drawDrill(lastTap));
         $("fb").className = `fb ${cls}`;
         $("fb").innerHTML = hOnly(`<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`);
+        if (cls !== "good" && !rot)
+          $("fb").insertAdjacentHTML(
+            "beforeend",
+            mistakeLine(cur.ri, cur.phase, cur.role, lastTap),
+          );
         if (cur.phase === "rec" && nbOn("nbDrill")) {
           const nq = neighbourQ(cur.ri, cur.role);
           if (nq) {
@@ -5583,7 +5800,7 @@
         if (cur.phase === "start") {
           const zx = Math.min(2, Math.max(0, Math.floor(tap.x * 3))),
             zy = tap.y < AL ? 0 : 1;
-          const [c, r] = ZONES[zoneOf(cur.ri, cur.role)];
+          const [c, r] = ZONES[zoneOf(cur.ri, cur.role, "start")];
           dist = zx === c && zy === r ? 0 : 1;
         }
         if (dist < 0.14) {
@@ -5935,7 +6152,7 @@
       }
       function gKey() {
         return (
-          (feature("match-rotate-name") ? "v8|" : "v7|") +
+          (feature("match-rotate-name") ? "v9|" : "v7|") +
           role +
           "|" +
           gSteps().join(",") +
@@ -6240,7 +6457,7 @@
         if (!me && G.role === "L")
           return rulesMode === "official"
             ? "Who is in zone 1 when we serve? Remember: under the official rules the libero may never serve."
-            : "Who is in zone 1 when we serve? In Simplified KSV a substitute (SUB) serves in H5 and H2, so the libero waits off court.";
+            : "Who is in zone 1 when we serve? In Simplified KSV MB serves in H5 and H2, so the libero waits off court.";
         if (!me)
           return st.phase === "serve"
             ? "Who does the libero replace while we serve? And who is serving from zone 1?"
@@ -6249,8 +6466,6 @@
           if (G.role === "L") return `${relation(st.ri, "L")} Find the back-row middle first.`;
           const pz = zoneOf((st.ri + 5) % 6, G.role);
           if (G.mixed || G.replay) return relation(st.ri, G.role);
-          if (pz && zoneOf(st.ri, G.role) !== (pz === 1 ? 6 : pz - 1))
-            return `In the previous rotation you were in zone ${pz}. The middle pair resets here: MB walks along the net from zone 2 to zone 4, the libero across the back from zone 5 to zone 1.`;
           return pz
             ? `In the previous rotation you were in zone ${pz}. Everyone moves one zone clockwise: 2→1→6→5→4→3→2.`
             : `You were off court in the previous rotation. You come back on in the front row, zone 4.`;
@@ -6262,7 +6477,7 @@
             : G.role === "S"
               ? "You don't receive. Stay near your zone, out of the passing lanes, ready to run to the net."
               : "You don't receive. Stay out of the passing lanes.";
-          return `${relation(st.ri, G.role)} That makes your rotational spot zone ${z} (${row} row). ${job} Keep your overlap order at the whistle. ${WHISTLE_MOVE}`;
+          return `${relation(st.ri, G.role, "rec")} That makes your rotational spot zone ${z} (${row} row). ${job} Keep your overlap order at the whistle. ${WHISTLE_MOVE}`;
         }
         if (st.phase === "ar") {
           if (me.kind === "set") return "You are the setter: where do you set from?";
@@ -6270,7 +6485,7 @@
             return `Cover spot as ${passPlan(st.ri)?.hitter} spikes: ${gHintAttack(me)}`;
           return gHintAttack(me);
         }
-        return `When we serve there is no overlap rule, so everyone except the server stands in base defence before the serve: the front row in the middle of its zones, the back row deep. You are ${isFront(st.ri, G.role) ? "front" : "back"} row in this rotation.`;
+        return `When we serve there is no overlap rule, so everyone except the server stands in base defence before the serve: the front row in the middle of its zones, the back row deep. You are ${isFront(st.ri, G.role, "serve") ? "front" : "back"} row in this rotation.`;
       }
       function gHintAttack(me) {
         if (me.kind === "back")
@@ -6385,9 +6600,12 @@
           if (G.rot) {
             $("gFb").insertAdjacentHTML(
               "beforeend",
-              rotGradesHtml(G.rotGrades, G.role) + rotLimitsHtml(st.ri, G.role),
+              rotGradesHtml(G.rotGrades, G.role) +
+                rotMistake(G.rot, G.rotGrades) +
+                rotLimitsHtml(st.ri, G.role),
             );
-          }
+          } else if (q !== "perfect")
+            $("gFb").insertAdjacentHTML("beforeend", mistakeLine(st.ri, st.phase, G.role, G.tap));
         }
         if (G.rot) $("gAsk").textContent = "";
         $("gOff").disabled = true;
@@ -6516,7 +6734,7 @@
         if (st.phase === "start") {
           const zx = Math.min(2, Math.max(0, Math.floor(G.tap.x * 3))),
             zy = G.tap.y < AL ? 0 : 1;
-          const [c, r] = ZONES[zoneOf(st.ri, G.role)];
+          const [c, r] = ZONES[zoneOf(st.ri, G.role, "start")];
           dist = zx === c && zy === r ? 0 : 1;
         }
         gAnswer(dist < 0.14 ? "perfect" : dist < 0.24 ? "close" : "miss");
@@ -7004,7 +7222,7 @@
         return { db, auth };
       })();
       // Bump when the room data changes: a client on another version cannot join that room.
-      const ROOM_V = 2;
+      const ROOM_V = 3;
       const WEEK = 7 * 24 * 60 * 60 * 1000;
       const HOST_GRACE = 10000;
       const NB_GRACE =
