@@ -143,6 +143,43 @@ def check_official_reset(page: Page) -> None:
         fail("reset: the role list opened again after a reload")
 
 
+# Each note starts with this; the shared tail "Your own spots stay the same." is checked on its own.
+RULES_NOTES = {
+    ("official", "MB2"): "Official: MB1 and MB2; the libero is in for the back-row middle;",
+    ("simple", "MB"): "Simplified: you are MB, always the front middle",
+    ("official", "L"): "Official: two middles, MB1 and MB2; you are in for the back-row middle",
+    ("simple", "L"): "Simplified: one middle, MB; you always play the back middle",
+    ("official", "OH1"): "Official: two middles, MB1 and MB2, and the libero may not serve.",
+    ("simple", "S"): "Simplified: one middle, MB, at the net, and the libero in the back row.",
+}
+SAME_SPOTS = "Your own spots stay the same."
+
+
+def check_rules_note(page: Page) -> None:
+    """A rules pick says in one status line what changed for your role; the next tap clears it."""
+    for (rules, role), want in RULES_NOTES.items():
+        open_app(page, "?anim=0", {"role": role, "rulesMode": "simple" if rules == "official" else "official"})
+        open_setup(page)
+        page.click(f'.rulesmode [data-rm="{rules}"]')
+        note = page.locator("#rulesNote")
+        if note.get_attribute("role") != "status" or not note.is_visible():
+            fail(f"{rules} {role}: no rules note after the switch")
+        text = note.inner_text()
+        if not text.startswith(want) or (SAME_SPOTS in text) != (role in ("OH1", "S")):
+            fail(f"{rules} {role}: the rules note reads {text!r}")
+        box = note.bounding_box()
+        if box is None or box["x"] < 0 or box["x"] + box["width"] > page.evaluate("innerWidth"):
+            fail(f"{rules} {role}: the rules note leaves the screen: {box}")
+        page.click("#lNext")
+        if note.is_visible() or note.inner_text():
+            fail(f"{rules} {role}: the rules note stayed after the next tap")
+    open_app(page, "?anim=0", {"role": "OH1", "rulesMode": "simple"})
+    pick(page, rules="official")
+    page.wait_for_timeout(8300)
+    if page.inner_text("#rulesNote"):
+        fail("the rules note did not go away by itself")
+
+
 def check_switch(page: Page) -> None:
     """The picker, the middle carried across and the switch wording."""
     open_app(page, "?anim=0", {"role": "MB2", "rulesMode": "drill"})
@@ -163,7 +200,7 @@ def check_switch(page: Page) -> None:
         fail(f"back in Official the stored MB2 reads as {page.get_attribute('#roleChip', 'data-role')!r}")
     if "Official rules" not in (page.get_attribute("#roleChip", "aria-label") or ""):
         fail("role chip label does not name Official rules")
-    if " ".join(page.inner_text("#roleChip").split()) != "MB2 · O":
+    if " ".join(page.inner_text("#roleChip").split()) != "MB2 Official":
         fail(f"role chip does not show the role and rules: {page.inner_text('#roleChip')!r}")
     pick(page, rules="simple")
     if picker(page) != SIMPLE_ROLES or page.get_attribute("#roleChip", "data-role") != "MB":
@@ -300,6 +337,7 @@ def main() -> None:
         check_official_reset(page)
         check_stale_flag_keys(page)
         check_switch(page)
+        check_rules_note(page)
         check_learn(page)
         check_short_phone(page)
         check_outside_tap(page)
