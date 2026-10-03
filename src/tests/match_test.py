@@ -362,7 +362,7 @@ def check_libero_hint(browser: Browser) -> None:
 
 def check_hint_rule_numbers(browser: Browser) -> None:
     """A Match hint that cites a rule of thumb by number points to that rule in the Learn list."""
-    cases = (("OH1", 0, "outside hitter starts left"), ("L", 0, "Back-row movement"), ("OP", 3, "opposite covers deep"))
+    cases = (("OH1", 0, "outside starts left"), ("L", 0, "cover first, then base"), ("OP", 3, "opposite covers deep"))
     for rules in ("simple", "official"):
         for role, rotation, title in cases:
             page = new_page(browser, rules=rules)

@@ -444,8 +444,8 @@ def check_static(page: Page) -> None:
         learn(page, ri, phase)
         if anim(page):
             fail(f"R{ri + 1} {phase}: a chip tap plays an animation")
-        if not page.is_visible("#lPlay") or page.locator("#lDots i").count() != 6:
-            fail(f"R{ri + 1} {phase}: the controls or the six stage dots do not show")
+        if not page.is_visible("#lPlay") or page.locator("#lDots i").count() != 7:
+            fail(f"R{ri + 1} {phase}: the controls or the seven stage dots do not show")
         if not page.inner_text("#lNext").lower().startswith("next:"):
             fail(f"R{ri + 1} {phase}: Next reads {page.inner_text('#lNext')!r}")
         if page.locator("#courtL .am").count():
@@ -461,8 +461,8 @@ def check_static(page: Page) -> None:
     if anim(page) or page.inner_text("#learnTag") != "R2 (H6) · Rotation":
         fail("Next into the next Rotation animates")
     stages: list[dict[str, Any]] = page.evaluate("window.ksvLearn.stages(0, 'start')")
-    if len(stages) != 6:
-        fail(f"Rotation has {len(stages)} build stages, expected 6")
+    if len(stages) != 7:
+        fail(f"Rotation has {len(stages)} build stages, expected 7")
 
 
 HIT_Y, APPROACH_Y = 0.08, 0.17
@@ -487,6 +487,8 @@ TRAIL_FADE_MS = 400
 BALL_WAIT_MS = 400
 DEEP_LIMIT = 0.85
 CAPTION_MS = 2500
+BUILD_MS = 1200
+BUILD_PLAY_MAX_MS = 10000
 HELD = (MARKER_R * 100 + 1 + 0.65 * MARKER_R * 100) / 100
 
 
@@ -536,6 +538,10 @@ def trails_at(stages: list[dict[str, Any]], t: float) -> list[str]:
 
 
 ZONES = (4, 3, 2, 5, 6, 1)
+WALK_ARROWS = """() => [...document.querySelectorAll('#courtL g.walk')]
+  .filter((g) => +g.getAttribute('opacity') > 0).map((g) => { const l = g.querySelector('line');
+    const v = (n) => +l.getAttribute(n) / 100;
+    return { from: g.dataset.from, to: g.dataset.to, x1: v('x1'), y1: v('y1'), x2: v('x2'), y2: v('y2') }; })"""
 SHOWN = """() => [...document.querySelectorAll('#courtL .am')]
   .filter((g) => +(g.getAttribute('opacity') ?? 1) > 0).map((g) => g.dataset.p).sort()"""
 
@@ -546,11 +552,17 @@ def rotation_zones(ri: int, mode: str) -> dict[str, int]:
 
 
 def build_order(zones: dict[str, int]) -> list[str]:
-    """The setter, the opposite, the outside hitters, then the front middle and the back-row player left."""
-    known = ["S", "OP", "OH1", "OH2"]
-    middle = next(p for p, z in zones.items() if z in (4, 3, 2) and p not in known)
-    back = next(p for p in zones if p not in known and p != middle)
-    return [*known, middle, back]
+    """The zone walk: the player in each zone from the setter's up, 6 wrapping to 1."""
+    by_zone = {z: p for p, z in zones.items()}
+    return [by_zone[(zones["S"] - 1 + k) % 6 + 1] for k in range(6)]
+
+
+WALK_JOBS = ("S", "OH", "MB", "OP", "OH", "MB")
+
+
+def job(p: str) -> str:
+    """A role's job in the walk: L and OM play the middle."""
+    return "MB" if p in ("L", "OM") else p.rstrip("12")
 
 
 def check_build_stages(page: Page, mode: str, ri: int) -> None:
@@ -565,10 +577,17 @@ def check_build_stages(page: Page, mode: str, ri: int) -> None:
             fail(f"{tag}: {p} is in zone {zones[p]}, the rule gives {z}")
     if ri in (2, 5) and ("L" in zones or zones.get(server(ri, mode)) != 1):  # type: ignore[arg-type]
         fail(f"{tag}: expected the serving middle in zone 1 and no L: {zones}")
+    if tuple(job(p) for p in order) != WALK_JOBS:
+        fail(f"{tag}: the walk from the setter's zone meets {order}, expected the jobs {WALK_JOBS}")
     stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'start')")
+    walks = [st["walk"] for st in stages]
+    if walks[0] is not None or any(w is None or zones[w[0]] % 6 + 1 != zones[w[1]] for w in walks[1:]):
+        fail(f"{tag}: the walk arrows are {walks}, expected each from zone n to zone n + 1")
+    if [w[1] for w in walks[1:]] != [*order[1:], order[0]]:
+        fail(f"{tag}: the walk arrows {walks} do not close the circle back at the setter")
     got = [st["appear"] for st in stages]
-    if got != order:
-        fail(f"{tag}: the markers appear as {got}, expected {order}")
+    if got != [*order, None]:
+        fail(f"{tag}: the markers appear as {got}, expected {order} and then the check stage")
     if any(st["moves"] or st["ball"] for st in stages):
         fail(f"{tag}: a build stage moves a player or the ball")
     still = {o["p"]: (o["x"], o["y"]) for o in page.evaluate(f"window.ksvLearn.players({ri}, 'start')")}
@@ -582,18 +601,43 @@ def check_build_stages(page: Page, mode: str, ri: int) -> None:
     end = {p: (v["x"], v["y"]) for p, v in page.evaluate(f"window.ksvLearn.track({ri}, 'start', 1)")[-1]["pos"].items()}
     if set(end) != set(still) or any(math.dist(end[p], still[p]) > 1e-6 for p in still):
         fail(f"{tag}: the build ends on {end}, not the still {still}")
-    texts = [st["notes"][st["appear"]] for st in stages]
-    for p, text in zip(order, texts, strict=False):
-        if len(text) > 78 or f"zone {zones[p]}" not in text:
+    texts = [st["notes"][st["appear"]] for st in stages[:-1]]
+    for p, text in zip(order, texts, strict=True):
+        if len(text) > 78 or f"zone {zones[p]}" not in text.lower():
             fail(f"{tag}: {p}'s caption is {len(text)} characters or misses its zone: {text!r}")
+    count = ", ".join(str((zones["S"] - 1 + k) % 6 + 1) for k in range(1, 6))
+    wrap = "; after 6 comes 1" if zones["S"] > 1 else ""
+    if texts[0] != f"Rule 1: setter in zone {zones['S']} (H{zones['S']}). Count up: {count}{wrap}.":
+        fail(f"{tag}: the setter's caption is {texts[0]!r}")
     if len(set(texts)) != len(texts):
         fail(f"{tag}: repeated captions {texts}")
-    if ri in (2, 5) and "serves" not in texts[-1]:
-        fail(f"{tag}: the serving middle's caption does not say it serves: {texts[-1]!r}")
+    serving = ri in (2, 5)
+    for p, text in zip(order, texts, strict=True):
+        if p == "L" and "libero" not in text:
+            fail(f"{tag}: L's caption does not say the libero plays the middle: {text!r}")
+        if serving and p == server(ri, mode) and "serves" not in text:  # type: ignore[arg-type]
+            fail(f"{tag}: the serving middle's caption does not say it serves: {text!r}")
+    check = stages[-1]
+    partner = ("OM" if mode == "simple" else "MB") if serving else "L"
+    want_check = f"Rule 2: same job, opposite corners: S–OP, OH–OH, MB–{partner}."
+    if (
+        check["notes"]
+        or check["moves"]
+        or [c for c in page.evaluate("(a) => window.ksvLearn.captions(...a)", [ri, "start", "OH1"])][-1] != want_check
+    ):
+        fail(f"{tag}: the last stage is not the diagonal check {want_check!r}")
+    build_ms = page.evaluate("window.ksvLearn.buildMs()")
+    if build_ms != BUILD_MS:
+        fail(f"{tag}: a build stage lasts {build_ms} ms, expected {BUILD_MS}")
+    if [(st["start"], st["dur"]) for st in stages] != [(k * BUILD_MS, BUILD_MS) for k in range(len(stages))]:
+        fail(f"{tag}: the stages run {[(st['start'], st['dur']) for st in stages]}, expected {BUILD_MS} ms each")
     for role in MODES[mode]:
-        plan = [c["text"] for c in page.evaluate("(a) => window.ksvLearn.captionPlan(...a)", [ri, "start", role])]
-        if len(plan) != len(stages) or len(set(plan)) != len(plan):
-            fail(f"{tag} as {role}: the caption plan is {plan}, expected every stage's line once")
+        plan = page.evaluate("(a) => window.ksvLearn.captionPlan(...a)", [ri, "start", role])
+        texts = [c["text"] for c in plan]
+        if len(texts) != len(stages) or len(set(texts)) != len(texts):
+            fail(f"{tag} as {role}: the caption plan is {texts}, expected every stage's line once")
+        if [c["t"] for c in plan] != [st["start"] for st in stages]:
+            fail(f"{tag} as {role}: the captions change at {[c['t'] for c in plan]}, expected each stage start")
 
 
 def check_rotation_build(page: Page) -> None:
@@ -627,6 +671,15 @@ def check_rotation_build(page: Page) -> None:
             check_positions(f"{tag} step {k}", page.evaluate(MARKERS, "#courtL .am"), {p: still[p] for p in order[:k]})
             if page.locator("#courtL .bnd").count():
                 fail(f"{tag}: overlap lines show during the build")
+            arrows = page.evaluate(WALK_ARROWS)
+            if [(a["from"], a["to"]) for a in arrows] != list(zip(order[: k - 1], order[1:k], strict=True)):
+                fail(f"{tag}: after {k} Step(s) the walk arrows are {arrows}, expected {order[:k]} in order")
+            for a in arrows:
+                start, end = (a["x1"], a["y1"]), (a["x2"], a["y2"])
+                if math.dist(start, still[a["from"]]) > 0.1 or math.dist(end, still[a["to"]]) > 0.1:
+                    fail(f"{tag}: the walk arrow {a} does not run from {a['from']} to {a['to']}")
+            if page.locator("#courtL line[marker-end]:not(.walk line)").count():
+                fail(f"{tag}: the rotation arrows show during the build")
             line = page.evaluate(f"window.ksvLearn.captions({ri}, 'start', '{role}')")[k - 1]
             if page.inner_text("#lCap").strip() != line:
                 fail(f"{tag}: after {k} Step(s) the caption is {page.inner_text('#lCap')!r}, expected {line!r}")
@@ -636,16 +689,29 @@ def check_rotation_build(page: Page) -> None:
         page.click("#lBack")
         if anim(page) or page.locator("#courtL .mk").count() != 6:
             fail(f"{tag}: Step back from the first stage does not return to the still")
+        page.evaluate(
+            """() => { window.buildRun = null; let t0 = null;
+            const poll = () => { const a = window.ksvLearn.anim();
+              if (a?.playing && t0 === null) t0 = performance.now();
+              if (t0 === null || a) requestAnimationFrame(poll);
+              else window.buildRun = performance.now() - t0; };
+            requestAnimationFrame(poll); }"""
+        )
         page.click("#lPlay")
-        page.wait_for_function("!window.ksvLearn.anim()", timeout=25000)
+        page.wait_for_function("window.buildRun !== null", timeout=25000)
+        run = page.evaluate("window.buildRun")
+        if run >= BUILD_PLAY_MAX_MS:
+            fail(f"{tag}: the build played at 1× for {run:.0f} ms, expected under {BUILD_PLAY_MAX_MS}")
         check_positions(f"{tag} end", page.evaluate(MARKERS, "#courtL .mk"), still)
+        if page.locator("#courtL g.walk").count() or page.locator("#courtL line[marker-end]").count() < 6:
+            fail(f"{tag}: the still after the play does not show the rotation arrows instead of the walk")
         if mode == "official" and ("L" in still or role not in still):
             fail(f"{tag}: the build shows L or leaves out the serving middle: {sorted(still)}")
         if mode == "simple" and not page.locator("#courtL .bnd").count():
             fail(f"{tag}: the overlap lines do not show at the end")
         want = page.evaluate(f"window.ksvLearn.captions({ri}, 'start', '{role}')")
         items = page.locator("#lCap .then li").all_inner_texts()
-        if items != want or len(items) != 6:
+        if items != want or len(items) != 7:
             fail(f"{tag}: after the play the Then: list is {items}, expected {want}")
 
 
@@ -1418,7 +1484,7 @@ def check_reduced(browser: Browser) -> None:
         still = page.evaluate("window.ksvLearn.still(0, 'start', 'OH1')")
         items = page.locator("#lCap ol li").all_inner_texts()
         if items != ([still] if still and still not in build else []) + build or page.is_visible("#lAnim"):
-            fail(f"{label} Rotation: the caption lists {items}, expected the six build steps {build}")
+            fail(f"{label} Rotation: the caption lists {items}, expected the seven build steps {build}")
         for phase in ("serve", "rec"):
             page.click("#lNext")
             if anim(page) or page.locator("#courtL .am").count():
