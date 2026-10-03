@@ -1,12 +1,11 @@
 """Playwright end-to-end test of same-device multiplayer in index.html."""
 
-import contextlib
 import random
 import re
 import sys
 from pathlib import Path
 
-from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import Page, expect, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 # A stored role skips the first-visit role sheet, which covers the page.
@@ -23,6 +22,20 @@ GAME_TEXT_JS = (
     " return [g.textContent, ...[...g.querySelectorAll('[aria-label]')].map(e => e.getAttribute('aria-label'))]"
     ".join(' | '); }"
 )
+
+
+def wait_stored(pg: Page, keys: list[str]) -> None:
+    """Waits until a fresh page of the same context reads the stored keys as this page does.
+
+    A reload can land in a new renderer, which reads the browser's copy of localStorage, not this page's.
+    """
+    values = pg.evaluate("keys => keys.map(k => localStorage.getItem(k))", keys)
+    probe = pg.context.new_page()
+    probe.goto((ROOT / "requirements.txt").as_uri())
+    probe.wait_for_function(
+        "([keys, values]) => keys.every((k, i) => localStorage.getItem(k) === values[i])", arg=[keys, values]
+    )
+    probe.close()
 
 
 def assert_h_names(pg: Page, where: str) -> None:
@@ -88,7 +101,7 @@ def breakdown_total(line: str) -> tuple[int, int]:
 random.seed(3)
 with sync_playwright() as p:
     b = p.chromium.launch()
-    pg = b.new_page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    pg = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True).new_page()
     pg.add_init_script(SEED_ROLE)
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
@@ -287,13 +300,12 @@ with sync_playwright() as p:
     pg.click("#tabGame")
     assert pg.is_visible("#gPass"), "role change at the top ended the same-device match"
     pg.click("#pQuit")
+    assert pg.evaluate("localStorage.getItem('ksv51:gPlayers')") == '"mp"', "same-device choice not stored"
+    wait_stored(pg, ["ksv51:gPlayers", "ksv51:mpPlayers"])
     pg.reload()
-    pg.wait_for_load_state("load")
     pg.click("#tabGame")
-    with contextlib.suppress(Exception):
-        pg.wait_for_function('document.querySelector(\'input[name="gPlayers"][value="mp"]\')?.checked', timeout=5000)
-    assert pg.is_checked('input[name="gPlayers"][value="mp"]'), "same-device choice not remembered"
-    assert pg.input_value('#mpList input[data-k="0"]'), "player names not remembered"
+    expect(pg.locator('input[name="gPlayers"][value="mp"]'), "same-device choice not remembered").to_be_checked()
+    expect(pg.locator('#mpList input[data-k="0"]'), "player names not remembered").not_to_have_value("")
     # remove works after reload, when the list exists before the Rules switch is wired up
     rules_before = pg.evaluate("localStorage.getItem('ksv51:rulesMode')")
     pg.click('#mpList button[data-rm="2"]')

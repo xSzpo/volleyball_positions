@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
-from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import Error, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 URL = (ROOT / "index.html").as_uri() + "?ff=all&anim=0"
@@ -97,6 +97,20 @@ def check_contrast(page: Page, tag: str) -> None:
         need(f"{family} on --panel", colour[family], colour["--panel"], 4.5)
 
 
+def wait_stored(page: Page, keys: list[str]) -> None:
+    """Waits until a fresh page of the same context reads the stored keys as this page does.
+
+    A reload can land in a new renderer, which reads the browser's copy of localStorage, not this page's.
+    """
+    values = page.evaluate("keys => keys.map(k => localStorage.getItem(k))", keys)
+    probe = page.context.new_page()
+    probe.goto((ROOT / "requirements.txt").as_uri())
+    probe.wait_for_function(
+        "([keys, values]) => keys.every((k, i) => localStorage.getItem(k) === values[i])", arg=[keys, values]
+    )
+    probe.close()
+
+
 def check_button(page: Page, tag: str, expected: str) -> None:
     if shown_theme(page) != expected:
         fail(f"{tag}: body background is not {expected}")
@@ -109,12 +123,12 @@ def run(scheme: Literal["light", "dark"], shots: Path | None) -> None:
     tag = f"system {scheme}"
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
-        page = browser.new_page(
+        page = browser.new_context(
             viewport={"width": 360, "height": 740},
             color_scheme=scheme,
             is_mobile=True,
             has_touch=True,
-        )
+        ).new_page()
         errors: list[str] = []
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.add_init_script("localStorage.setItem('ksv51:role', JSON.stringify('OH1'))")
@@ -141,9 +155,18 @@ def run(scheme: Literal["light", "dark"], shots: Path | None) -> None:
             fail(f"{tag}: tap did not set data-theme={flipped}")
         check_button(page, f"{tag} after tap", flipped)
         check_contrast(page, f"{tag} tokens after tap")
+        if page.evaluate("localStorage.getItem('ksv51:theme')") != f'"{flipped}"':
+            fail(f"{tag}: tap did not store ksv51:theme={flipped}")
+        wait_stored(page, ["ksv51:theme"])
         page.reload()
-        page.wait_for_timeout(300)
-        if page.get_attribute("html", "data-theme") != flipped:
+        try:
+            page.wait_for_function(
+                "([shown, next]) => document.documentElement.dataset.theme === shown"
+                " && document.getElementById('themeBtn').getAttribute('aria-label') === `Switch to ${next} mode`",
+                arg=[flipped, OPPOSITE[flipped]],
+                timeout=5000,
+            )
+        except Error:
             fail(f"{tag}: choice not remembered after reload")
         check_button(page, f"{tag} after reload", flipped)
         page.click("#tabSets")
