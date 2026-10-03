@@ -1058,3 +1058,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** OH1 is always one zone on from the setter (6 wraps to 1), so the caption says "Outside hitter 1 serves next after the setter, one zone on: zone <n+1>." It names the serving order, as `relation()` does, rather than "next to", which on court can mean either side.
 - **Alternatives:** "OH1 is next to the setter"; count the zones as in `relation()` ("count 1 zone on").
 - **Reversible by:** `buildRotation()` in `src/template.html`.
+
+### 139. Simplified R3 and R6: MB serves, the other middle is OM
+
+- **Issue:** none (owner decision, 2026-10-03)
+- **Problem:** In Simplified R3 and R6 the libero would be in zone 1 and may not serve. A grey substitute (SUB) used to come on to serve, which no real team does.
+- **Decision:** The owner decided MB serves. At Rotation and Our serve MB is in zone 1 and serves, L is off, and the other middle plays zone 4. When we lose the serve, at Reception, MB goes back to the net and L to the back row. The other middle is labelled `OM` ("Other middle"): middle colour with a dashed edge, named "the other middle" in captions. The online room data is unchanged, so `ROOM_V` stays.
+- **Alternatives:** `MB2` or `SUB` as the label (both read as a second, specific player); hiding the other middle (leaves zone 4 empty).
+- **Reversible by:** `OTHER_MIDDLE`, `lineup()`, `server()` and `rotation_lineup()` in `src/data.py`; `middleServes()`, `who()` and `stillStage()` in `src/template.html`.

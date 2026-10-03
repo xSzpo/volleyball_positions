@@ -3,7 +3,19 @@
 import json
 from pathlib import Path
 
-from data import ATTACK_LINE, BASE_DEF, ROWS, RULES_MODES, SETS, SETTER_X, UNCONFIRMED_SETS, RulesMode, lineup, server
+from data import (
+    ATTACK_LINE,
+    BASE_DEF,
+    ROWS,
+    RULES_MODES,
+    SETS,
+    SETTER_X,
+    UNCONFIRMED_SETS,
+    RulesMode,
+    lineup,
+    rotation_lineup,
+    server,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,6 +33,7 @@ def rows(mode: RulesMode) -> list[dict[str, object]]:
                 server=server(ri, mode),
                 front=r["front"],
                 back=r["back"],
+                start=rotation_lineup(ri, mode),
                 rec=[list(x) for x in r["rec"]],
                 ar=[list(x) for x in r["ar"]],
                 serve=[r["serve"][0], r["serve"][1]],

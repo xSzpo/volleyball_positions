@@ -336,7 +336,10 @@ def check_off_court_pill(browser: Browser) -> None:
 
 def check_libero_hint(browser: Browser) -> None:
     """The libero's hint at the R3 serve, off court, names the rule set in play."""
-    for rules, want, unwanted in (("simple", "SUB", "official rules"), ("official", "official rules", "SUB")):
+    for rules, want, unwanted in (
+        ("simple", "MB serves", "official rules"),
+        ("official", "official rules", "MB serves"),
+    ):
         page = new_page(browser, rules=rules)
         setup_match(page, "L", ("serve",))
         page.click("#gStart")
@@ -351,7 +354,7 @@ def check_libero_hint(browser: Browser) -> None:
         if want not in hint or unwanted in hint:
             fail(f"{rules} L hint at the R3 serve reads {hint!r}, expected {want!r}")
         page.close()
-    print("libero hint: Simplified names SUB, Official the libero rule", flush=True)
+    print("libero hint: Simplified names MB as the server, Official the libero rule", flush=True)
 
 
 def check_hint_rule_numbers(browser: Browser) -> None:
@@ -418,15 +421,19 @@ def fill_rotate(page: Page) -> None:
 
 
 def rotate_lineup(page: Page, ri: int, role: str) -> tuple[list[str], dict[str, tuple[float, float]]]:
-    """The markers Rotate asks for in order (setter, you, your overlap partners) and each right spot."""
+    """The markers Rotate asks for in order (setter, you, your overlap partners) and each right spot.
+
+    In R3 and R6 the middle who serves from zone 1 is nobody's overlap partner.
+    """
     spots = {
         str(o["p"]): (float(o["x"]), float(o["y"])) for o in page.evaluate(f"window.ksvLearn.players({ri}, 'start')")
     }
     order = [] if role == "S" else ["S"]
     order.append(role)
-    if role not in spots:
+    serving = page.evaluate(f"window.ksvLearn.server({ri})") if ri in (2, 5) else None
+    if role not in spots or role == serving:
         return order, spots
-    grid = {(round(x * 3 - 0.5), y > 0.42): p for p, (x, y) in spots.items()}
+    grid = {(round(x * 3 - 0.5), y > 0.42): p for p, (x, y) in spots.items() if p != serving}
     col, back = round(spots[role][0] * 3 - 0.5), spots[role][1] > 0.42
     for key in [(col, not back), (col - 1, back), (col + 1, back)]:
         mate = grid.get(key)

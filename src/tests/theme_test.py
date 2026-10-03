@@ -16,8 +16,8 @@ URL = (ROOT / "index.html").as_uri() + "?ff=all&anim=0"
 FAIL: list[str] = []
 OPPOSITE = {"light": "dark", "dark": "light"}
 COURT = ("--court-g0", "--court-g1", "--court-g2")
-ROLE_FILLS = ("--role-s", "--role-op", "--role-mb", "--role-oh", "--role-sub")
-ROUTES = ("--route-s", "--route-op", "--route-mb", "--route-oh", "--route-l", "--route-sub")
+ROLE_FILLS = ("--role-s", "--role-op", "--role-mb", "--role-oh")
+ROUTES = ("--route-s", "--route-op", "--route-mb", "--route-oh", "--route-l")
 SET_FAMILIES = ("--set-left", "--set-mid", "--set-right", "--set-back")
 RGB = tuple[float, float, float]
 
