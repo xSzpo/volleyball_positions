@@ -278,7 +278,7 @@ def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str])
         fail(f"report context is wrong: { {k: report[k] for k in ('rules', 'theme', 'version')} }")
     if report["view"] != "R3 rec" or not report["viewport"].startswith("390x664@"):
         fail(f"report view or viewport is wrong: {report['view']!r} {report['viewport']!r}")
-    if report["flags"].get("bug-report") is not True or not isinstance(report["createdAt"], int):
+    if report["flags"] != {"animation": False, "zones": True} or not isinstance(report["createdAt"], int):
         fail(f"report flags or createdAt are wrong: {report['flags']} {report['createdAt']}")
     if report["image"] != src:
         fail("the sent image is not the preview")
@@ -545,21 +545,13 @@ def check_widths(browser: Browser, url: str, errors: list[str]) -> None:
         page.context.close()
 
 
-def check_flag_off(browser: Browser, url: str, errors: list[str]) -> None:
-    """With bug-report off neither the icon nor the sheet is in the page."""
-    page, _ = phone(browser, url.replace("ff=all", "ff=all,-bug-report"), errors)
-    if page.locator("#reportBtn, #reportSheet").count():
-        fail("bug-report off leaves the icon or the sheet in the page")
-    page.context.close()
-
-
 def main() -> None:
     """Runs the report scenarios against the emulators, in WebKit with --webkit, else in Chromium."""
     signal.alarm(500)
     engine = "webkit" if "--webkit" in sys.argv[1:] else "chromium"
     emulator_db = os.environ["FIREBASE_DATABASE_EMULATOR_HOST"]
     emulator_auth = os.environ["FIREBASE_AUTH_EMULATOR_HOST"]
-    url = f"{serve()}/index.html?emu={emulator_db},{emulator_auth}&ff=all&anim=0"
+    url = f"{serve()}/index.html?emu={emulator_db},{emulator_auth}&anim=0"
     errors: list[str] = []
     with sync_playwright() as p:
         browser = getattr(p, engine).launch()
@@ -573,7 +565,6 @@ def main() -> None:
         check_hung_storage(browser, url, emulator_db, errors)
         check_real_capture(browser, url, errors)
         check_widths(browser, url, errors)
-        check_flag_off(browser, url, errors)
         browser.close()
     if errors:
         fail(f"page errors: {errors}")

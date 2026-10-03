@@ -1156,3 +1156,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The steps read 4, 3, 2, "serve: you serve, then defend zone 5", "the first off" (the libero in zone 6) and "the second off" (zone 5), from the middle's zone in the Official rotation lineup (the libero's zone when it is in). At Receive in the serving rotation the step reads "serve: when we receive, the libero plays for you". The line ships with the `cycle` rule of thumb under the flag `middle-cycle`; Match hints for an Official middle at Rotate, and when it is off court, cite the rule with `thumbRef("cycle", …)`.
 - **Alternatives:** "off (zone 6)"; no cycle line at Receive in the serving rotation.
 - **Reversible by:** `CYCLE_STEP`, `cycleLine()` and `cycleHint()` in `src/template.html`.
+
+### 151. A report's `flags` carries the animation and zones settings
+
+- **Issue:** #36
+- **Problem:** Report a problem sent every feature flag in `flags`. With the flags gone there is nothing to send, but the live database rules require a non-empty `flags` object of booleans, and they change only with a `terraform apply` by the owner, so a report without it would be refused.
+- **Decision:** `flags` now holds two device settings that help when reading a report: `animation` (false with `?anim=0` or reduced motion) and `zones` (the zone numbers shown). The rules stay as they are.
+- **Alternatives:** make `flags` optional in `infra/database.rules.json` and drop it, which breaks reports until the rules are applied; a fixed placeholder such as `{v2: true}`.
+- **Reversible by:** `reportContext()` in `src/template.html`.

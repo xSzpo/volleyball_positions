@@ -1,10 +1,10 @@
 """Playwright test of the two rule sets: Official (default) and Simplified KSV.
 
 Checks the default mode and the role picker of each, that a stored "simple"
-or "drill" reads as Simplified, that Official needs the ``rules-official`` flag, the
-middle roles carried across a switch, the Simplified middle pair and MB serving in
-R3 and R6 in Learn, the Rules switch wording, and the one-time reset of stored rules
-and role to a first visit in Official.
+or "drill" reads as Simplified, the middle roles carried across a switch, the
+Simplified middle pair and MB serving in R3 and R6 in Learn, the Rules switch wording,
+the one-time reset of stored rules and role to a first visit in Official, and the
+removal of the stored feature flag keys of older versions.
 
 Usage: python src/tests/rules_test.py
 """
@@ -82,7 +82,7 @@ def learn(page: Page, rotation: int, phase: str) -> None:
 
 
 def check_defaults(page: Page) -> None:
-    """Built-in flags: Official by default, a stored Simplified kept; rules-official off keeps a stored Official."""
+    """Official by default, a stored Simplified kept."""
     for stored, want in ((None, "official"), ("simple", "simple"), ("drill", "simple"), ("official", "official")):
         open_app(page, "", {"role": "OH1"} | ({"rulesMode": stored} if stored else {}))
         if checked_rules(page) != want:
@@ -92,7 +92,7 @@ def check_defaults(page: Page) -> None:
         if want == "official" and "two middles" not in page.inner_text("#rmSub"):
             fail(f"defaults, stored {stored}: the Rules note is {page.inner_text('#rmSub')!r}")
         if not page.evaluate("!!document.getElementById('rmOfficial')"):
-            fail(f"defaults, stored {stored}: the Official button is missing with rules-official on")
+            fail(f"defaults, stored {stored}: the Official button is missing")
         if page.evaluate("localStorage.getItem('ksv51:rulesMode')") != (json.dumps(stored) if stored else None):
             fail(f"defaults, stored {stored}: the stored rules changed on load")
     open_app(page, "", {})
@@ -103,19 +103,18 @@ def check_defaults(page: Page) -> None:
     open_app(page, "", {"role": "MB"})
     if page.get_attribute("#roleChip", "data-role") != "MB1":
         fail(f"stored MB with no rules shows as {page.get_attribute('#roleChip', 'data-role')!r}, expected MB1")
-    for stored in ("official", "drill"):
-        open_app(page, "?ff=-rules-official", {"role": "OH1", "rulesMode": stored})
-        if checked_rules(page) != "simple":
-            fail(f"rules-official off, stored {stored}: rules read as {checked_rules(page)}")
-        if page.evaluate("!!document.getElementById('rmOfficial')"):
-            fail(f"rules-official off, stored {stored}: the Official button is in the DOM")
-        if picker(page) != SIMPLE_ROLES:
-            fail(f"rules-official off: role picker is {picker(page)}")
-    open_app(page, "?ff=-rules-official", {"role": "MB2", "rulesMode": "official"})
-    if page.get_attribute("#roleChip", "data-role") != "MB":
-        fail(f"rules-official off: stored MB2 shows as {page.get_attribute('#roleChip', 'data-role')!r}, expected MB")
-    if page.evaluate("JSON.parse(localStorage.getItem('ksv51:rulesMode'))") != "official":
-        fail("rules-official off: a stored Official choice was overwritten")
+
+
+def check_stale_flag_keys(page: Page) -> None:
+    """Flag keys stored by an older version, and a stale ``?ff=``, change nothing and are removed at start-up."""
+    off = {"rules-official": False, "drill-tab": False, "court-zones": False, "*": False}
+    open_app(page, "?ff=-drill-tab", {"role": "OH1", "flags": off, "ffOverride": off})
+    if stored_keys(page, ["flags", "ffOverride"]) != [None, None]:
+        fail(f"stale flag keys still stored: {stored_keys(page, ['flags', 'ffOverride'])}")
+    if checked_rules(page) != "official" or not page.is_visible("#tabDrill"):
+        fail(f"stale flag keys: rules {checked_rules(page)}, Drill tab visible {page.is_visible('#tabDrill')}")
+    if not page.evaluate("!!document.querySelector('#courtL g.zones')"):
+        fail("stale flag keys: no zone numbers on the Learn court")
 
 
 def stored_keys(page: Page, keys: list[str]) -> list[Any]:
@@ -142,15 +141,11 @@ def check_official_reset(page: Page) -> None:
         fail(f"reset: after a reload rules {checked_rules(page)}, role {page.get_attribute('#roleChip', 'data-role')}")
     if page.is_visible("#setupPanel"):
         fail("reset: the role list opened again after a reload")
-    open_app(page, "?ff=all,-rules-official", {"rulesMode": "simple", "role": "OH1", "officialReset": None})
-    after = stored_keys(page, ["rulesMode", "role", "officialReset"])
-    if after != ["simple", "OH1", None] or page.is_visible("#setupPanel"):
-        fail(f"reset with rules-official off: stored {after}, role list open {page.is_visible('#setupPanel')}")
 
 
 def check_switch(page: Page) -> None:
-    """With rules-official on: the picker, the middle carried across and the switch wording."""
-    open_app(page, "?ff=all&anim=0", {"role": "MB2", "rulesMode": "drill"})
+    """The picker, the middle carried across and the switch wording."""
+    open_app(page, "?anim=0", {"role": "MB2", "rulesMode": "drill"})
     if checked_rules(page) != "simple":
         fail(f"stored drill reads as {checked_rules(page)}, expected simple")
     open_setup(page)
@@ -183,7 +178,7 @@ def check_switch(page: Page) -> None:
 
 def check_learn(page: Page) -> None:
     """Simplified in Learn: MB serves from zone 1 in R3 and R6, the other middle in zone 4, L off."""
-    open_app(page, "?ff=all&anim=0", {"role": "MB", "rulesMode": "simple"})
+    open_app(page, "?anim=0", {"role": "MB", "rulesMode": "simple"})
     for ri in (2, 5):
         tag = f"Simplified R{ri + 1}"
         for phase in ("start", "serve"):
@@ -237,7 +232,7 @@ def check_learn(page: Page) -> None:
 def check_short_phone(page: Page) -> None:
     """At 390 x 664 the Official role list fits on screen under the header button, with no sideways scroll."""
     page.set_viewport_size({"width": 390, "height": 664})
-    open_app(page, "?ff=all&anim=0", {"role": "MB2", "rulesMode": "official"})
+    open_app(page, "?anim=0", {"role": "MB2", "rulesMode": "official"})
     open_setup(page)
     fits = page.evaluate(
         "(() => { const r = document.getElementById('setup').getBoundingClientRect();"
@@ -268,7 +263,7 @@ def tap_court_with_list_open(page: Page, court: str) -> None:
 
 def check_outside_tap(page: Page) -> None:
     """A tap on the Drill or Match court that closes the role list does not answer."""
-    open_app(page, "?ff=all&anim=0", {"role": "OH1"})
+    open_app(page, "?anim=0", {"role": "OH1"})
     page.click("#tabDrill")
     stats = page.evaluate("localStorage.getItem('ksv51:stats2')")
     court = page.inner_html("#courtD")
@@ -303,6 +298,7 @@ def main() -> None:
         page.on("pageerror", lambda e: errors.append(str(e)))
         check_defaults(page)
         check_official_reset(page)
+        check_stale_flag_keys(page)
         check_switch(page)
         check_learn(page)
         check_short_phone(page)

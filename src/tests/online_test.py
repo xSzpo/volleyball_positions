@@ -1086,7 +1086,7 @@ def main() -> None:
     emulator_db = os.environ["FIREBASE_DATABASE_EMULATOR_HOST"]
     emulator_auth = os.environ["FIREBASE_AUTH_EMULATOR_HOST"]
     check_rules(emulator_db)
-    base = f"{serve()}/index.html?emu={emulator_db},{emulator_auth}&ff=all&anim=0"
+    base = f"{serve()}/index.html?emu={emulator_db},{emulator_auth}&anim=0"
     url = f"{base}&nbgrace={NB_GRACE_MS}"
     errors: list[str] = []
     with sync_playwright() as p:

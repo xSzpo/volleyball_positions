@@ -15,8 +15,8 @@ height, reduced motion and ?anim=0, the movement trails (through the stage and a
 run carried on), that the ball never waits in a player's hands, L's run in
 front of the deep outside hitter,
 the passer, the 3-2 cover at the spike, the top speed, no
-marker passing through another, the controls in the court panel on a short
-phone, and that the flag off leaves no trace.
+marker passing through another, and the controls in the court panel on a short
+phone.
 
 Usage: python src/tests/anim_test.py
 """
@@ -163,7 +163,7 @@ def check_still_ball(page: Page, tag: str, phase: str, markers: dict[str, list[f
 
 def check_opens_at_rest(page: Page) -> None:
     """Next into Reception opens on its still; Play runs from the start of the play back to it. Base stays still."""
-    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    open_app(page, "", {"role": "OH1", "rulesMode": "simple"})
     learn(page, 0, "serve")
     page.click("#lNext")
     if page.inner_text("#learnTag") != "R1 (H1) · Reception":
@@ -237,7 +237,7 @@ def check_rest_pictures(page: Page) -> None:
     and no ball; its play ends on base defence with the ball over the net.
     """
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             for phase in PHASES:
                 learn(page, ri, phase)
@@ -283,9 +283,9 @@ def check_reception_rest(page: Page, tag: str, ri: int = 0, mode: str = "simple"
 def check_nudge(browser: Browser) -> None:
     """Play nudges once per open of Rotation or Reception, never on Our serve, Base, a loop or while playing."""
     for label, query, motion in (
-        ("motion", "?ff=all", None),
-        ("reduced motion", "?ff=all", "reduce"),
-        ("?anim=0", "?ff=all&anim=0", None),
+        ("motion", "", None),
+        ("reduced motion", "", "reduce"),
+        ("?anim=0", "?anim=0", None),
     ):
         context = browser.new_context(viewport={"width": 390, "height": 844}, reduced_motion=motion)  # type: ignore[arg-type]
         page = context.new_page()
@@ -382,7 +382,7 @@ def check_nudge_colour_only(browser: Browser) -> None:
     """The Play nudge changes colour only: no box on the Learn screen or the page moves while it runs."""
     context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
     page = context.new_page()
-    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    open_app(page, "", {"role": "OH1", "rulesMode": "simple"})
     learn(page, 0, "rec")
     page.wait_for_timeout(900)
     got = page.evaluate(NUDGE_BOXES)
@@ -399,7 +399,7 @@ def check_nudge_colour_only(browser: Browser) -> None:
 
 def check_no_autoplay(page: Page) -> None:
     """No route plays: load, reload, Next, the chips, the arrow keys, a role change and a rules change."""
-    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    open_app(page, "", {"role": "OH1", "rulesMode": "simple"})
     if page.inner_text("#learnTag") != "R1 (H1) · Reception" or anim(page):
         fail(f"a fresh load onto {page.inner_text('#learnTag')!r} plays: {anim(page)}")
     page.reload()
@@ -439,7 +439,7 @@ def check_no_autoplay(page: Page) -> None:
 
 def check_static(page: Page) -> None:
     """Rotation opens on its still with the controls and plays nothing; Next reads in full and Base does not play."""
-    open_app(page, "?ff=all", {"role": "S", "rulesMode": "official"})
+    open_app(page, "", {"role": "S", "rulesMode": "official"})
     for ri, phase in ((0, "start"), (3, "start")):
         learn(page, ri, phase)
         if anim(page):
@@ -655,7 +655,7 @@ def check_build_off_court(page: Page) -> None:
     for ri in (0, 3):
         role = back_middle(ri, "official")
         tag = f"official R{ri + 1} Rotation build as {role}"
-        open_app(page, "?ff=all", {"role": role, "rulesMode": "official"})
+        open_app(page, "", {"role": role, "rulesMode": "official"})
         learn(page, ri, "start")
         for k in range(7):
             page.click("#lStep")
@@ -674,13 +674,13 @@ def check_rotation_build(page: Page) -> None:
     R6 build the serving middle in zone 1 and no L.
     """
     for mode in MODES:
-        open_app(page, "?ff=all", {"role": "OH1", "rulesMode": mode})
+        open_app(page, "", {"role": "OH1", "rulesMode": mode})
         for ri in range(6):
             check_build_stages(page, mode, ri)
     for mode, ri in (("simple", 0), ("official", 2)):
         role = "OH1" if mode == "simple" else server(ri, mode)  # type: ignore[arg-type]
         tag = f"{mode} R{ri + 1} Rotation as {role}"
-        open_app(page, "?ff=all", {"role": role, "rulesMode": mode})
+        open_app(page, "", {"role": role, "rulesMode": mode})
         learn(page, ri, "start")
         zones = rotation_zones(ri, mode)
         back = back_middle(ri, mode)
@@ -764,7 +764,7 @@ def check_reception_stages(page: Page) -> None:
 
     Step stays on the last stage; Play runs on and fades back to the reception spots.
     """
-    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    open_app(page, "", {"role": "OH1", "rulesMode": "simple"})
     learn(page, 0, "start")
     page.click('.ph[data-k="rec"]')
     ar = spots(0, "ar")
@@ -889,7 +889,7 @@ def check_reception_ends(page: Page) -> None:
     """
     zones = {z: spot[:2] for z, spot in BASE_DEF.items()}
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             tag = f"{mode} R{ri + 1} Reception"
             row = lineup(ri, mode)  # type: ignore[arg-type]
@@ -972,7 +972,7 @@ def check_quick_in_front(page: Page) -> None:
     The quick opens in the middle of the front zone, so the back-row hitter's lane on the 3 m line stays clear.
     """
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             row = lineup(ri, mode)  # type: ignore[arg-type]
             middle = next(p for p in row["front"] if p.startswith("MB"))
@@ -994,7 +994,7 @@ def check_cover_runs(page: Page) -> None:
     outside-in, ending at least 0.05 inside where it starts.
     """
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             tag = f"{mode} R{ri + 1} Reception"
             row = lineup(ri, mode)  # type: ignore[arg-type]
@@ -1037,7 +1037,7 @@ def check_ball_moving(page: Page) -> None:
     L's run in stage 2 stays in front of y DEEP_LIMIT.
     """
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             tag = f"{mode} R{ri + 1} Reception"
             stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")
@@ -1090,7 +1090,7 @@ def check_caption_timing(page: Page) -> None:
     Every rotation, role and rule set, from the caption plan; then one Reception played at 1× on the page.
     """
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             phase = "rec"
             total = page.evaluate(f"window.ksvLearn.track({ri}, '{phase}', 1)")[-1]["t"]
@@ -1104,7 +1104,7 @@ def check_caption_timing(page: Page) -> None:
                 others = [c["text"] for c in plan[1:] if not c["text"].startswith(f"You ({role})")]
                 if others and any(role in st["notes"] for st in stages):
                     fail(f"{tag}: the caption changes to someone else's line: {others}")
-    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    open_app(page, "", {"role": "OH1", "rulesMode": "simple"})
     learn(page, 0, "rec")
     page.evaluate(
         """() => { window.capLog = [];
@@ -1123,7 +1123,7 @@ def check_caption_timing(page: Page) -> None:
 def check_rest_list(page: Page) -> None:
     """After the Reception play the rest caption keeps the reception cue and lists your lines under Then:."""
     for mode, role in (("simple", "OH1"), ("official", "MB2")):
-        open_app(page, "?ff=all", {"role": role, "rulesMode": mode})
+        open_app(page, "", {"role": role, "rulesMode": mode})
         learn(page, 3, "rec")
         if page.locator("#lCap .then").count():
             fail(f"{mode}: the Then: list shows before the play")
@@ -1146,7 +1146,7 @@ def check_path_shapes(page: Page) -> None:
     A front-row side switch behind the middle may be longer.
     """
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             phase = "rec"
             stages: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.stages({ri}, '{phase}')")
@@ -1168,7 +1168,7 @@ def check_path_shapes(page: Page) -> None:
 def check_switch_behind(page: Page) -> None:
     """After the spike, a front-row player who switches sides crosses GAP behind the middle."""
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             row = lineup(ri, mode)  # type: ignore[arg-type]
             middle = next(p for p in row["front"] if p.startswith("MB"))
@@ -1188,7 +1188,7 @@ def check_switch_behind(page: Page) -> None:
 def check_cross_captions(page: Page) -> None:
     """After the spike, a run to base across the centre line by more than 0.3 is captioned as a cross; no other is."""
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         crossed = 0
         for ri in range(6):
             stage = page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')")[-1]
@@ -1210,7 +1210,7 @@ def check_no_overlap(page: Page) -> None:
     Every Reception play, rotation and rule set, sampled about every 10 ms; the ball may touch a marker.
     """
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
             phase = "rec"
             track: list[dict[str, Any]] = page.evaluate(f"window.ksvLearn.track({ri}, '{phase}', 1000)")
@@ -1240,7 +1240,7 @@ def check_no_overlap(page: Page) -> None:
 
 def check_never_blocks(page: Page) -> None:
     """Next, the chips and the court answer at once while a phase plays; markers ignore taps."""
-    open_app(page, "?ff=all", {"role": "S", "rulesMode": "simple"})
+    open_app(page, "", {"role": "S", "rulesMode": "simple"})
     learn(page, 1, "rec")
     page.click("#lPlay")
     page.wait_for_timeout(300)
@@ -1268,7 +1268,7 @@ def check_never_blocks(page: Page) -> None:
 
 
 def check_speed(page: Page) -> None:
-    open_app(page, "?ff=all", {"role": "L", "rulesMode": "simple"})
+    open_app(page, "", {"role": "L", "rulesMode": "simple"})
     page.click("#lSpeed")
     if page.inner_text("#lSpeed") != "0.5×" or page.evaluate("localStorage.getItem('ksv51:animSpeed')") != "0.5":
         fail(f"speed button: {page.inner_text('#lSpeed')!r}")
@@ -1285,7 +1285,7 @@ def check_speed(page: Page) -> None:
 
 def check_still_captions(page: Page) -> None:
     """The exchanges and MB serving in Simplified R3 and R6 stay in the still captions."""
-    open_app(page, "?ff=all", {"role": "MB", "rulesMode": "simple"})
+    open_app(page, "", {"role": "MB", "rulesMode": "simple"})
     for ri in (2, 5):
         tag = f"Simplified R{ri + 1}"
         still = page.evaluate(f"window.ksvLearn.still({ri}, 'start', 'MB')")
@@ -1329,7 +1329,7 @@ def check_captions(page: Page) -> None:
     The Rotation build's one line, shared by every stage, may run to WALK_MAX characters.
     """
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         result: list[dict[str, Any]] = page.evaluate(
             """(roles) => { const cap = document.querySelector('#lCap'), out = [];
             const line = parseFloat(getComputedStyle(cap).lineHeight);
@@ -1396,7 +1396,7 @@ def check_step_back(page: Page) -> None:
     """Step back after Step returns to the same frame; it stops on the start picture and never plays."""
     for mode in MODES:
         for ri in (0, 3):
-            open_app(page, "?ff=all", {"role": "OH1", "rulesMode": mode})
+            open_app(page, "", {"role": "OH1", "rulesMode": mode})
             learn(page, ri, "rec")
             tag = f"{mode} R{ri + 1} Reception"
             bar = page.evaluate(BAR)
@@ -1478,7 +1478,7 @@ def check_step_back_paused(page: Page) -> None:
     """Step back from a pause mid-stage and in the end hold, disabled in a Step run, no caption fade on resume."""
     for mode in MODES:
         for ri in (0, 3):
-            open_app(page, "?ff=all", {"role": "OH1", "rulesMode": mode})
+            open_app(page, "", {"role": "OH1", "rulesMode": mode})
             learn(page, ri, "rec")
             tag = f"{mode} R{ri + 1} Reception"
             count = len(page.evaluate(f"window.ksvLearn.stages({ri}, 'rec')"))
@@ -1523,7 +1523,7 @@ def check_reduced(browser: Browser) -> None:
 
     Base shows base defence with the ball, no routes and one caption.
     """
-    for label, query, motion in (("reduced motion", "?ff=all", "reduce"), ("?anim=0", "?ff=all&anim=0", None)):
+    for label, query, motion in (("reduced motion", "", "reduce"), ("?anim=0", "?anim=0", None)):
         context = browser.new_context(viewport={"width": 390, "height": 844}, reduced_motion=motion)  # type: ignore[arg-type]
         page = context.new_page()
         open_app(page, query, {"role": "OH1", "rulesMode": "simple"})
@@ -1598,7 +1598,7 @@ def check_phone(browser: Browser) -> None:
     for height in (750, 664):
         context = browser.new_context(viewport={"width": 390, "height": height}, is_mobile=True, has_touch=True)
         page = context.new_page()
-        open_app(page, "?ff=all", {"role": "S", "rulesMode": "simple"})
+        open_app(page, "", {"role": "S", "rulesMode": "simple"})
         learn(page, 0, "ar")
         page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         played = 0
@@ -1647,7 +1647,7 @@ def check_phone(browser: Browser) -> None:
 def check_official(page: Page) -> None:
     """Official R3 and R6: the Rotation step shows the real lineup and the exchanges stay in the still captions."""
     for ri, (on, serves) in ((2, ("MB2", "MB1")), (5, ("MB1", "MB2"))):
-        open_app(page, "?ff=all", {"role": serves, "rulesMode": "official"})
+        open_app(page, "", {"role": serves, "rulesMode": "official"})
         tag = f"Official R{ri + 1}"
         if page.evaluate(f"window.ksvLearn.stages({ri}, 'serve')"):
             fail(f"{tag} Our serve has animation stages")
@@ -1676,7 +1676,7 @@ def check_official(page: Page) -> None:
 def check_passer(page: Page) -> None:
     """The serve goes to a guide rule 01 receiver, the passer changes across rotations and the caption names them."""
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         passers = set()
         for ri in range(6):
             tag = f"{mode} R{ri + 1} Reception"
@@ -1734,7 +1734,7 @@ def check_static_phases(page: Page) -> None:
     pressed by script (they are hidden) do nothing. The hidden controls bar keeps its height.
     """
     for mode, roles in MODES.items():
-        open_app(page, "?ff=all", {"role": roles[0], "rulesMode": mode})
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
         learn(page, 5, "start")
         page.evaluate(NUDGES)
         for phase, name in STILL_NAMES.items():
@@ -1754,7 +1754,7 @@ def check_static_phases(page: Page) -> None:
 
 def check_trails_in_play(page: Page) -> None:
     """While Reception plays, a trail shows through its stage and while its run carries on, then fades out."""
-    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    open_app(page, "", {"role": "OH1", "rulesMode": "simple"})
     learn(page, 3, "start")
     page.click('.ph[data-k="rec"]')
     stages: list[dict[str, Any]] = page.evaluate("window.ksvLearn.stages(3, 'rec')")
@@ -1790,7 +1790,7 @@ def check_fade_back(page: Page) -> None:
 
     Pause keeps its frame and does not fade back.
     """
-    open_app(page, "?ff=all", {"role": "OH1", "rulesMode": "simple"})
+    open_app(page, "", {"role": "OH1", "rulesMode": "simple"})
     learn(page, 2, "start")
     page.click('.ph[data-k="rec"]')
     page.click("#lPlay")
@@ -1827,16 +1827,6 @@ def check_fade_back(page: Page) -> None:
         fail("after the fade-back Play does not read Play")
 
 
-def check_flag_off(page: Page) -> None:
-    open_app(page, "?ff=all,-learn-animation", {"role": "OH1", "rulesMode": "simple"})
-    for sel in ("#lCap", "#lAnim", "#lDots", "#lReplay"):
-        if page.locator(sel).count():
-            fail(f"learn-animation off: {sel} is in the DOM")
-    page.click("#lNext")
-    if anim(page):
-        fail("learn-animation off: Next plays a transition")
-
-
 def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -1871,7 +1861,6 @@ def main() -> None:
         check_step_back_paused(page)
         check_still_captions(page)
         check_captions(page)
-        check_flag_off(page)
         check_reduced(browser)
         check_nudge(browser)
         check_nudge_colour_only(browser)

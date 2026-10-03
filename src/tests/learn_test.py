@@ -18,7 +18,7 @@ from typing import Any
 from playwright.sync_api import Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
-URL = (ROOT / "index.html").as_uri() + "?ff=all&anim=0"
+URL = (ROOT / "index.html").as_uri() + "?anim=0"
 FAIL: list[str] = []
 MODES = {
     "simple": ["MB", "OH1", "OH2", "OP", "S", "L"],
@@ -190,7 +190,7 @@ def check_reception_animated(page: Page) -> None:
     """With the animation on, Reception rests on the reception spots with the overlap lines and no ball."""
     for mode, roles in MODES.items():
         for role in roles:
-            open_app(page, {"role": role, "rulesMode": mode}, URL.replace("&anim=0", ""))
+            open_app(page, {"role": role, "rulesMode": mode}, URL.replace("?anim=0", ""))
             for rotation in range(6):
                 learn(page, rotation, "rec")
                 check_step(page, mode, role, rotation, "rec")
@@ -284,7 +284,7 @@ def check_pass_tags(page: Page) -> None:
                 learn(page, 0, phase)
                 if page.locator("#courtL .ptag").count() or PASSERS_LINE in page.inner_text("#cue"):
                     fail(f"{mode} {role} {PHASE_NAMES[phase]}: pass tags or the passers line off Reception")
-    open_app(page, {"role": "OH1", "rulesMode": "simple"}, URL.replace("&anim=0", ""))
+    open_app(page, {"role": "OH1", "rulesMode": "simple"}, URL.replace("?anim=0", ""))
     learn(page, 0, "rec")
     page.click("#lPlay")
     shown = page.evaluate(

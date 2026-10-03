@@ -2,7 +2,7 @@
 # Once per ticket, after review fixes: build and audit, then every browser test in parallel.
 source "$(dirname "$0")/lib.sh"
 
-ORDER=(build audit qa-m qa-d theme analytics flags rules learn anim match-1 match-2 match-3 match-4 mp
+ORDER=(build audit qa-m qa-d theme analytics rules learn anim match-1 match-2 match-3 match-4 mp
   online online-wk report report-wk)
 # Emulator ports from this checkout's path, so several worktrees can run full.sh at once.
 SLOT=$(($(printf '%s' "$ROOT" | cksum | cut -d' ' -f1) % 2000))
@@ -28,7 +28,6 @@ if [ "$rc" = 0 ]; then
   {
     run theme src/tests/theme_test.py
     run analytics src/tests/analytics_test.py
-    run flags src/tests/flags_test.py
     run rules src/tests/rules_test.py
     run learn src/tests/learn_test.py
   } &
