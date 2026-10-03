@@ -3,6 +3,8 @@
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOGS="$ROOT/src/tests/_out/logs"
 PY="${PYTHON:-$ROOT/.venv/bin/python}"
+# A git worktree has no .venv of its own; use the main checkout's.
+[ -x "$PY" ] || PY="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)/../.venv/bin/python"
 [ -x "$PY" ] || PY=python3
 mkdir -p "$LOGS"
 rm -f "$LOGS"/*.log "$LOGS"/*.status
