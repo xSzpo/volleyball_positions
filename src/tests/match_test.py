@@ -2081,35 +2081,53 @@ def mistake_after(page: Page, x: float | None, y: float | None = None) -> str:
 
 def check_common_mistakes(browser: Browser) -> None:
     """Solo Match names a common mistake after a wrong or close answer, picked from the tap, and none when exact."""
-    cases: list[tuple[str, tuple[str, ...], str, list[tuple[float | None, float | None, str]]]] = [
+    # A want of None skips the check, and "!text" means the line must not say it.
+    cases: list[tuple[str, str, tuple[str, ...], str, list[tuple[float | None, float | None, str | None]]]] = [
         (
             "OH1",
+            "simple",
             ("rec",),
             "?ff=all&anim=0",
             [
                 (0.3, 0.73, "Overlap fault: at the whistle you must stand right of MB."),
                 (0.84, 0.72, ""),
-                (None, None, "You are on court here"),
+                (None, None, "Only the libero goes off, when SUB serves"),
             ],
         ),
-        ("OH1", ("serve",), "?ff=all&anim=0", [(0.15, 0.8, "Wrong row: you are front row here")]),
-        ("S", ("rec",), "?ff=all&anim=0", [(0.75, 0.8, "In a passing lane"), (0.58, 0.31, "")]),
+        ("OH1", "official", ("rec",), "?ff=all&anim=0", [(None, None, "the middle it replaces go off")]),
+        ("OH1", "simple", ("serve",), "?ff=all&anim=0", [(0.15, 0.8, "Wrong row: you are front row here")]),
+        ("S", "simple", ("rec",), "?ff=all&anim=0", [(0.75, 0.8, "!In a passing lane"), (0.58, 0.31, "")]),
+        ("MB", "simple", ("rec",), "?ff=all&anim=0", [(0.5, 0.65, "In a passing lane")]),
+        (
+            "OP",
+            "simple",
+            ("ar",),
+            "?ff=all&anim=0",
+            [(0.5, 0.5, None), (0.5, 0.5, None), (0.5, 0.5, None), (0.8, 0.3, "!A back-row attacker")],
+        ),
         (
             "OH1",
+            "simple",
             ("start",),
             "?ff=all,-match-rotate-name&anim=0",
             [(0.5, 0.71, "You counted along the arrows")],
         ),
     ]
-    for role, steps, query, taps in cases:
-        page = new_page(browser, query=query)
-        setup_match(page, role, steps)
+    for role, rules, steps, query, taps in cases:
+        page = new_page(browser, rules=rules, query=query)
+        setup_match(page, role, steps, sets=False)
         page.click("#gStart")
         for k, (x, y, want) in enumerate(taps):
             if k:
                 press_next(page)
             got = mistake_after(page, x, y)
-            ctx = f"{role} {steps[0]} R{k + 1} tap {x},{y}"
+            ctx = f"{role} {rules} {steps[0]} R{k + 1} tap {x},{y}"
+            if want is None:
+                continue
+            if want.startswith("!"):
+                if want[1:] in got:
+                    fail(f"{ctx}: line {got!r} should not say {want[1:]!r}")
+                continue
             if not want and got:
                 fail(f"{ctx}: an exact answer shows {got!r}")
             if want and not got.startswith("Common mistake:"):

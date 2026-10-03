@@ -2990,6 +2990,8 @@
       // One line after a wrong or close answer, picked from what the tap did.
       const MISTAKES = {
         offWhenOn: "You are on court here. Only the libero and the middle it replaces go off.",
+        offWhenOnSimple:
+          "You are on court here. Only the libero goes off, when SUB serves in R3 and R6.",
         liberoServes: "The libero may not serve: wait off court while the middle serves.",
         liberoIn: "The libero is in for you in the back row: wait off court.",
         arrows: "You counted along the arrows: count on from the setter's zone, 1→2→3→4→5→6.",
@@ -3028,7 +3030,7 @@
         const right = answerSpots(ri, phase, role).find((o) => o.p === role);
         if (!right && !tap) return "";
         if (!right) return role === "L" ? MISTAKES.liberoServes : MISTAKES.liberoIn;
-        if (!tap) return MISTAKES.offWhenOn;
+        if (!tap) return rulesMode === "official" ? MISTAKES.offWhenOn : MISTAKES.offWhenOnSimple;
         if (phase === "start" && alongArrows(ri, role, tap)) return MISTAKES.arrows;
         if (phase === "start" || phase === "rec") {
           const pl = players(ri, phase);
@@ -3046,8 +3048,10 @@
           !RECEIVERS.includes(role) &&
           tap.y > 0.55 &&
           tap.y < 0.88 &&
+          Math.hypot(tap.x - right.x, tap.y - right.y) >= 0.24 &&
           players(ri, "rec").some(
-            (o) => RECEIVERS.includes(o.p) && Math.hypot(o.x - tap.x, o.y - tap.y) < 0.2,
+            (o) =>
+              RECEIVERS.includes(o.p) && tap.y < o.y && Math.hypot(o.x - tap.x, o.y - tap.y) < 0.2,
           )
         )
           return MISTAKES.lane;
@@ -3056,7 +3060,8 @@
           if (front && right.y < AL && tap.y >= AL) return MISTAKES.front;
           if (!front && right.y >= AL && tap.y < AL) return MISTAKES.back;
         }
-        if (phase === "ar" && right.kind === "back" && tap.y < AL) return MISTAKES.backAttack;
+        if (phase === "ar" && right.kind === "back" && !right.spike && !right.cover && tap.y < AL)
+          return MISTAKES.backAttack;
         const dx = tap.x - right.x,
           dy = tap.y - right.y;
         if ((tap.x - 0.5) * (right.x - 0.5) < 0 && Math.abs(dx) > 0.3)
