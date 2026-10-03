@@ -205,6 +205,102 @@ def check_reception_animated(page: Page) -> None:
                     fail(f"{tag}: a ball on the still")
 
 
+PASSERS_LINE = "OH1, OH2 and L pass; everyone else keeps out of the lanes."
+# Court geometry in SVG units: tags, markers (your ring included), zone digits, overlap lines with their halos.
+PASS_TAGS = """() => {
+  const court = document.querySelector('#courtL');
+  const box = (b) => [b.x, b.y, b.x + b.width, b.y + b.height];
+  const tags = [...court.querySelectorAll('.ptag')].map((g) => ({ p: g.dataset.p,
+    box: box(g.querySelector('rect').getBBox()) }));
+  const marks = [...court.querySelectorAll('.mk')].map((g) => {
+    const c = g.querySelector(':scope > circle:not(.hit)');
+    return { p: g.dataset.p, x: +c.getAttribute('cx'), y: +c.getAttribute('cy'),
+      r: g.querySelector('.me-ring') ? 8.9 : +c.getAttribute('r') + 0.5 };
+  });
+  const zones = [...court.querySelectorAll('g.zones text')].map((t) => {
+    const b = t.getBBox(), base = +t.getAttribute('y'), size = +t.getAttribute('font-size');
+    return [b.x, base - 0.72 * size, b.x + b.width, base];
+  });
+  const lines = [...court.querySelectorAll('.bnd line')].map((l) => ({
+    a: [+l.getAttribute('x1'), +l.getAttribute('y1')], b: [+l.getAttribute('x2'), +l.getAttribute('y2')],
+    w: +l.getAttribute('stroke-width') / 2 }));
+  return { tags, marks, zones, lines };
+}"""
+
+
+def boxes_cross(first: list[float], second: list[float]) -> bool:
+    return first[0] < second[2] and second[0] < first[2] and first[1] < second[3] and second[1] < first[3]
+
+
+def circle_in_box(box: list[float], x: float, y: float, r: float) -> bool:
+    nearest_x, nearest_y = max(box[0], min(box[2], x)), max(box[1], min(box[3], y))
+    return bool((nearest_x - x) ** 2 + (nearest_y - y) ** 2 < r * r)
+
+
+def line_in_box(box: list[float], line: dict[str, Any]) -> bool:
+    (x1, y1), (x2, y2), w = line["a"], line["b"], line["w"]
+    steps = int(max(abs(x2 - x1), abs(y2 - y1)) / 0.25) + 1
+    return any(
+        box[0] - w < x1 + (x2 - x1) * i / steps < box[2] + w and box[1] - w < y1 + (y2 - y1) * i / steps < box[3] + w
+        for i in range(steps + 1)
+    )
+
+
+def check_pass_tags(page: Page) -> None:
+    """A "pass" tag on exactly the three receivers on every Reception still, clear of everything else."""
+    page.set_viewport_size({"width": 390, "height": 664})
+    checked = 0
+    for mode, roles in MODES.items():
+        for role in roles:
+            open_app(page, {"role": role, "rulesMode": mode})
+            for rotation in range(6):
+                learn(page, rotation, "rec")
+                tag = f"{mode} {role} {ROTATION_NAMES[rotation]} pass tags"
+                got: dict[str, Any] = page.evaluate(PASS_TAGS)
+                tags = got["tags"]
+                if sorted(t["p"] for t in tags) != ["L", "OH1", "OH2"]:
+                    fail(f"{tag}: tags on {[t['p'] for t in tags]}")
+                if PASSERS_LINE not in page.inner_text("#cue"):
+                    fail(f"{tag}: the cue lacks the passers line")
+                for k, t in enumerate(tags):
+                    box = t["box"]
+                    if box[0] < -4 or box[2] > 104 or box[1] < 1.2 or box[3] > 103:
+                        fail(f"{tag}: {t['p']} tag outside the court picture: {box}")
+                    for m in got["marks"]:
+                        if circle_in_box(box, m["x"], m["y"], m["r"]):
+                            fail(f"{tag}: {t['p']} tag covers the {m['p']} marker")
+                    if any(boxes_cross(box, z) for z in got["zones"]):
+                        fail(f"{tag}: {t['p']} tag covers a zone number")
+                    if any(line_in_box(box, line) for line in got["lines"]):
+                        fail(f"{tag}: {t['p']} tag covers an overlap line")
+                    if any(boxes_cross(box, other["box"]) for other in tags[k + 1 :]):
+                        fail(f"{tag}: {t['p']} tag overlaps another tag")
+                checked += 1
+            for phase in ("start", "serve", "ar"):
+                learn(page, 0, phase)
+                if page.locator("#courtL .ptag").count() or PASSERS_LINE in page.inner_text("#cue"):
+                    fail(f"{mode} {role} {PHASE_NAMES[phase]}: pass tags or the passers line off Reception")
+    open_app(page, {"role": "OH1", "rulesMode": "simple"}, URL.replace("&anim=0", ""))
+    learn(page, 0, "rec")
+    page.click("#lPlay")
+    shown = page.evaluate(
+        "[...document.querySelectorAll('#courtL .am .ptag')].filter(g => g.getAttribute('visibility') !== 'hidden')"
+        ".map(g => g.dataset.p).sort()"
+    )
+    if shown != ["L", "OH1", "OH2"]:
+        fail(f"Reception play before the pass: tags on {shown}")
+    learn(page, 0, "rec")
+    page.click("#lStep")
+    page.wait_for_function("() => window.ksvLearn.anim() && !window.ksvLearn.anim().playing")
+    shown = page.evaluate(
+        "[...document.querySelectorAll('#courtL .ptag')].filter(g => g.getAttribute('visibility') !== 'hidden').length"
+    )
+    if shown:
+        fail(f"Reception play from the pass on: {shown} tags still shown")
+    page.set_viewport_size({"width": 390, "height": 844})
+    print(f"pass tags: three receivers clear of markers, zones, lines and each other on {checked} stills; play")
+
+
 def check_next_in_view(page: Page) -> None:
     """On a short phone Next belongs below the fold, yet it is drawn inside the viewport."""
     page.set_viewport_size({"width": 390, "height": 664})
@@ -562,6 +658,7 @@ def main() -> None:
             for role in roles:
                 check_walk(page, mode, role)
         check_reception_animated(page)
+        check_pass_tags(page)
         check_next_in_view(page)
         check_texts(page)
         check_rules_of_thumb(page)
