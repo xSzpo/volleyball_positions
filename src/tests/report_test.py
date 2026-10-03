@@ -316,7 +316,7 @@ def check_sheet(browser: Browser, url: str, emulator_db: str, errors: list[str])
         fail(f"report fields are {sorted(report)}")
     if report["comment"] != "The ball is wrong in R3" or report["tab"] != "learn" or report["role"] != "OH1":
         fail(f"report content is wrong: { {k: report[k] for k in ('comment', 'tab', 'role')} }")
-    if report["rules"] != "simple" or report["theme"] != "light" or report["version"] != "2":
+    if report["rules"] != "official" or report["theme"] != "light" or report["version"] != "2":
         fail(f"report context is wrong: { {k: report[k] for k in ('rules', 'theme', 'version')} }")
     if report["view"] != "R3 rec" or not report["viewport"].startswith("390x664@"):
         fail(f"report view or viewport is wrong: {report['view']!r} {report['viewport']!r}")
