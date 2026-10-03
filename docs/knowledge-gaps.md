@@ -1115,3 +1115,20 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The owner decided on 2026-10-03 that the serving middle takes the libero's base spot, zone 5, and the back-row outside hitter defends zone 6. The `serve` lineups and captions of R3 and R6 in `src/data.py` carry it, so both rule sets follow.
 - **Alternatives:** keep the server in zone 6 and the outside hitter in zone 5.
 - **Reversible by:** the R3 and R6 `serve` lineups and `move["serve"]` captions in `src/data.py`, and the zone 5 check in `src/tests/audit.py`.
+
+### 146. The Rotation build is a fast zone walk
+
+- **Issue:** none (owner feedback, 2026-10-03)
+- **Supersedes:** the stage order of #135, the per-stage lines and "Rule 1"/"Rule 2" stages of #136, and the last stage of #137.
+- **Problem:** The owner found the Rotation play too slow and its text too long. He asked for Setter, Outside, Middle, Opposite, Outside, Middle, then the libero replacing the back middle, played fast.
+- **Decision:** The build adds the six markers in the walk order from the setter's zone (`players(ri, 'start')`), with a walk arrow from each marker to the next. In Official the back middle appears as itself (MB1 or MB2), then one swap stage fades it out and L in on its spot. Simplified has no back middle, so L appears in its zone. R3 and R6, where the zone 1 middle serves and L is off (#144), have no swap stage. Timings: `BUILD_MS` 450 ms per marker, `POP_MS` 250 ms pop, `SWAP_MS` 500 ms swap, `BUILD_HOLD_MS` 300 ms end hold, so a play lasts 3.5 s (3 s without the swap). The rule stages are dropped.
+- **Alternatives:** keep L appearing directly in the back middle's spot; keep the closing "Same job, opposite corners" stage.
+- **Reversible by:** `buildRotation()` and the build constants in `src/template.html`.
+
+### 147. One short line for the Rotation build
+
+- **Issue:** none (owner feedback, 2026-10-03)
+- **Problem:** The owner's sentence ("start from setter backward to rotation: Setter, Outside, Middle, Opposite, Outside, Middle and replace back Middle with Libero") takes three lines on a 390 px phone.
+- **Decision:** The build shows one line during and after the play: "Against the rotation: Setter, Outside, Middle, Opposite, Outside, Middle. The libero replaces the back middle." (R3/R6: "The zone 1 middle serves, libero off."). The list starts with Setter, so the line does not say to start at the setter. It fits two lines at 390 px and takes three at 360 px. There is no "Then:" list after a Rotation play; with reduced motion the still caption is followed by this line instead of a stage list. The rest caption before a play is unchanged, and Reception keeps its "Then:" list.
+- **Alternatives:** the owner's sentence word for word on three lines; "Libero for the back middle."
+- **Reversible by:** `WALK_LINE`, `walkLine()`, `captionPlan()` and `captionHtml()` in `src/template.html`.
