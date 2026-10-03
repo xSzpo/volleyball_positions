@@ -1076,10 +1076,34 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** keep stored choices (#139 alone); map a stored `simple` to Official without clearing the role.
 - **Reversible by:** the `officialReset` block after `feature` in `src/template.html`.
 
-### 141. Simplified R3 and R6: MB serves, the other middle is OM
+### 141. The pass tag reuses the title tag colours and hides at the pass
+
+- **Issue:** #152
+- **Problem:** The "pass" tag needed colours with enough contrast on the court in both themes, and a rule for when it shows during the Reception play.
+- **Decision:** The tag uses `--tag` (fill) and `--tag-ink` (text and outline), the colours of the Learn title tag, so no new tokens; `theme_test.py` checks the text at 4.5 and the fill or outline against every court band at 3. It sits beside each receiver on the side clear of the zone numbers, the markers, your overlap lines and the other tags (`passTagSpots()`), moves with its marker in the play and hides once the pass is in the air (stage 2). Watch the move in Drill and Match shows no tag, as no tag shows there before the answer.
+- **Alternatives:** new `--pass-*` tokens; keep the tag through the whole play; a fixed offset below each marker.
+- **Reversible by:** `passTag()`, `passTagSpots()` and `paintPlay()` in `src/template.html`.
+
+### 142. Which common mistake a tap gets
+
+- **Issue:** #152
+- **Problem:** The issue lists the mistakes to name but not how to tell them apart, or which one wins when a tap makes more than one.
+- **Decision:** `mistakeText()` checks in this order and names the first that fits: off court versus on (and the libero off at its serve; in Simplified only the libero goes off, while MB serves); at Rotate a count along the rotation arrows (the tap is in the zone mirrored round the setter); an overlap fault against the real positions (Rotate and Receive); a passing lane at Receive (anyone but OH1, OH2 and L tapping between y 0.55 and 0.88, in front of a receiver and within 0.2 of it, and not within 0.24 of their own spot); the wrong row at Rotate and Our serve (by the 3 m line); a back-row attacker in front of the 3 m line at Attack (not a back-row opposite graded on its cover spot); the wrong side (the other half and more than 0.3 across); too deep or too close to the net (more than 0.08 and mostly in depth; the front middle at Attack "near the net, ready for the quick"); else one line for the step. Match Rotate and Drill Rotate name the arrows for any wrong marker counted along them, else your own marker's mistake. Same-device and online show none, as they show no verdict per turn.
+- **Alternatives:** name every mistake that fits; a line only for the listed cases and none otherwise.
+- **Reversible by:** `MISTAKES` and `mistakeText()` in `src/template.html`.
+
+### 143. Two flags for the pass tag and the common mistakes
+
+- **Issue:** #152
+- **Problem:** The issue asked for one flag key for both features.
+- **Decision:** Two keys, `passer-tag` (needs `learn-tab`) and `common-mistakes` (no need), both on by default, so each can be switched off alone: the tag is Learn only, the mistake line is Drill and Match only.
+- **Alternatives:** one key for both, as the issue asked.
+- **Reversible by:** `FEATURES` and `FEATURE_NEEDS` in `src/template.html`.
+
+### 144. Simplified R3 and R6: MB serves, the other middle is OM
 
 - **Issue:** none (owner decision, 2026-10-03)
 - **Problem:** In Simplified R3 and R6 the libero would be in zone 1 and may not serve. A grey substitute (SUB) used to come on to serve, which no real team does.
-- **Decision:** The owner decided MB serves. At Rotation and Our serve MB is in zone 1 and serves, L is off, and the other middle plays zone 4. When we lose the serve, at Reception, MB goes back to the net and L to the back row. The other middle is labelled `OM` ("Other middle"): middle colour with a dashed edge, named "the other middle" in captions. The online room data is unchanged, so `ROOM_V` stays.
+- **Decision:** The owner decided MB serves. At Rotation and Our serve MB is in zone 1 and serves, L is off, and the other middle plays zone 4. When we lose the serve, at Reception, MB goes back to the net and L to the back row. The other middle is labelled `OM` ("Other middle"): middle colour with a dashed edge, named "the other middle" in captions, prompts and grades; its overlap limit at Rotation reads MB, whose slot it is at the whistle for their serve. When we lose the serve the change is called a training convention. Rotate grades change, so `ROOM_V` is 3 and the best-score key `v9|`.
 - **Alternatives:** `MB2` or `SUB` as the label (both read as a second, specific player); hiding the other middle (leaves zone 4 empty).
-- **Reversible by:** `OTHER_MIDDLE`, `lineup()`, `server()` and `rotation_lineup()` in `src/data.py`; `middleServes()`, `who()` and `stillStage()` in `src/template.html`.
+- **Reversible by:** `OTHER_MIDDLE`, `lineup()`, `server()` and `rotation_lineup()` in `src/data.py`; `middleServes()`, `who()`, `limitName()` and `stillStage()` in `src/template.html`.

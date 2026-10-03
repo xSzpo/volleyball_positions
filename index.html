@@ -2934,7 +2934,7 @@
       }
       // Each line runs from your marker to the line a partner sets, in that partner's colour.
       function boundLines(ri, pl, role, phase) {
-        const out = { lines: [], tight: [] };
+        const out = { lines: [], tight: [], segs: [] };
         const me = pl.find((o) => o.p === role);
         if (!me) return out;
         const gap = MARKER_R + 0.5;
@@ -2953,11 +2953,9 @@
             out.tight.push(p);
             return;
           }
-          out.lines.push(
-            vertical
-              ? route(mx, start, mx, end, p, { cls: "bnd" })
-              : route(start, my, end, my, p, { cls: "bnd" }),
-          );
+          const seg = vertical ? [mx, start, mx, end] : [start, my, end, my];
+          out.segs.push(seg);
+          out.lines.push(route(...seg, p, { cls: "bnd" }));
         });
         return out;
       }
@@ -2983,6 +2981,109 @@
           boundLines(ri, players(ri, "rec"), role, "rec"),
         );
         return `<p class="lim" style="margin:4px 0 0">${text}${when ? ` ${OVERLAP_WHEN.rec}` : ""}</p>`;
+      }
+      // One line after a wrong or close answer, picked from what the tap did.
+      const MISTAKES = {
+        offWhenOn: "You are on court here. Only the libero and the middle it replaces go off.",
+        offWhenOnSimple: "You are on court here. Only the libero goes off, while MB serves.",
+        liberoServes: "The libero may not serve: wait off court while the middle serves.",
+        liberoIn: "The libero is in for you in the back row: wait off court.",
+        arrows: "You counted along the arrows: count on from the setter's zone, 1→2→3→4→5→6.",
+        overlap: (words, p) => `Overlap fault: at the whistle you must stand ${words} ${p}.`,
+        lane: "In a passing lane: only OH1, OH2 and L pass, so keep clear of them.",
+        front: "Wrong row: you are front row here, in front of the 3 m line.",
+        back: "Wrong row: you are back row here, behind the 3 m line.",
+        backAttack: "A back-row attacker takes off behind the 3 m line.",
+        side: (side) => `Wrong side: your spot is on the ${side} half of the court.`,
+        quick: "Too deep: as the pass lands, the middle is near the net, ready for the quick.",
+        deep: "Too deep: your spot is closer to the net.",
+        shallow: "Too close to the net: your spot is deeper.",
+        start: "Find the setter's zone from the name, then count on in serving order.",
+        serve: "At our serve, go to your base spot: front row by job, back row deep.",
+        rec: "Find the setter first, then check your overlap partners.",
+        ar: "As the pass lands, attackers get ready to approach and covers move in.",
+      };
+      const OVERLAP_WORDS = {
+        behind: "in front of",
+        front: "behind",
+        left: "right of",
+        right: "left of",
+      };
+      function zoneAt(tap) {
+        return ZONE_ROWS[tap.y < AL ? 0 : 1][Math.min(2, Math.max(0, Math.floor(tap.x * 3)))];
+      }
+      // Serving order runs 1→2→3 round the zones, against the rotation arrows; the mirror zone is a count along them.
+      function alongArrows(ri, p, tap) {
+        const z = zoneOf(ri, p),
+          zs = zoneOf(ri, "S");
+        if (!z || !zs) return false;
+        const k = (z - zs + 6) % 6;
+        return k !== 0 && k !== 3 && zoneAt(tap) === ((((zs - 1 - k) % 6) + 6) % 6) + 1;
+      }
+      function mistakeText(ri, phase, role, tap) {
+        const right = answerSpots(ri, phase, role).find((o) => o.p === role);
+        if (!right && !tap) return "";
+        if (!right) return role === "L" ? MISTAKES.liberoServes : MISTAKES.liberoIn;
+        if (!tap) return rulesMode === "official" ? MISTAKES.offWhenOn : MISTAKES.offWhenOnSimple;
+        if (phase === "start" && alongArrows(ri, role, tap)) return MISTAKES.arrows;
+        if (phase === "start" || phase === "rec") {
+          const pl = players(ri, phase);
+          const fault = partners(ri, role, phase).find(({ p, side }) => {
+            const q = pl.find((o) => o.p === p);
+            if (!q) return false;
+            if (side === "behind") return tap.y >= q.y;
+            if (side === "front") return tap.y <= q.y;
+            return side === "left" ? tap.x <= q.x : tap.x >= q.x;
+          });
+          if (fault) return MISTAKES.overlap(OVERLAP_WORDS[fault.side], fault.p);
+        }
+        if (
+          phase === "rec" &&
+          !RECEIVERS.includes(role) &&
+          tap.y > 0.55 &&
+          tap.y < 0.88 &&
+          Math.hypot(tap.x - right.x, tap.y - right.y) >= 0.24 &&
+          players(ri, "rec").some(
+            (o) =>
+              RECEIVERS.includes(o.p) && tap.y < o.y && Math.hypot(o.x - tap.x, o.y - tap.y) < 0.2,
+          )
+        )
+          return MISTAKES.lane;
+        if (phase === "start" || phase === "serve") {
+          const front = [4, 3, 2].includes(zoneOf(ri, role));
+          if (front && right.y < AL && tap.y >= AL) return MISTAKES.front;
+          if (!front && right.y >= AL && tap.y < AL) return MISTAKES.back;
+        }
+        if (phase === "ar" && right.kind === "back" && !right.spike && !right.cover && tap.y < AL)
+          return MISTAKES.backAttack;
+        const dx = tap.x - right.x,
+          dy = tap.y - right.y;
+        if ((tap.x - 0.5) * (right.x - 0.5) < 0 && Math.abs(dx) > 0.3)
+          return MISTAKES.side(right.x < 0.5 ? "left" : "right");
+        if (phase !== "start" && Math.abs(dy) > 0.08 && Math.abs(dy) > Math.abs(dx)) {
+          if (dy > 0) return right.turn ? MISTAKES.quick : MISTAKES.deep;
+          return MISTAKES.shallow;
+        }
+        return MISTAKES[phase];
+      }
+      function mistakeHtml(text) {
+        return feature("common-mistakes") && text
+          ? `<p class="mistake" style="margin:4px 0 0">Common mistake: ${text}</p>`
+          : "";
+      }
+      function mistakeLine(ri, phase, role, tap) {
+        return feature("common-mistakes") ? mistakeHtml(mistakeText(ri, phase, role, tap)) : "";
+      }
+      // Rotate: a count along the arrows for any marker, else your own marker's mistake, else the step's line.
+      function rotMistake(r, grades) {
+        if (!feature("common-mistakes") || grades.every((o) => o.g === "right")) return "";
+        const tapOf = (p) => (p === r.role && r.off ? null : r.spots[p]);
+        if (grades.some(({ p, g }) => g === "wrong" && tapOf(p) && alongArrows(r.ri, p, tapOf(p))))
+          return mistakeHtml(MISTAKES.arrows);
+        const mine = grades.find((o) => o.p === r.role);
+        return mine?.g === "wrong"
+          ? mistakeLine(r.ri, "start", r.role, tapOf(r.role))
+          : mistakeHtml(MISTAKES.start);
       }
       const SERVE_SPOT = [0.88, 1.1];
       function serveLayer(ri, pl, role) {
@@ -3109,6 +3210,8 @@
         "sets-quiz": true,
         "after-dig": false,
         "bug-report": true,
+        "passer-tag": true,
+        "common-mistakes": true,
       };
       const FEATURE_NEEDS = {
         "learn-animation": ["learn-tab"],
@@ -3128,6 +3231,7 @@
         "match-online": ["match-same-device"],
         "sets-quiz": ["sets-tab"],
         "after-dig": ["match-solo"],
+        "passer-tag": ["learn-tab"],
       };
       const FEATURE_ELEMENTS = {
         "learn-tab": ["tabLearn", "learn"],
@@ -3488,6 +3592,10 @@
             : { lines: [], tight: [] };
         s += bounds.lines.join("");
         if (me) s += chip(me, { me: true });
+        Object.entries(learnPassTags(ri, pl)).forEach(([p, [dx, dy]]) => {
+          const o = pl.find((q) => q.p === p);
+          s += passTag(o.x * W + dx, o.y * H + dy, p);
+        });
         if (ball) s += ballSvg(ball);
         $("courtL").innerHTML = s;
         $("learnTag").textContent = `${ROWS[ri].name} · ${LEARN_NAME[phase]}`;
@@ -3511,8 +3619,10 @@
           : me && (phase === "start" || phase === "rec")
             ? ` ${limitsSentence(ri, role, phase, bounds)} ${OVERLAP_WHEN[phase]}`
             : "";
+        const passers =
+          phase === "rec" && feature("passer-tag") ? `<p class="passers">${PASSERS_LINE}</p>` : "";
         $("cue").innerHTML =
-          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${guide}${libero}`;
+          `<b>${me ? d.t : `${NAMES[role]}: ${d.t.toLowerCase()}`}</b><p>${d.d}${overlap}</p>${passers}${guide}${libero}`;
         const at = PHASES.findIndex(([k]) => k === phase);
         const upNext = at === PHASES.length - 1 ? ROWS[(ri + 1) % 6].name : PHASES[at + 1][1];
         $("lNext").textContent = `${phase === "rec" ? upNext : `Next: ${upNext}`} ▸`;
@@ -3575,6 +3685,7 @@
       const PASS_TEXT = "Pass the serve high to the setter at the net.";
       const PASS_ATTACK = "Pass high to the setter, then get out to the 3 m line to attack.";
       const SERVE_TO = "Their serve comes to you: get behind the ball and pass it.";
+      const PASSERS_LINE = "OH1, OH2 and L pass; everyone else keeps out of the lanes.";
       const SET_TEXT = (passer) =>
         `Take ${passer}'s pass at the setting spot: you play the second contact.`;
       const OFF_SERVE = (sv) =>
@@ -3590,6 +3701,92 @@
       // Guide rule 01: the two outside hitters and the libero receive. One passer per rotation, so each takes two.
       const RECEIVERS = ["OH1", "OH2", "L"];
       const PASSER = ["L", "OH2", "OH1", "L", "OH1", "OH2"];
+      const PASS_TAG_W = 10.4,
+        PASS_TAG_H = 4.6;
+      const PASS_TAG_DIRS = [
+        [0, 1],
+        [0, -1],
+        [1, 0],
+        [-1, 0],
+        [1, 1],
+        [-1, 1],
+        [1, -1],
+        [-1, -1],
+      ];
+      function passTag(x, y, p) {
+        return `<g class="ptag" data-p="${p}" pointer-events="none"><rect x="${x - PASS_TAG_W / 2}" y="${y - PASS_TAG_H / 2}" width="${PASS_TAG_W}" height="${PASS_TAG_H}" rx="${PASS_TAG_H / 2}" fill="var(--tag)" stroke="var(--tag-ink)" stroke-width="0.4"/><text x="${x}" y="${y + 1.2}" text-anchor="middle" font-size="3.4" font-weight="700" fill="var(--tag-ink)" font-family="Barlow,sans-serif">pass</text></g>`;
+      }
+      // Each receiver's tag offset: the first spot round its marker clear of the zone numbers, the markers, your
+      // overlap lines (with their T-bars) and the tags placed before; else the spot with the fewest clashes.
+      function passTagSpots(pl, role, segs = []) {
+        const reach = (o) => (o.p === role ? 9 : MARKER_R + 0.6);
+        const zones = ZONE_SPOTS.map(([, x, y]) => [
+          x * W - 3,
+          y * H - 3.6,
+          x * W + 3,
+          y * H + 3.6,
+        ]);
+        const lines = segs.flatMap(([x1, y1, x2, y2]) => [
+          [x1, y1, x2, y2],
+          x1 === x2 ? [x2 - 3.2, y2, x2 + 3.2, y2] : [x2, y2 - 3.2, x2, y2 + 3.2],
+        ]);
+        const hitsCircle = ([a, b, c, d], x, y, r) =>
+          Math.hypot(Math.max(a, Math.min(c, x)) - x, Math.max(b, Math.min(d, y)) - y) < r;
+        const hitsBox = ([a, b, c, d], [e, f, g, h]) => a < g && e < c && b < h && f < d;
+        const hitsLine = ([a, b, c, d], [x1, y1, x2, y2]) => {
+          const n = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 0.5) + 1;
+          for (let i = 0; i <= n; i++) {
+            const x = x1 + ((x2 - x1) * i) / n,
+              y = y1 + ((y2 - y1) * i) / n;
+            if (x > a - 1.4 && x < c + 1.4 && y > b - 1.4 && y < d + 1.4) return true;
+          }
+          return false;
+        };
+        const placed = [],
+          out = {};
+        pl.filter((o) => RECEIVERS.includes(o.p)).forEach((o) => {
+          const X = o.x * W,
+            Y = o.y * H,
+            R = reach(o);
+          let best = null,
+            least = Infinity;
+          PASS_TAG_DIRS.forEach(([ux, uy]) => {
+            const near = ux && uy ? R * 0.72 : R + 0.6;
+            const dx = ux * (near + PASS_TAG_W / 2),
+              dy = uy * (near + PASS_TAG_H / 2);
+            const box = [
+              X + dx - PASS_TAG_W / 2,
+              Y + dy - PASS_TAG_H / 2,
+              X + dx + PASS_TAG_W / 2,
+              Y + dy + PASS_TAG_H / 2,
+            ];
+            let cost = box[0] < -3.5 || box[2] > W + 3.5 || box[1] < 1.6 || box[3] > H + 3 ? 10 : 0;
+            pl.forEach((q) => {
+              if (q !== o && hitsCircle(box, q.x * W, q.y * H, reach(q) + 0.3)) cost++;
+            });
+            zones.forEach((z) => {
+              if (hitsBox(box, z)) cost++;
+            });
+            lines.forEach((l) => {
+              if (hitsLine(box, l)) cost++;
+            });
+            placed.forEach((t) => {
+              if (hitsBox(box, t)) cost++;
+            });
+            if (cost < least) {
+              least = cost;
+              best = { dx, dy, box };
+            }
+          });
+          placed.push(best.box);
+          out[o.p] = [best.dx, best.dy];
+        });
+        return out;
+      }
+      function learnPassTags(ri, pl) {
+        if (phase !== "rec" || !feature("passer-tag")) return {};
+        return passTagSpots(pl, role, boundLines(ri, pl, role, "rec").segs);
+      }
       // The 3-2 cover: three close covers about 3 m from the hitter, in an arc behind and inside, at least GAP clear of
       // the hitter's lane; two deep covers behind the gaps between them.
       const COVER = {
@@ -4327,6 +4524,9 @@
           el.setAttribute("opacity", 0.6 * fade);
           el.setAttribute("visibility", "visible");
         });
+        a.tags.forEach((el) => {
+          el.setAttribute("visibility", a.t < a.tagsUntil ? "visible" : "hidden");
+        });
         a.ball.setAttribute("opacity", ball ? 1 : 0);
         if (ball) {
           const x = (ball.from.x + (ball.to.x - ball.from.x) * ball.u) * W,
@@ -4441,11 +4641,12 @@
         restList = null;
         const tr = phaseStages(ri, phase);
         if (!tr.stages.length) return false;
-        const { s, trails } = playMarkup(tr, role);
+        const { s, trails } = playMarkup(tr, role, learnPassTags(ri, learnPlayers(ri, phase)));
         $("courtL").innerHTML = DEFS + courtBase(!tr.from[role]) + s;
         anim = {
           tr,
           t: 0,
+          tagsUntil: tr.stages[1]?.start ?? tr.total,
           ...playEls($("courtL"), trails),
           stage: null,
           total: tr.total,
@@ -4458,9 +4659,9 @@
         return true;
       }
       // A play's trails, markers (yours on top) and ball, drawn at their start.
-      function playMarkup(tr, r) {
+      function playMarkup(tr, r, tags = {}) {
         const mark = (p, me) =>
-          `<g class="am" data-p="${p}">${chip({ p, x: 0, y: 0 }, { me })}</g>`;
+          `<g class="am" data-p="${p}">${chip({ p, x: 0, y: 0 }, { me })}${tags[p] ? passTag(...tags[p], p) : ""}</g>`;
         let s = "";
         const trails = [];
         tr.stages.forEach((st, k) => {
@@ -4494,6 +4695,7 @@
           trails: [...svg.querySelectorAll(".trail")].map((el, i) => ({ el, ...trails[i] })),
           walks: [...svg.querySelectorAll(".walk")],
           ball: svg.querySelector(".ball"),
+          tags: [...svg.querySelectorAll(".ptag")],
         };
       }
       // Plays the current phase from its start to the rest picture; with step, only the first stage.
@@ -5326,7 +5528,9 @@
         feedback(ok ? "good" : "bad", ok ? "Spot on" : "Not there");
         $("fb").insertAdjacentHTML(
           "beforeend",
-          rotGradesHtml(grades, cur.role) + rotLimitsHtml(cur.ri, cur.role),
+          rotGradesHtml(grades, cur.role) +
+            rotMistake(rot, grades) +
+            rotLimitsHtml(cur.ri, cur.role),
         );
       }
       function rotRefresh() {
@@ -5535,6 +5739,11 @@
         watchMount("dWatch", "courtD", cur.ri, cur.phase, cur.role, () => drawDrill(lastTap));
         $("fb").className = `fb ${cls}`;
         $("fb").innerHTML = hOnly(`<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`);
+        if (cls !== "good" && !rot)
+          $("fb").insertAdjacentHTML(
+            "beforeend",
+            mistakeLine(cur.ri, cur.phase, cur.role, lastTap),
+          );
         if (cur.phase === "rec" && nbOn("nbDrill")) {
           const nq = neighbourQ(cur.ri, cur.role);
           if (nq) {
@@ -6391,9 +6600,12 @@
           if (G.rot) {
             $("gFb").insertAdjacentHTML(
               "beforeend",
-              rotGradesHtml(G.rotGrades, G.role) + rotLimitsHtml(st.ri, G.role),
+              rotGradesHtml(G.rotGrades, G.role) +
+                rotMistake(G.rot, G.rotGrades) +
+                rotLimitsHtml(st.ri, G.role),
             );
-          }
+          } else if (q !== "perfect")
+            $("gFb").insertAdjacentHTML("beforeend", mistakeLine(st.ri, st.phase, G.role, G.tap));
         }
         if (G.rot) $("gAsk").textContent = "";
         $("gOff").disabled = true;
