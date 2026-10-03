@@ -140,7 +140,7 @@ def check_header(pg: Page, tag: str) -> None:
         pg.get_attribute("#roleChip", "aria-label") or ""
     ):
         fail(f"{tag} role button does not show the role")
-    want = "OH1 · S" if pg.evaluate("innerWidth") < 480 else "Outside 1 · Simplified"
+    want = "OH1 · O" if pg.evaluate("innerWidth") < 480 else "Outside 1 · Official"
     if " ".join(pg.inner_text("#roleChip").split()) != want:
         fail(f"{tag} role button text is {pg.inner_text('#roleChip')!r}")
     chip = pg.locator("#roleChip").bounding_box()

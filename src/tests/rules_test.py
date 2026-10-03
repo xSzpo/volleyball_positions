@@ -1,7 +1,7 @@
-"""Playwright test of the two rule sets: Simplified KSV (default) and Official.
+"""Playwright test of the two rule sets: Official (default) and Simplified KSV.
 
-Checks the default mode and the role picker of each, that a stored "drill"
-reads as Simplified, that Official needs the ``rules-official`` flag, the
+Checks the default mode and the role picker of each, that a stored "simple"
+or "drill" reads as Simplified, that Official needs the ``rules-official`` flag, the
 middle roles carried across a switch, the Simplified middle pair and SUB in
 Learn, and the Rules switch wording.
 
@@ -78,13 +78,27 @@ def learn(page: Page, rotation: int, phase: str) -> None:
 
 
 def check_defaults(page: Page) -> None:
-    """Built-in flags: Simplified by default with Official on offer; rules-official off keeps a stored Official."""
-    for stored, want in ((None, "simple"), ("drill", "simple"), ("official", "official")):
+    """Built-in flags: Official by default, a stored Simplified kept; rules-official off keeps a stored Official."""
+    for stored, want in ((None, "official"), ("simple", "simple"), ("drill", "simple"), ("official", "official")):
         open_app(page, "", {"role": "OH1"} | ({"rulesMode": stored} if stored else {}))
         if checked_rules(page) != want:
             fail(f"defaults, stored {stored}: rules read as {checked_rules(page)}, expected {want}")
+        if picker(page) != (OFFICIAL_ROLES if want == "official" else SIMPLE_ROLES):
+            fail(f"defaults, stored {stored}: role picker is {picker(page)}")
+        if want == "official" and "two middles" not in page.inner_text("#rmSub"):
+            fail(f"defaults, stored {stored}: the Rules note is {page.inner_text('#rmSub')!r}")
         if not page.evaluate("!!document.getElementById('rmOfficial')"):
             fail(f"defaults, stored {stored}: the Official button is missing with rules-official on")
+        if page.evaluate("localStorage.getItem('ksv51:rulesMode')") != (json.dumps(stored) if stored else None):
+            fail(f"defaults, stored {stored}: the stored rules changed on load")
+    open_app(page, "", {})
+    if checked_rules(page) != "official" or picker(page) != OFFICIAL_ROLES:
+        fail(f"first visit: rules {checked_rules(page)}, role picker {picker(page)}")
+    if page.get_attribute("#roleChip", "data-role") != "MB1":
+        fail(f"first visit: role chip shows {page.get_attribute('#roleChip', 'data-role')!r}, expected MB1")
+    open_app(page, "", {"role": "MB"})
+    if page.get_attribute("#roleChip", "data-role") != "MB1":
+        fail(f"stored MB with no rules shows as {page.get_attribute('#roleChip', 'data-role')!r}, expected MB1")
     for stored in ("official", "drill"):
         open_app(page, "?ff=-rules-official", {"role": "OH1", "rulesMode": stored})
         if checked_rules(page) != "simple":

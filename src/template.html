@@ -2340,14 +2340,13 @@
           rows.map((r) => ({ ...r, short: r.name, name: `${r.name} (H${r.setter})` })),
         ]),
       );
-      // v1's Drill mode is dropped; a stored "drill" reads as Simplified.
+      // Official unless Simplified was picked; v1's Drill mode reads as Simplified.
       function storedRules() {
         try {
-          return JSON.parse(localStorage.getItem("ksv51:rulesMode")) === "official"
-            ? "official"
-            : "simple";
+          const mode = JSON.parse(localStorage.getItem("ksv51:rulesMode"));
+          return mode === "simple" || mode === "drill" ? "simple" : "official";
         } catch (e) {
-          return "simple";
+          return "official";
         }
       }
       let rulesMode = storedRules();

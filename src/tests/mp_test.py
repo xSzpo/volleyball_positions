@@ -11,6 +11,9 @@ from playwright.sync_api import Page, sync_playwright
 ROOT = Path(__file__).resolve().parents[2]
 # A stored role skips the first-visit role sheet, which covers the page.
 SEED_ROLE = "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"
+SEED_RULES = (
+    "if (!localStorage.getItem('ksv51:rulesMode')) localStorage.setItem('ksv51:rulesMode', JSON.stringify('simple'))"
+)
 sys.path.insert(0, str(ROOT / "src"))
 SHOTS = ROOT / "src" / "tests" / "_out"
 SHOTS.mkdir(exist_ok=True)
@@ -90,6 +93,7 @@ with sync_playwright() as p:
     b = p.chromium.launch()
     pg = b.new_page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
     pg.add_init_script(SEED_ROLE)
+    pg.add_init_script(SEED_RULES)
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto((ROOT / "index.html").as_uri() + "?ff=all&anim=0")

@@ -341,6 +341,11 @@ def check_rules_restored(page: Page) -> None:
         "() => { ['rulesMode', 'mpPlayers', 'gPlayers'].forEach((k) => localStorage.removeItem('ksv51:' + k));"
         " localStorage.setItem('ksv51:role', JSON.stringify('OH1')); }"
     )
+    for query, want in (("?ff=reset,-rules-official", "simple"), ("?ff=reset", "official")):
+        open_app(page, query)
+        checked = page.get_attribute('.rulesmode [aria-checked="true"]', "data-rm")
+        if checked != want or page.evaluate("localStorage.getItem('ksv51:rulesMode')") is not None:
+            fail(f"rules: no stored rules with {query} reads as {checked!r}, expected {want} and nothing stored")
     open_app(page)
 
 

@@ -1058,3 +1058,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** OH1 is always one zone on from the setter (6 wraps to 1), so the caption says "Outside hitter 1 serves next after the setter, one zone on: zone <n+1>." It names the serving order, as `relation()` does, rather than "next to", which on court can mean either side.
 - **Alternatives:** "OH1 is next to the setter"; count the zones as in `relation()` ("count 1 zone on").
 - **Reversible by:** `buildRotation()` in `src/template.html`.
+
+### 139. Official is the default rule set
+
+- **Issue:** none (owner request, 2026-10-03)
+- **Problem:** The app opened in Simplified KSV, but the club plays Official rules and the owner wants new users to learn those first.
+- **Decision:** The owner asked on 2026-10-03 for Official as the default. With no stored `ksv51:rulesMode` the app runs Official, so a new user's role list shows MB1 and MB2 and a stored `MB` reads as MB1 (`roleIn()`). A stored choice is kept: `simple` stays Simplified, `official` stays Official, and a stored `drill` from v1 still reads as Simplified. With `rules-official` off the app still runs Simplified.
+- **Alternatives:** switch everyone to Official, including users who picked Simplified.
+- **Reversible by:** `storedRules()` in `src/template.html`.
