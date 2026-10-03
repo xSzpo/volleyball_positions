@@ -1107,3 +1107,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The owner decided MB serves. At Rotation and Our serve MB is in zone 1 and serves, L is off, and the other middle plays zone 4. When we lose the serve, at Reception, MB goes back to the net and L to the back row. The other middle is labelled `OM` ("Other middle"): middle colour with a dashed edge, named "the other middle" in captions, prompts and grades; its overlap limit at Rotation reads MB, whose slot it is at the whistle for their serve. When we lose the serve the change is called a training convention. Rotate grades change, so `ROOM_V` is 3 and the best-score key `v9|`.
 - **Alternatives:** `MB2` or `SUB` as the label (both read as a second, specific player); hiding the other middle (leaves zone 4 empty).
 - **Reversible by:** `OTHER_MIDDLE`, `lineup()`, `server()` and `rotation_lineup()` in `src/data.py`; `middleServes()`, `who()`, `limitName()` and `stillStage()` in `src/template.html`.
+
+### 145. The serving middle takes the libero's zone 5 at Our serve
+
+- **Issue:** none (owner decision, 2026-10-03)
+- **Problem:** In R3 (H5) and R6 (H2) the libero is in zone 1 and may not serve, so a middle serves (MB in Simplified). The app sent the server to zone 6 after the serve and kept the back-row outside hitter in zone 5; #16 question 3 asked the coach which.
+- **Decision:** The owner decided on 2026-10-03 that the serving middle takes the libero's base spot, zone 5, and the back-row outside hitter defends zone 6. The `serve` lineups and captions of R3 and R6 in `src/data.py` carry it, so both rule sets follow.
+- **Alternatives:** keep the server in zone 6 and the outside hitter in zone 5.
+- **Reversible by:** the R3 and R6 `serve` lineups and `move["serve"]` captions in `src/data.py`, and the zone 5 check in `src/tests/audit.py`.

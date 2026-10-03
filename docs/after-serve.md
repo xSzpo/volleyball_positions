@@ -13,7 +13,8 @@ for play: back-row players may not block. Spots come from `BASE_DEF` in
 (4, 3, 2 at y 0.21), not at the net, because the coach has not confirmed these
 spots; the back row defends deep (5, 6, 1). A back-row setter defends zone 1, a
 front-row setter takes zone 2, the libero always takes zone 5. In R3 and R6 under official rules the middle
-serves, stays on and runs to zone 6. The phase key, `meta` fields and step
+serves, stays on and runs to zone 5, the libero's spot; the back-row
+outside hitter takes zone 6. The phase key, `meta` fields and step
 indices are unchanged, so the live database rules still accept it.
 
 In a match, one rotation R runs: Rotation (we won the rally and rotate into
