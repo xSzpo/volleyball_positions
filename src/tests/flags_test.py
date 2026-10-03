@@ -218,6 +218,69 @@ def check_passers_and_mistakes(page: Page) -> None:
     page.evaluate("localStorage.removeItem('ksv51:drillSteps'); localStorage.removeItem('ksv51:ffOverride')")
 
 
+def check_both_middles_off(page: Page) -> None:
+    """drill-both-middles off: no Middle row, and a stored Both still asks only your own middle."""
+    page.goto(URL)
+    page.evaluate(
+        "localStorage.setItem('ksv51:role', JSON.stringify('MB1'));"
+        " localStorage.setItem('ksv51:rulesMode', JSON.stringify('official'));"
+        " localStorage.setItem('ksv51:drillMiddles', JSON.stringify('both'));"
+        " localStorage.setItem('ksv51:drillSteps', JSON.stringify(['rec']))"
+    )
+    open_app(page, "?ff=reset,-drill-both-middles&anim=0")
+    if present(page, "dMiddles"):
+        fail("drill-both-middles off: #dMiddles still in the DOM")
+    page.click("#tabDrill")
+    for _ in range(8):
+        if "You are" in page.inner_text("#dq"):
+            fail(f"drill-both-middles off: Drill asks another middle: {page.inner_text('#dq')!r}")
+            break
+        page.click("#offBtn")
+        page.click("#nextBtn")
+    if any(
+        key.startswith("MB2|")
+        for key in page.evaluate("Object.keys(JSON.parse(localStorage.getItem('ksv51:stats2') || '{}'))")
+    ):
+        fail("drill-both-middles off: an answer recorded under MB2")
+    open_app(page, "?ff=reset,-drill-tab")
+    if values(page)["drill-both-middles"]:
+        fail("drill-tab off: drill-both-middles still on")
+    page.evaluate(
+        "['role', 'rulesMode', 'drillMiddles', 'drillSteps', 'stats2', 'score2', 'ffOverride']"
+        ".forEach((k) => localStorage.removeItem('ksv51:' + k));"
+        " localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"
+    )
+
+
+def check_middle_cycle_off(page: Page) -> None:
+    """middle-cycle off: no cycle rule of thumb, the other rules numbered as without it, no cycle line in Drill."""
+    page.goto(URL)
+    page.evaluate(
+        "localStorage.setItem('ksv51:role', JSON.stringify('MB1'));"
+        " localStorage.setItem('ksv51:rulesMode', JSON.stringify('official'));"
+        " localStorage.setItem('ksv51:drillSteps', JSON.stringify(['rec']))"
+    )
+    rules_js = "[...document.querySelectorAll('#thumbs li')].map((li) => li.textContent.trim())"
+    open_app(page, "?ff=reset&anim=0")
+    on: list[str] = page.evaluate(rules_js)
+    open_app(page, "?ff=reset,-middle-cycle&anim=0")
+    off: list[str] = page.evaluate(rules_js)
+    if off != [text for text in on if "off, off" not in text] or len(off) != len(on) - 1:
+        fail(f"middle-cycle off: the rules of thumb are not those without the cycle: {off}")
+    page.click("#tabDrill")
+    page.click("#offBtn")
+    if "Your cycle" in page.inner_text("#fb"):
+        fail(f"middle-cycle off: Drill feedback shows the cycle: {page.inner_text('#fb')!r}")
+    open_app(page, "?ff=reset,-learn-tab")
+    if values(page)["middle-cycle"]:
+        fail("learn-tab off: middle-cycle still on")
+    page.evaluate(
+        "['role', 'rulesMode', 'drillSteps', 'stats2', 'score2', 'ffOverride']"
+        ".forEach((k) => localStorage.removeItem('ksv51:' + k));"
+        " localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"
+    )
+
+
 def check_override_storage(page: Page) -> None:
     open_app(page, "?ff=reset,-sets-quiz")
     open_app(page)
@@ -450,6 +513,8 @@ def main() -> None:
             check_zones_off,
             check_answer_glide,
             check_passers_and_mistakes,
+            check_both_middles_off,
+            check_middle_cycle_off,
             check_override_storage,
             check_tabs,
             check_players_mode_restored,

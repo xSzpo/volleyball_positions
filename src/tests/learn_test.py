@@ -406,6 +406,45 @@ def check_rules_of_thumb(page: Page) -> None:
             fail(f"{mode} L: the middles rule is not marked as your rule: {mine}")
 
 
+def middle_cycle(middle: str) -> tuple[list[str], str]:
+    """The H names where a middle is front row (zone 4, 3, 2 in turn) and the one where it serves, from data.py."""
+    sys.path.insert(0, str(ROOT / "src"))
+    from data import ROWS, server
+
+    front = {}
+    serves = ""
+    for ri, row in enumerate(ROWS):
+        h = f"H{row['setter']}"
+        if middle in row["front"]:
+            front[row["front"].index(middle)] = h
+        elif server(ri, "official") == middle:
+            serves = h
+    return [front[i] for i in range(3)], serves
+
+
+def check_middle_cycle(page: Page) -> None:
+    """Official lists the middle cycle, yours as MB1 and MB2, with the rotations of data.py; Simplified does not."""
+    for middle in ("MB1", "MB2"):
+        front, serves = middle_cycle(middle)
+        open_app(page, {"role": middle, "rulesMode": "official"})
+        item = page.locator("#thumbs li", has_text="4, 3, 2, serve, off, off")
+        if item.count() != 1:
+            fail(f"official {middle}: no single middle cycle rule of thumb")
+            continue
+        text = " ".join((item.text_content() or "").split())
+        want = f"{middle} is in the front row in {front[0]}, {front[1]} and {front[2]} and serves in {serves}."
+        if want not in text:
+            fail(f"official {middle}: the cycle rule lacks {want!r}: {text!r}")
+        if "your rule" not in text:
+            fail(f"official {middle}: the cycle rule is not marked as yours")
+    open_app(page, {"role": "OH1", "rulesMode": "official"})
+    if "your rule" in (page.locator("#thumbs li", has_text="4, 3, 2, serve, off, off").text_content() or ""):
+        fail("official OH1: the middle cycle rule is marked as yours")
+    open_app(page, {"role": "MB", "rulesMode": "simple"})
+    if "off, off" in (page.text_content("#thumbs") or ""):
+        fail("simple: the Official middle cycle rule of thumb is listed")
+
+
 def check_rotation_names(page: Page) -> None:
     """Rotations are named with the Danish H in the table and the rotation chips, and Rules of thumb explain it."""
     for mode, roles in MODES.items():
@@ -689,6 +728,7 @@ def main() -> None:
         check_next_in_view(page)
         check_texts(page)
         check_rules_of_thumb(page)
+        check_middle_cycle(page)
         check_rotation_names(page)
         check_table_off(page)
         check_official_walkthrough(page)

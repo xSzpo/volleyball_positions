@@ -1132,3 +1132,27 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The build shows one line during and after the play: "Against the rotation: Setter, Outside, Middle, Opposite, Outside, Middle. The libero replaces the back middle." (R3/R6: "The zone 1 middle serves, libero off."). The list starts with Setter, so the line does not say to start at the setter. It fits two lines at 390 px and takes three at 360 px. There is no "Then:" list after a Rotation play; with reduced motion the still caption is followed by this line instead of a stage list. The rest caption before a play is unchanged, and Reception keeps its "Then:" list.
 - **Alternatives:** the owner's sentence word for word on three lines; "Libero for the back middle."
 - **Reversible by:** `WALK_LINE`, `walkLine()`, `captionPlan()` and `captionHtml()` in `src/template.html`.
+
+### 148. The middle cycle is an Official rule of thumb only
+
+- **Issue:** none (owner request, 2026-10-03)
+- **Problem:** The owner plays MB1 and MB2 and wanted the middles' rotation as one line, "4, 3, 2, serve, off, off". Simplified has one MB who plays the front middle in every rotation, so the cycle does not hold there.
+- **Decision:** The `cycle` entry has `modes: ["official"]`: Simplified leaves it out, and `thumbList()` numbers the list per rule set, so the rule numbers in hints follow it. It sits after the middles entry and is marked as your rule for MB1 and MB2. After the serve the middle defends zone 5, as at Our serve (#145). The entry, the Drill line and the Match hint sit behind the flag `middle-cycle` (needs `learn-tab`); with it off, the list and the rule numbers are as before.
+- **Alternatives:** a Simplified wording ("MB plays the front middle; in H5 and H2 MB serves"), which the middles entry already says.
+- **Reversible by:** `THUMB`, `thumbList()` and `thumbNo()` in `src/template.html`.
+
+### 149. Drill "Middle: Mine / Both" defaults to Mine and shows only for an Official middle
+
+- **Issue:** none (owner request, 2026-10-03)
+- **Problem:** The request did not say the default, what the weak spots show with Both, or what happens to an open question when the option changes.
+- **Decision:** Mine by default (`ksv51:drillMiddles`, a bad value reads as Mine), so nothing changes until the owner picks Both. The row shows only in Official for MB1 and MB2. With Both, each new question picks MB1 or MB2 at random, the title ends "You are MB2", stats are recorded under the asked middle, and the weak spots and Review take both middles ("Needs practice (both middles): MB2 H3 reception"). A change of the option replaces an unanswered question, so the title always matches. The header role stays yours; Reset still clears every role.
+- **Alternatives:** Both by default; weak spots of your own middle only.
+- **Reversible by:** `drillRoles()`, `middlesShown()` and `renderDrillMiddles()` in `src/template.html`.
+
+### 150. The cycle line in Drill names the step
+
+- **Issue:** none (owner request, 2026-10-03)
+- **Problem:** Drill feedback for an Official middle at Rotate and Receive adds "Your cycle: 4, 3, 2, serve, off, off — you are at <step>." The steps needed names, and at Receive in the serving rotation (MB1 H5, MB2 H2) the libero is in for the middle, so "you are at serve" alone was wrong there.
+- **Decision:** The steps read 4, 3, 2, "serve: you serve, then defend zone 5", "the first off" (the libero in zone 6) and "the second off" (zone 5), from the middle's zone in the Official rotation lineup (the libero's zone when it is in). At Receive in the serving rotation the step reads "serve: when we receive, the libero plays for you". The line ships with the `cycle` rule of thumb under the flag `middle-cycle`; Match hints for an Official middle at Rotate, and when it is off court, cite the rule with `thumbRef("cycle", …)`.
+- **Alternatives:** "off (zone 6)"; no cycle line at Receive in the serving rotation.
+- **Reversible by:** `CYCLE_STEP`, `cycleLine()` and `cycleHint()` in `src/template.html`.

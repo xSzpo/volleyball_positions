@@ -1056,6 +1056,125 @@ def check_drill_reset(browser: Browser, tag: str) -> None:
     ctx.close()
 
 
+CYCLE_STEP = {
+    4: "4",
+    3: "3",
+    2: "2",
+    1: "serve: you serve, then defend zone 5",
+    6: "the first off",
+    5: "the second off",
+}
+CYCLE_SERVE_REC = "serve: when we receive, the libero plays for you"
+ZONE_ORDER = [4, 3, 2, 5, 6, 1]
+
+
+def cycle_step(middle: str, ri: int, phase: str) -> str:
+    """Where an Official middle is in "4, 3, 2, serve, off, off", from data.py: off court, L stands in its zone."""
+    from data import ROWS
+
+    row = ROWS[ri]
+    lineup = [*row["front"], *row["back"]]
+    zone = ZONE_ORDER[lineup.index(middle if middle in lineup else "L")]
+    return CYCLE_SERVE_REC if zone == 1 and phase == "rec" else CYCLE_STEP[zone]
+
+
+def check_drill_middles(browser: Browser, tag: str, quick: bool) -> None:
+    """Middle: Mine / Both in Drill options for an Official middle: storage, both asked, stats and the cycle line."""
+    from data import ROWS
+
+    section("DRILL both middles")
+    ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) {"
+        " localStorage.setItem('ksv51:role', '\"MB1\"');"
+        " localStorage.setItem('ksv51:rulesMode', '\"official\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"');"
+        " localStorage.setItem('ksv51:drillSteps', '[\"rec\"]'); }"
+    )
+    pg = ctx.new_page()
+    errs: list[str] = []
+    pg.on("pageerror", collect_errors(errs))
+    pg.goto(URL)
+    wait_ready(pg)
+    pg.click("#tabDrill")
+    open_fold(pg, "#dOpts")
+    if not pg.is_visible("#dMiddles"):
+        fail(f"{tag} no Middle row for an Official MB1")
+    if pg.get_attribute('#dMiddles [data-m="mine"]', "aria-checked") != "true":
+        fail(f"{tag} Middle does not default to Mine")
+    for w, h in pg.eval_on_selector_all("#dMiddles button", BOX_JS):
+        if w < 44 or h < 44:
+            fail(f"{tag} tap target #dMiddles button is {w:.0f} x {h:.0f} px")
+    for _ in range(4):
+        if "You are" in pg.inner_text("#dq"):
+            fail(f"{tag} Mine names the middle: {pg.inner_text('#dq')!r}")
+        pg.click("#offBtn")
+        pg.click("#nextBtn")
+    pg.click('#dMiddles [data-m="both"]')
+    if pg.evaluate("localStorage.getItem('ksv51:drillMiddles')") != '"both"':
+        fail(f"{tag} Both is not stored in ksv51:drillMiddles")
+    ri_of = {f"H{row['setter']}": ri for ri, row in enumerate(ROWS)}
+    asked: set[str] = set()
+    serving = False
+    for n in range(80):
+        if n >= (16 if quick else 30) and serving and len(asked) == 2:
+            break
+        title = pg.inner_text("#dq")
+        found = re.fullmatch(r"(H[1-6]) · Reception · You are (MB1|MB2)", title)
+        if not found:
+            fail(f"{tag} Both question {n} reads {title!r}")
+            break
+        ri, middle = ri_of[found[1]], found[2]
+        asked.add(middle)
+        key = f"{middle}|{ri}|rec"
+        before = pg.evaluate(f"(JSON.parse(localStorage.getItem('ksv51:stats2') || '{{}}'))['{key}'] || null")
+        pg.click("#offBtn")
+        after = pg.evaluate(f"(JSON.parse(localStorage.getItem('ksv51:stats2') || '{{}}'))['{key}'] || null")
+        old = before or {"ok": 0, "miss": 0}
+        if not after or after["ok"] + after["miss"] != old["ok"] + old["miss"] + 1:
+            fail(f"{tag} the answer as {middle} in {found[1]} was not recorded under {key}: {old} -> {after}")
+        step = cycle_step(middle, ri, "rec")
+        serving = serving or step == CYCLE_SERVE_REC
+        want = f"Your cycle: 4, 3, 2, serve, off, off — you are at {step}."
+        if want not in pg.inner_text("#fb"):
+            fail(f"{tag} {middle} {found[1]} feedback lacks {want!r}: {pg.inner_text('#fb')!r}")
+        if pg.get_attribute("#roleChip", "data-role") != "MB1":
+            fail(f"{tag} Both changed the header role to {pg.get_attribute('#roleChip', 'data-role')}")
+        pg.click("#nextBtn")
+    if asked != {"MB1", "MB2"}:
+        fail(f"{tag} Both asked only {sorted(asked)}")
+    if not serving:
+        fail(f"{tag} Both never asked a middle at Receive in its serving rotation")
+    weak = pg.inner_text("#weak")
+    if weak.startswith("Needs practice") and "both middles" not in weak:
+        fail(f"{tag} the weak spots with Both do not cover both middles: {weak!r}")
+    pg.reload()
+    wait_ready(pg)
+    pg.click("#tabDrill")
+    if pg.get_attribute('#dMiddles [data-m="both"]', "aria-checked") != "true":
+        fail(f"{tag} Both not restored from storage")
+    pg.evaluate("localStorage.setItem('ksv51:drillMiddles', '\"x\"')")
+    pg.reload()
+    wait_ready(pg)
+    pg.click("#tabDrill")
+    if pg.get_attribute('#dMiddles [data-m="mine"]', "aria-checked") != "true" or "You are" in pg.inner_text("#dq"):
+        fail(f"{tag} a bad stored Middle value did not read as Mine")
+    open_fold(pg, "#dOpts")
+    pick_role(pg, "OH1")
+    if pg.is_visible("#dMiddles"):
+        fail(f"{tag} the Middle row shows for OH1")
+    pick_rules(pg, "simple")
+    pick_role(pg, "MB")
+    if pg.is_visible("#dMiddles"):
+        fail(f"{tag} the Middle row shows in Simplified")
+    if "Your cycle" in pg.inner_text("#fb"):
+        fail(f"{tag} Simplified shows the Official middle cycle")
+    check_page(pg, f"{tag} drill both middles")
+    if errs:
+        fail(f"{tag} drill both middles JS errors: {errs[:3]}")
+    ctx.close()
+
+
 def check_drill_h_names(browser: Browser, tag: str) -> None:
     """Drill and Match name every rotation H<n> only (question, feedback, weak spots, review); Learn R<n> (H<n>)."""
     section("DRILL names by the setter")
@@ -1268,6 +1387,7 @@ def main() -> None:
         check_zones(b, tag)
         check_drill_rotate(b, tag, args.quick)
         check_drill_h_names(b, tag)
+        check_drill_middles(b, tag, args.quick)
         sweep_match(pg, tag, combos, args.quick)
         sweep_sets(pg, tag)
         check_persistence(pg, tag)
