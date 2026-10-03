@@ -2486,7 +2486,7 @@
           if (role === "L" && rulesMode === "simple")
             return {
               t: "Off court",
-              d: "You are in zone 1, but the libero may never serve. A substitute (SUB) comes on, serves, then defends zone 6. If we win the rally, SUB serves again. When we lose the serve, you come back on for SUB and take SUB's zone.",
+              d: "You are in zone 1, but the libero may never serve. A substitute (SUB) comes on, serves, then defends zone 5. If we win the rally, SUB serves again. When we lose the serve, you come back on for SUB and take SUB's zone.",
             };
           if (role === "L") {
             const m = server(ri);
@@ -4972,7 +4972,7 @@
             : "MB plays the front middle, L the back",
           "@THUMB_MIDDLES_D": off
             ? "Only while the ball is out of play. The libero never serves: in R3 and R6 the middle in zone 1 serves and stays on until we lose the serve (FIVB 19.3)."
-            : "A training convention, not in the guide. Into R3 and R6, MB moves from zone 2 to 4, L from 5 to 1. The libero never serves: in R3 and R6 SUB serves and defends zone 6.",
+            : "A training convention, not in the guide. Into R3 and R6, MB moves from zone 2 to 4, L from 5 to 1. The libero never serves: in R3 and R6 SUB serves and defends zone 5.",
         };
         return lab(x in T ? T[x] : x);
       }

@@ -1075,3 +1075,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The owner decided on 2026-10-03 that everyone restarts in Official once. On start-up, while `rules-official` is on and `ksv51:officialReset` is not stored, the app removes `ksv51:rulesMode` and `ksv51:role` and stores the mark, so the next screen is a first visit for rules and role: Official, and the role list opens with "Pick your role". Progress, bests, theme, room, zones and every other key are kept. A user who then picks Simplified keeps it. A phone with `rules-official` off is not reset until the flag is on for it. Drill stats of the Simplified `MB` do not carry over to MB1 or MB2.
 - **Alternatives:** keep stored choices (#139 alone); map a stored `simple` to Official without clearing the role.
 - **Reversible by:** the `officialReset` block after `feature` in `src/template.html`.
+
+### 145. The serving middle takes the libero's zone 5 at Our serve
+
+- **Issue:** none (owner decision, 2026-10-03)
+- **Problem:** In R3 (H5) and R6 (H2) the libero is in zone 1 and may not serve, so the middle (Official) or SUB (Simplified) serves. The app sent the server to zone 6 after the serve and kept the back-row outside hitter in zone 5; #16 question 3 asked the coach which.
+- **Decision:** The owner decided on 2026-10-03 that the serving middle takes the libero's base spot, zone 5, and the back-row outside hitter defends zone 6. The `serve` lineups and captions of R3 and R6 in `src/data.py` carry it, so both rule sets follow.
+- **Alternatives:** keep the server in zone 6 and the outside hitter in zone 5.
+- **Reversible by:** the R3 and R6 `serve` lineups and `move["serve"]` captions in `src/data.py`, and the zone 5 check in `src/tests/audit.py`.

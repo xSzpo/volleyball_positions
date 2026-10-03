@@ -211,7 +211,7 @@ def check_learn(page: Page) -> None:
     shown = markers(page)
     if "SUB" in shown or "MB1" not in shown or "L" in shown:
         fail(f"Official R3 Our serve markers: {shown}")
-    if not page.inner_text("#cue").startswith("Defend zone 6") or "so you serve" not in page.inner_text("#cue"):
+    if not page.inner_text("#cue").startswith("Defend zone 5") or "so you serve" not in page.inner_text("#cue"):
         fail(f"MB1 in Official R3 Our serve: cue {page.inner_text('#cue')!r}")
 
 

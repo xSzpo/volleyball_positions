@@ -166,15 +166,15 @@ ROWS: list[Row] = [
             ("OH1", 0.52, 0.76, None),
             ("S", 0.66, 0.09, "set"),
         ],
-        serve=(["OH2", "MB2", "OP"], ["OH1", "MB1", "S"]),
+        serve=(["OH2", "MB2", "OP"], ["MB1", "OH1", "S"]),
         note="Front-row outside hitter 2 stands slightly ahead of back-row outside hitter 1.",
         move={
             "serve": {
                 "OH2": "Move to zone 4, ready to block and attack on the left.",
                 "MB2": "Move to zone 3, in the middle of the net, ready to block.",
                 "OP": "Stay in zone 2: the opposite blocks and attacks on the right.",
-                "OH1": "Move to zone 5 and defend deep on the left.",
-                "MB1": "Serve from behind the end line, then run to zone 6 and defend deep.",
+                "OH1": "Move to zone 6 and defend deep in the middle.",
+                "MB1": "Serve from behind the end line, then run to zone 5, the libero's spot.",
                 "S": "Move to zone 1 and defend there until we dig.",
             },
             "rec": {
@@ -319,15 +319,15 @@ ROWS: list[Row] = [
             ("OH2", 0.52, 0.76, None),
             ("S", 0.75, 0.12, "set"),
         ],
-        serve=(["OH1", "MB1", "S"], ["OH2", "MB2", "OP"]),
+        serve=(["OH1", "MB1", "S"], ["MB2", "OH2", "OP"]),
         note="Front-row outside hitter 1 stands slightly ahead of back-row outside hitter 2.",
         move={
             "serve": {
                 "OH1": "Move to zone 4, ready to block and attack on the left.",
                 "MB1": "Move to zone 3, in the middle of the net, ready to block.",
                 "S": "Stay in zone 2: the setter blocks on the right and sets from there.",
-                "OH2": "Move to zone 5 and defend deep on the left.",
-                "MB2": "Serve from behind the end line, then run to zone 6 and defend deep.",
+                "OH2": "Move to zone 6 and defend deep in the middle.",
+                "MB2": "Serve from behind the end line, then run to zone 5, the libero's spot.",
                 "OP": "Move to zone 1 and defend deep on the right.",
             },
             "rec": {
