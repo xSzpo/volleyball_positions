@@ -155,8 +155,10 @@ def check_row(i: int, mode: RulesMode) -> None:
     base = dict(zip([4, 3, 2, 5, 6, 1], sf + sb, strict=True))
     if "L" in base.values() and base[5] != "L":
         issues.append(f"{tag} serve: libero not in zone 5")
-    if zp[1] == "L" and base[6] != serving:
-        issues.append(f"{tag} serve: {serving} serves for the libero but does not defend zone 6")
+    if zp[1] == "L" and base[5] != serving:
+        issues.append(f"{tag} serve: {serving} serves for the libero but does not take its zone 5")
+    if zp[1] == "L" and base[6] not in ("OH1", "OH2"):
+        issues.append(f"{tag} serve: back-row outside hitter not in zone 6")
     if mode == "simple" and (serving == "MB" and OTHER_MIDDLE in sf) != (i in RESETS):
         issues.append(f"{tag} serve: MB should serve with {OTHER_MIDDLE} in front only in R3 and R6")
     if base[1 if r["setter"] in (1, 6, 5) else 2] != "S":
