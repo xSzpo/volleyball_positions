@@ -31,8 +31,8 @@ if [ "$rc" = 0 ]; then
     run flags src/tests/flags_test.py
     run rules src/tests/rules_test.py
     run learn src/tests/learn_test.py
-    run anim src/tests/anim_test.py
   } &
+  run anim src/tests/anim_test.py &
   wait
 fi
 summary
