@@ -122,7 +122,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** The live Realtime Database rules reject the role `MB` and `rulesMode` `simple` until the owner runs `terraform apply`. With `match-online` on by default, `file://` and any client without PostHog values would create rooms whose writes are denied.
 - **Decision:** The built-in default of `match-online` is off. Re-enable it in #33, after the owner's `terraform apply`.
 - **Alternatives:** keep it on and write `official` to rooms until the apply; that would teach the wrong rule set online.
-- **Reversible by:** `FEATURES["match-online"]` in `src/template.html` and `DEFAULT_OFF` in `src/tests/flags_test.py`.
+- **Reversible by:** a code change; the feature flags were removed in #36.
 
 ### 16. Learn boundaries show your own limits
 
@@ -188,7 +188,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** The plan ships the animation "for Simplified first" but `rules-official` is off by default, so only Simplified is reachable without `?ff=`.
 - **Decision:** The built-in default of `learn-animation` is on; the PostHog flag stays off. With `rules-official` on, the Official exchanges play with generic captions ("Go off at the sideline: the libero may not serve.") until #22 polishes them. The options fold of §4.4 (Show everyone / Zones) and the Drill and Match motion of §4.7 are not in this issue.
 - **Alternatives:** keep the default off until #22.
-- **Reversible by:** `FEATURES["learn-animation"]` in `src/template.html`.
+- **Reversible by:** a code change; the feature flags were removed in #36.
 
 ### 24. Learn controls on one line, page scrolls to the court
 
@@ -295,7 +295,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** #1 kept `rules-official` off by default until Official was finished. #22 finishes it.
 - **Decision:** The built-in default of `rules-official` is on, as `learn-animation` in #23; the PostHog flag stays off until the owner checks it on a phone. Simplified stays the default rule set; Official is one tap away in the role sheet. #11 still applies when the flag is off.
 - **Alternatives:** keep the default off until the coach answers questions 1 and 5 on #16.
-- **Reversible by:** `FEATURES["rules-official"]` in `src/template.html`.
+- **Reversible by:** a code change; the feature flags were removed in #36.
 
 ### 37. What the Reception animation shows after the pass
 
@@ -977,7 +977,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** #15 kept `match-online` off until the live rules accept Simplified; the owner applied those on 2026-09-30. The new rules for `meta.v` and the player `v` are live only after the next `terraform apply`, and the live rules deny `v` (`$other: false`) until then, so Create a room would fail.
 - **Decision:** `match-online` stays off in `FEATURES` in this PR. The owner applies the rules and wipes `rooms`, then the PostHog flag goes on, and a follow-up PR flips the built-in default.
 - **Alternatives:** flip the default in this PR and accept failing creates between the merge and the apply.
-- **Reversible by:** `FEATURES["match-online"]` in `src/template.html` and `DEFAULT_OFF` in `src/tests/flags_test.py`.
+- **Reversible by:** a code change; the feature flags were removed in #36.
 
 ### 129. Zone numbers on every court, on by default
 
