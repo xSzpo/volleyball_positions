@@ -3258,6 +3258,7 @@
         if (!$("game").hidden && gPlayersMode() === "online") onRejoinCheck();
       }
       window.ksvLearn = {
+        buildMs: () => BUILD_MS,
         describe: (ri, phase, r) => describe(ri, phase, r),
         players: (ri, phase) => players(ri, phase),
         captions: (ri, phase, r) =>
@@ -3562,8 +3563,7 @@
         FADE_BACK_MS = 400,
         CAPTION_MS = 2500,
         POP_MS = 300;
-      // A Rotation build stage lasts as long as its caption is held, so every line shows in full.
-      const BUILD_MS = CAPTION_MS;
+      const BUILD_MS = 1200;
       // 1 unit is 9 m; with a quarter of the glide spent speeding up and a quarter slowing down, the top speed is about 4.8 m/s.
       const MS_PER_UNIT = 2500,
         EASE_PART = 0.25,
@@ -4209,7 +4209,7 @@
         return stageCaption(base || stillStage(ri, phase), r);
       }
       // While a play runs, the caption changes only when you get a new line, and each line stays CAPTION_MS of play.
-      // A Rotation build shows every stage's line: each one is the rule that places the next player.
+      // A Rotation build shows every stage's line as its marker appears, with no hold: each one places the next player.
       function captionPlan(ri, phase, tr, r) {
         const want = [];
         tr.stages.forEach((st, k) => {
@@ -4220,7 +4220,7 @@
         want.forEach((w) => {
           const prev = out[out.length - 1];
           if (prev?.html === w.html) return;
-          const t = prev ? Math.max(w.t, prev.t + CAPTION_MS) : w.t;
+          const t = prev && !tr.build ? Math.max(w.t, prev.t + CAPTION_MS) : w.t;
           if (t < tr.total) out.push({ t, html: w.html });
         });
         return out;

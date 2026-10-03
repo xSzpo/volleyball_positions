@@ -485,6 +485,8 @@ TRAIL_FADE_MS = 400
 BALL_WAIT_MS = 400
 DEEP_LIMIT = 0.85
 CAPTION_MS = 2500
+BUILD_MS = 1200
+BUILD_PLAY_MAX_MS = 9000
 HELD = (MARKER_R * 100 + 1 + 0.65 * MARKER_R * 100) / 100
 
 
@@ -592,10 +594,18 @@ def check_build_stages(page: Page, mode: str, ri: int) -> None:
         fail(f"{tag}: repeated captions {texts}")
     if mode == "official" and ri in (2, 5) and "serves" not in texts[-1]:
         fail(f"{tag}: the serving middle's caption does not say it serves: {texts[-1]!r}")
+    build_ms = page.evaluate("window.ksvLearn.buildMs()")
+    if build_ms != BUILD_MS:
+        fail(f"{tag}: a build stage lasts {build_ms} ms, expected {BUILD_MS}")
+    if [(st["start"], st["dur"]) for st in stages] != [(k * BUILD_MS, BUILD_MS) for k in range(len(stages))]:
+        fail(f"{tag}: the stages run {[(st['start'], st['dur']) for st in stages]}, expected {BUILD_MS} ms each")
     for role in MODES[mode]:
-        plan = [c["text"] for c in page.evaluate("(a) => window.ksvLearn.captionPlan(...a)", [ri, "start", role])]
-        if len(plan) != len(stages) or len(set(plan)) != len(plan):
-            fail(f"{tag} as {role}: the caption plan is {plan}, expected every stage's line once")
+        plan = page.evaluate("(a) => window.ksvLearn.captionPlan(...a)", [ri, "start", role])
+        texts = [c["text"] for c in plan]
+        if len(texts) != len(stages) or len(set(texts)) != len(texts):
+            fail(f"{tag} as {role}: the caption plan is {texts}, expected every stage's line once")
+        if [c["t"] for c in plan] != [st["start"] for st in stages]:
+            fail(f"{tag} as {role}: the captions change at {[c['t'] for c in plan]}, expected each stage start")
 
 
 def check_rotation_build(page: Page) -> None:
@@ -638,8 +648,19 @@ def check_rotation_build(page: Page) -> None:
         page.click("#lBack")
         if anim(page) or page.locator("#courtL .mk").count() != 6:
             fail(f"{tag}: Step back from the first stage does not return to the still")
+        page.evaluate(
+            """() => { window.buildRun = null; let t0 = null;
+            const poll = () => { const a = window.ksvLearn.anim();
+              if (a?.playing && t0 === null) t0 = performance.now();
+              if (t0 === null || a) requestAnimationFrame(poll);
+              else window.buildRun = performance.now() - t0; };
+            requestAnimationFrame(poll); }"""
+        )
         page.click("#lPlay")
-        page.wait_for_function("!window.ksvLearn.anim()", timeout=25000)
+        page.wait_for_function("window.buildRun !== null", timeout=25000)
+        run = page.evaluate("window.buildRun")
+        if run >= BUILD_PLAY_MAX_MS:
+            fail(f"{tag}: the build played at 1× for {run:.0f} ms, expected under {BUILD_PLAY_MAX_MS}")
         check_positions(f"{tag} end", page.evaluate(MARKERS, "#courtL .mk"), still)
         if mode == "official" and ("L" in still or role not in still):
             fail(f"{tag}: the build shows L or leaves out the serving middle: {sorted(still)}")

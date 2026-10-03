@@ -1039,7 +1039,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** #146
 - **Problem:** While a play runs, the caption shows only your own lines (`captionPlan()`). In the build each player has one line, so you would see the setter's line and then your own, and miss the rules that place everyone in between.
-- **Decision:** The build shows every stage's line, each held for its whole stage (`BUILD_MS` = `CAPTION_MS`, 2.5 s, so the play lasts 15 s plus the end hold). Your own stage reads "You (OH1): …". After the play, the rest caption lists the six steps under "Then:", and reduced motion lists them on the still. Reception keeps the own-line rule.
+- **Decision:** The build shows every stage's line for its whole stage, changing with each marker. A stage lasts `BUILD_MS`, 1.2 s, with no `CAPTION_MS` hold (owner, #149; first 2.5 s, which made the play last 15 s), so the play lasts 7.2 s plus the end hold. Your own stage reads "You (OH1): …". After the play, the rest caption lists the six steps under "Then:", and reduced motion lists them on the still. Reception keeps the own-line rule.
 - **Alternatives:** your own line only, as on Reception; shorter stages with the lines shown after the play.
 - **Reversible by:** `captionPlan()` (`tr.build`) and `BUILD_MS` in `src/template.html`.
 
