@@ -2479,7 +2479,7 @@
           if (role === "L" && rulesMode === "simple")
             return {
               t: "Off court",
-              d: "MB is in zone 1 and serves: the libero may never serve. The other middle plays zone 4. If we win the rally, MB serves again and you stay off. When we lose the serve, MB goes back to the net, the other middle goes off and you come on in zone 1.",
+              d: "MB is in zone 1 and serves: the libero may never serve. The other middle plays zone 4. If we win the rally, MB serves again and you stay off. When we lose the serve, by our training convention MB goes back to the net, the other middle goes off and you come on in zone 1.",
             };
           if (role === "L") {
             const m = server(ri);
@@ -2918,6 +2918,8 @@
         if (i < 2) out.push({ p: zp[row[i + 1]], side: "right" });
         return serving ? out.filter((o) => o.p !== server(ri)) : out;
       }
+      // At the whistle for their serve OM's zone 4 slot is MB's: name the limit MB, keep OM's spot.
+      const limitName = (p) => (p === "OM" ? "MB" : p);
       function overlapText(ri, role, phase) {
         const words = {
           behind: "in front of",
@@ -2925,7 +2927,7 @@
           left: "right of",
           right: "left of",
         };
-        const parts = partners(ri, role, phase).map((o) => `${words[o.side]} ${who(o.p)}`);
+        const parts = partners(ri, role, phase).map((o) => `${words[o.side]} ${limitName(o.p)}`);
         if (!parts.length) return "";
         const last = parts.pop();
         return `Overlap: stay ${parts.length ? `${parts.join(", ")} and ${last}` : last}.`;
@@ -2964,7 +2966,7 @@
           lines.length ? " Each line ends at a limit you may not cross." : ""
         }${
           tight.length
-            ? ` You stand right at the ${tight.map((p) => (p === "OM" ? "other middle" : p)).join(" and ")} limit${tight.length > 1 ? "s" : ""}.`
+            ? ` You stand right at the ${tight.map(limitName).join(" and ")} limit${tight.length > 1 ? "s" : ""}.`
             : ""
         }`;
       }
@@ -3734,10 +3736,10 @@
           team = `The libero leaves; ${who(on)} comes on in zone ${z}. ${sv} is in zone 1 and serves.`;
         }
         if (phase === "rec" && rulesMode === "simple" && middleServes(ri)) {
-          notes.MB = "We lost the serve: go back to the net in zone 4. The other middle goes off.";
+          notes.MB = "Training convention: we lost the serve, so go back to the net in zone 4.";
           notes.L = "Come back on in zone 1 and take your reception spot.";
           team =
-            "We lost the serve: the other middle goes off, MB goes back to the net and L comes on.";
+            "Training convention: we lost the serve, so the other middle goes off, MB goes back to the net and L comes on.";
         }
         if (phase === "serve" && !order.includes("L") && !from.L) notes.L = OFF_SERVE(server(ri));
         return { notes, team, swap: leave.length + enter.length > 0 };
@@ -3961,7 +3963,7 @@
             return `Zone ${z}: next is a middle; in the back row the libero replaces it.`;
           if (swap && p === server(ri))
             return `Zone ${z}: next is a middle, ${p}; it serves, so the libero is off.`;
-          return `Zone ${z}: next is a middle, ${p}.`;
+          return `Zone ${z}: next is ${p === "OM" ? "the other middle" : `a middle, ${p}`}.`;
         };
         const steps = [
           () =>
@@ -3984,10 +3986,7 @@
         });
         lines.push([
           null,
-          rule(
-            "corners",
-            `same job, opposite corners: S–OP, OH–OH, MB–${swap ? (rulesMode === "simple" ? "OM" : "MB") : "L"}.`,
-          ),
+          rule("corners", `same job, opposite corners: S–OP, OH–OH, MB–${swap ? "MB" : "L"}.`),
         ]);
         const appear = {};
         const stages = lines.map(([p, text], k) => {
@@ -5259,9 +5258,9 @@
       function rotPrompt(r) {
         const p = rotNext(r);
         if (!p) return "All placed. Tap a marker to move it, or press Continue.";
-        const who =
-          p === r.role ? "you stand" : p === "S" ? "the setter (S) stands" : `${p} stands`;
-        return `Tap where ${who}.`;
+        const ask =
+          p === r.role ? "you stand" : p === "S" ? "the setter (S) stands" : `${who(p)} stands`;
+        return `Tap where ${ask}.`;
       }
       // Once your partners are asked, your own marker stays put: moving it would move their limits.
       function rotLocked(r, p) {
@@ -5307,7 +5306,7 @@
         }));
       }
       function rotGradesHtml(grades, you) {
-        return `<p class="rotgrades" style="margin:4px 0 0">${grades.map(({ p, g }) => `${p === you ? "You" : p}: ${g}`).join(" · ")}</p>`;
+        return `<p class="rotgrades" style="margin:4px 0 0">${grades.map(({ p, g }) => `${p === you ? "You" : cap(who(p))}: ${g}`).join(" · ")}</p>`;
       }
       function rotLimitsHtml(ri, role) {
         const pl = players(ri, "start");
@@ -5944,7 +5943,7 @@
       }
       function gKey() {
         return (
-          (feature("match-rotate-name") ? "v8|" : "v7|") +
+          (feature("match-rotate-name") ? "v9|" : "v7|") +
           role +
           "|" +
           gSteps().join(",") +
@@ -7011,7 +7010,7 @@
         return { db, auth };
       })();
       // Bump when the room data changes: a client on another version cannot join that room.
-      const ROOM_V = 2;
+      const ROOM_V = 3;
       const WEEK = 7 * 24 * 60 * 60 * 1000;
       const HOST_GRACE = 10000;
       const NB_GRACE =

@@ -618,8 +618,7 @@ def check_build_stages(page: Page, mode: str, ri: int) -> None:
         if serving and p == server(ri, mode) and "serves" not in text:  # type: ignore[arg-type]
             fail(f"{tag}: the serving middle's caption does not say it serves: {text!r}")
     check = stages[-1]
-    partner = ("OM" if mode == "simple" else "MB") if serving else "L"
-    want_check = f"Rule 2: same job, opposite corners: S–OP, OH–OH, MB–{partner}."
+    want_check = f"Rule 2: same job, opposite corners: S–OP, OH–OH, MB–{'MB' if serving else 'L'}."
     if (
         check["notes"]
         or check["moves"]
@@ -1261,7 +1260,7 @@ def check_still_captions(page: Page) -> None:
         ):
             fail(f"{tag} Reception still caption for L")
         if page.evaluate(f"window.ksvLearn.still({ri}, 'rec', 'MB')") != (
-            "You (MB): We lost the serve: go back to the net in zone 4. The other middle goes off."
+            "You (MB): Training convention: we lost the serve, so go back to the net in zone 4."
         ):
             fail(f"{tag} Reception still caption for MB")
         if page.evaluate(f"window.ksvLearn.still({ri}, 'ar', 'L')") != (

@@ -52,8 +52,8 @@ OVERLAP_WHEN = {
     " We serve now, so you may stand anywhere.",
     "rec": "These limits count at the whistle, not during the pass. " + WHISTLE_MOVE,
 }
-# The captions name OM in words.
-OTHER_MIDDLE = {"the other middle": "OM", "other middle": "OM"}
+# Simplified R3/R6 Rotation: OM's zone 4 slot is MB's at the whistle for their serve, so its limit reads MB.
+OM_LIMIT = {"MB": "OM"}
 # Caption words -> the axis and direction your line must run from your marker.
 SIDE = {"behind": ("y", -1), "in front of": ("y", 1), "right of": ("x", -1), "left of": ("x", 1)}
 
@@ -130,7 +130,8 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
     elif phase in ("start", "rec") and here:
         if OVERLAP_WHEN[phase] not in state["cue"]:
             fail(f"{tag}: cue does not say when the overlap limits count: {state['cue']!r}")
-        check_overlap(tag, state, EXPECTED.get((mode, role, rotation, phase)))
+        alias = OM_LIMIT if (mode, phase) == ("simple", "start") and rotation in (2, 5) else {}
+        check_overlap(tag, state, EXPECTED.get((mode, role, rotation, phase)), alias)
         for bound in state["bounds"]:
             if bound["stroke"] != f"var(--route-{ROUTE_KEY[bound['p']]})":
                 fail(f"{tag}: line for {bound['p']} coloured {bound['stroke']}")
@@ -140,19 +141,19 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
         fail(f"{tag}: boundary lines outside Rotation and Reception or off court: {state['bounds']}")
 
 
-def check_overlap(tag: str, state: dict[str, Any], expected: tuple[str, list[str]] | None) -> None:
+def check_overlap(
+    tag: str, state: dict[str, Any], expected: tuple[str, list[str]] | None, alias: dict[str, str]
+) -> None:
     """Every partner in the caption has a line running to their side, or is named as a limit you stand at."""
     overlap = re.search(r"Overlap: stay ([^.]*)\.", state["cue"])
     if not overlap:
         fail(f"{tag}: no overlap sentence: {state['cue']!r}")
         return
     tight_match = re.search(r"You stand right at the (.*) limits?\.", state["cue"])
-    tight = [OTHER_MIDDLE.get(p, p) for p in tight_match.group(1).split(" and ")] if tight_match else []
+    tight = [alias.get(p, p) for p in tight_match.group(1).split(" and ")] if tight_match else []
     sides = dict(
-        (OTHER_MIDDLE.get(partner, partner), words)
-        for words, partner in re.findall(
-            r"(behind|in front of|right of|left of) (the other middle|[A-Z][A-Z0-9]*)", overlap.group(1)
-        )
+        (alias.get(partner, partner), words)
+        for words, partner in re.findall(r"(behind|in front of|right of|left of) ([A-Z][A-Z0-9]*)", overlap.group(1))
     )
     lines = {bound["p"]: bound for bound in state["bounds"]}
     if expected and (overlap.group(0), tight) != expected:

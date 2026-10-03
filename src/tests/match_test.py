@@ -217,14 +217,14 @@ def check_vis_fixed(browser: Browser) -> None:
     if shown != "Shown: Setter (70% points)":
         fail(f"end screen reads {shown!r}")
     best = page.evaluate("JSON.parse(localStorage.getItem('ksv51:gameBest'))")
-    if list(best) != ["v8|OH1|rec|ref"]:
+    if list(best) != ["v9|OH1|rec|ref"]:
         fail(f"best score saved under {list(best)}, expected the starting settings only")
     page.close()
 
 
 def check_best_key(browser: Browser) -> None:
     """Bests from another scoring are ignored, and the neighbour check has its own best."""
-    bests = '{"v5|OH1|rec": 9999, "v6|OH1|rec": 9999, "v7|OH1|rec": 500, "v8|OH1|rec": 700}'
+    bests = '{"v5|OH1|rec": 9999, "v6|OH1|rec": 9999, "v7|OH1|rec": 500, "v8|OH1|rec": 9999, "v9|OH1|rec": 700}'
     seed = f"localStorage.setItem('ksv51:gameBest', JSON.stringify({bests}))"
     page = new_page(browser, query="?ff=all,-match-rotate-name&anim=0")
     page.evaluate(seed)
@@ -242,7 +242,7 @@ def check_best_key(browser: Browser) -> None:
     setup_match(page, "OH1", ("rec",))
     text = page.inner_text("#gBest")
     if "700" not in text:
-        fail(f"best line reads {text!r}, expected the v8 best of 700")
+        fail(f"best line reads {text!r}, expected the v9 best of 700")
     page.check("#nbGame")
     text = page.inner_text("#gBest")
     if text:
@@ -461,7 +461,8 @@ def answer_match_rotate(page: Page, ctx: str, ri: int, role: str, wrong: bool = 
     if page.locator("#courtG g.mk").count():
         fail(f"{ctx}: teammates shown before the answer with Show on court Everyone")
     for k, mate in enumerate(order):
-        who = "you stand" if mate == role else "the setter (S) stands" if mate == "S" else f"{mate} stands"
+        named = "the other middle" if mate == "OM" else mate
+        who = "you stand" if mate == role else "the setter (S) stands" if mate == "S" else f"{named} stands"
         if page.inner_text("#gAsk") != f"Tap where {who}.":
             fail(f"{ctx}: prompt {page.inner_text('#gAsk')!r}, expected 'Tap where {who}.'")
         if page.locator("#gNext").is_enabled():
@@ -478,7 +479,7 @@ def answer_match_rotate(page: Page, ctx: str, ri: int, role: str, wrong: bool = 
         fail(f"{ctx}: Continue not ready after placing {order}: {page.inner_text('#gAsk')!r}")
     press_next(page)
     grades = page.inner_text("#gFb .rotgrades")
-    right = " · ".join(f"{'You' if m == role else m}: right" for m in order)
+    right = " · ".join(f"{'You' if m == role else 'The other middle' if m == 'OM' else m}: right" for m in order)
     if not wrong and grades != right:
         fail(f"{ctx}: grades {grades!r}, expected {right!r}")
     if wrong and not grades.startswith(f"{order[0]}: wrong"):
