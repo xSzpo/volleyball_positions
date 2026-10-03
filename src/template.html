@@ -2041,6 +2041,17 @@
                   Mixed
                 </button>
               </div>
+              <div
+                class="vis"
+                id="dMiddles"
+                role="radiogroup"
+                aria-label="Which middle to drill"
+                hidden
+              >
+                <span class="vislabel">Middle</span>
+                <button type="button" role="radio" aria-checked="false" data-m="mine">Mine</button
+                ><button type="button" role="radio" aria-checked="false" data-m="both">Both</button>
+              </div>
             </div>
           </details>
         </div>
@@ -3199,6 +3210,7 @@
         "drill-review": true,
         "drill-steps": true,
         "drill-rotate-name": true,
+        "drill-both-middles": true,
         "neighbour-check": true,
         "match-solo": true,
         "match-rotate-name": true,
@@ -3222,6 +3234,7 @@
         "drill-review": ["drill-tab"],
         "drill-steps": ["drill-tab"],
         "drill-rotate-name": ["drill-tab"],
+        "drill-both-middles": ["drill-tab"],
         "neighbour-check": ["drill-tab"],
         "match-solo": ["learn-tab"],
         "match-rotate-name": ["match-solo"],
@@ -3244,6 +3257,7 @@
         "drill-review": ["reviewRow"],
         "drill-steps": ["dSteps"],
         "drill-rotate-name": ["dName"],
+        "drill-both-middles": ["dMiddles"],
         "neighbour-check": ["nbDrillCheck", "nbGameCheck"],
         "match-solo": ["tabGame", "game"],
         "answer-glide": ["dWatch", "gWatch", "rWatch"],
@@ -3460,6 +3474,7 @@
               renderRefLabels();
               review = null;
               renderLearn();
+              renderDrillMiddles();
               if (!$("drill").hidden) newQuestion();
               else cur = null;
               if (typeof gRenderSetup === "function") {
@@ -4153,7 +4168,7 @@
         const swap = middleServes(ri);
         const rule = (key, text) =>
           feature("learn-guides")
-            ? `Rule ${THUMB.findIndex((t) => t.k === key) + 1}: ${text}`
+            ? `Rule ${thumbNo(key)}: ${text}`
             : `${text[0].toUpperCase()}${text.slice(1)}`;
         const middle = (z, p) => {
           if (p === "L")
@@ -5129,6 +5144,13 @@
           d: "@THUMB_MIDDLES_D",
         },
         {
+          k: "cycle",
+          t: "A middle goes 4, 3, 2, serve, off, off",
+          roles: ["MB1", "MB2"],
+          modes: ["official"],
+          d: "You come on in zone 4, play 3, then 2, then serve from zone 1 while the libero stays off. Then the libero plays for you in zones 6 and 5. MB1 is in the front row in H2, H1 and H6 and serves in H5. MB2 is in the front row in H5, H4 and H3 and serves in H2.",
+        },
+        {
           k: "outside-left",
           t: "The front-row outside starts left",
           roles: ["OH1", "OH2", "OP"],
@@ -5160,10 +5182,18 @@
       THUMB.forEach((t) => {
         t.d = lab(t.d);
       });
+      // Simplified has one middle and no cycle, so the list depends on the rule set.
+      function thumbList() {
+        return THUMB.filter((t) => !t.modes || t.modes.includes(rulesMode));
+      }
       // Hints cite a rule of thumb by key, so its number follows the list order.
+      function thumbNo(key) {
+        const n = thumbList().findIndex((t) => t.k === key) + 1;
+        if (!n) throw new Error(`No rule of thumb "${key}" in ${rulesMode}`);
+        return n;
+      }
       function thumbRef(key, advice) {
-        const n = THUMB.findIndex((t) => t.k === key) + 1;
-        if (!n) throw new Error(`No rule of thumb "${key}"`);
+        const n = thumbNo(key);
         return feature("learn-guides")
           ? `Remember rule ${n} of the Rules of thumb: ${advice}.`
           : `${advice[0].toUpperCase()}${advice.slice(1)}.`;
@@ -5189,10 +5219,12 @@
               : `Off (libero in zone ${zoneOf(i, "L")})`;
           return `<tr><td class="r">${r.name}</td><td>${z ? `Zone ${z}` : off}</td>${["serve", "rec", "ar"].map((ph) => `<td>${describe(i, ph, role).t}</td>`).join("")}</tr>`;
         }).join("");
-        const thumbs = THUMB.map(
-          (t, i) =>
-            `<li${t.roles.includes(role) ? ' class="mine"' : ""}><b>${ruleText(t.t)}</b>${t.roles.includes(role) ? ' <span class="tag">your rule</span>' : ""}<br>${ruleText(t.d)}</li>`,
-        ).join("");
+        const thumbs = thumbList()
+          .map(
+            (t, i) =>
+              `<li${t.roles.includes(role) ? ' class="mine"' : ""}><b>${ruleText(t.t)}</b>${t.roles.includes(role) ? ' <span class="tag">your rule</span>' : ""}<br>${ruleText(t.d)}</li>`,
+          )
+          .join("");
         $("rotTable").innerHTML =
           `<table><thead><tr><th></th><th>Rotation</th><th>Our serve</th><th>Reception</th><th>Attack</th></tr></thead><tbody>${rows}</tbody></table>`;
         $("thumbs").innerHTML = thumbs;
@@ -5429,6 +5461,54 @@
         store.set("drillName", drillName);
         renderDrillName();
       });
+      // Both: each question asks MB1 or MB2 at random; the header role stays yours.
+      const DRILL_MIDDLES = ["mine", "both"],
+        MIDDLE_ROLES = ["MB1", "MB2"];
+      let drillMiddles = DRILL_MIDDLES.includes(store.get("drillMiddles", "mine"))
+        ? store.get("drillMiddles", "mine")
+        : "mine";
+      function middlesShown() {
+        return (
+          feature("drill-both-middles") && rulesMode === "official" && MIDDLE_ROLES.includes(role)
+        );
+      }
+      function drillRoles() {
+        return middlesShown() && drillMiddles === "both" ? MIDDLE_ROLES : [role];
+      }
+      function renderDrillMiddles() {
+        $("dMiddles").hidden = !middlesShown();
+        $("dMiddles")
+          .querySelectorAll("button")
+          .forEach((b) => {
+            b.setAttribute("aria-checked", b.dataset.m === drillMiddles);
+          });
+      }
+      renderDrillMiddles();
+      $("dMiddles").addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-m]");
+        if (!b) return;
+        drillMiddles = b.dataset.m;
+        store.set("drillMiddles", drillMiddles);
+        renderDrillMiddles();
+        if (cur && !answered && !review) newQuestion();
+        else updateScore();
+      });
+      const CYCLE_STEP = {
+        4: "4",
+        3: "3",
+        2: "2",
+        1: "serve",
+        6: "the first off",
+        5: "the second off",
+      };
+      // Where a middle is in "4, 3, 2, serve, off, off"; off court, the libero stands in its zone.
+      function cycleLine(ri, who) {
+        if (rulesMode !== "official" || !MIDDLE_ROLES.includes(who)) return "";
+        const r = ROWS[ri],
+          i = [...r.front, ...r.back].indexOf(who);
+        const zone = i < 0 ? ORDER[3 + r.back.indexOf("L")] : ORDER[i];
+        return `<p class="cycle" style="margin:4px 0 0">Your cycle: 4, 3, 2, serve, off, off — you are at ${CYCLE_STEP[zone]}.</p>`;
+      }
       // Rotate from the name alone: you place the setter, yourself, then each overlap partner.
       // Shared by Drill (`rot`) and Match (`G.rot`); `how` is "h" (setter's zone) or "r".
       let rot = null;
@@ -5576,7 +5656,7 @@
         const out = [];
         for (const k in stats) {
           const [r, , ph] = k.split("|");
-          if (r !== role || !drillSteps().includes(ph)) continue;
+          if (!drillRoles().includes(r) || !drillSteps().includes(ph)) continue;
           const st = stats[k];
           if (st.miss > st.ok) out.push(k);
         }
@@ -5599,6 +5679,7 @@
         newQuestion();
       }
       function newQuestion() {
+        renderDrillMiddles();
         watchClose($("dWatch"));
         rot = null;
         lastTap = null;
@@ -5629,13 +5710,15 @@
           cur = review.queue[review.i];
         } else {
           let pool = [];
+          const roles = drillRoles(),
+            asked = roles[Math.floor(Math.random() * roles.length)];
           for (let i = 0; i < 6; i++)
             for (const ph of drillSteps()) {
-              const st = stats[`${role}|${i}|${ph}`] || { ok: 0, miss: 0 };
+              const st = stats[`${asked}|${i}|${ph}`] || { ok: 0, miss: 0 };
               pool.push({
                 ri: i,
                 phase: ph,
-                role,
+                role: asked,
                 w: Math.max(1, 1 + st.miss * 3 - st.ok) * (ph === "start" ? 0.6 : 1),
               });
             }
@@ -5659,7 +5742,7 @@
         $("nextBtn").disabled = !!rot;
         $("offBtn").disabled = false;
         $("dq").textContent =
-          `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${rot ? rot.name : hName(cur.ri)} · ${FULL[cur.phase]}`;
+          `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${rot ? rot.name : hName(cur.ri)} · ${FULL[cur.phase]}${cur.role !== role || drillRoles().length > 1 ? ` · You are ${cur.role}` : ""}`;
         $("dsub").textContent =
           `${rot ? rotPrompt(rot) : cur.phase === "start" ? "Which zone are you in?" : cur.phase === "ar" ? arQuestion(cur.ri, cur.role) : cur.phase === "serve" ? serveQuestion(cur.ri, cur.role) : "Where do you stand?"}`;
         $("fb").className = "fb";
@@ -5739,6 +5822,8 @@
         watchMount("dWatch", "courtD", cur.ri, cur.phase, cur.role, () => drawDrill(lastTap));
         $("fb").className = `fb ${cls}`;
         $("fb").innerHTML = hOnly(`<b>${title}</b><p style="margin:2px 0 0">${d.t}. ${d.d}</p>`);
+        if (cur.phase === "start" || cur.phase === "rec")
+          $("fb").insertAdjacentHTML("beforeend", cycleLine(cur.ri, cur.role));
         if (cls !== "good" && !rot)
           $("fb").insertAdjacentHTML(
             "beforeend",
@@ -5867,16 +5952,17 @@
       function updateScore() {
         $("dscore").textContent = `${score.ok}/${score.n}`;
         $("dstreak").textContent = streak;
+        const both = drillRoles().length > 1;
         const weak = weakKeys().map((k) => {
-          const [, i, ph] = k.split("|");
-          return `${hName(i)} ${FULL[ph].toLowerCase()}`;
+          const [r, i, ph] = k.split("|");
+          return `${both ? `${r} ` : ""}${hName(i)} ${FULL[ph].toLowerCase()}`;
         });
-        const tried = Object.keys(stats).some((k) => k.split("|")[0] === role);
+        const tried = Object.keys(stats).some((k) => drillRoles().includes(k.split("|")[0]));
         const last = store.get("lastPractice", 0),
           days = last ? Math.floor((Date.now() - last) / 864e5) : 0;
         $("weak").textContent =
           (weak.length
-            ? `Needs practice (${NAMES[role]}): ${weak.join(", ")}. These come up more often.`
+            ? `Needs practice (${both ? "both middles" : NAMES[role]}): ${weak.join(", ")}. These come up more often.`
             : tried
               ? "No weak spots in the steps you picked."
               : "") +
@@ -6461,14 +6547,16 @@
         if (!me)
           return st.phase === "serve"
             ? "Who does the libero replace while we serve? And who is serving from zone 1?"
-            : `Who does the libero replace in ${hName(st.ri)}? Is your middle in the back row?`;
+            : `Who does the libero replace in ${hName(st.ri)}? Is your middle in the back row?${cycleHint(G.role)}`;
         if (st.phase === "start") {
           if (G.role === "L") return `${relation(st.ri, "L")} Find the back-row middle first.`;
           const pz = zoneOf((st.ri + 5) % 6, G.role);
           if (G.mixed || G.replay) return relation(st.ri, G.role);
-          return pz
-            ? `In the previous rotation you were in zone ${pz}. Everyone moves one zone clockwise: 2→1→6→5→4→3→2.`
-            : `You were off court in the previous rotation. You come back on in the front row, zone 4.`;
+          return `${
+            pz
+              ? `In the previous rotation you were in zone ${pz}. Everyone moves one zone clockwise: 2→1→6→5→4→3→2.`
+              : `You were off court in the previous rotation. You come back on in the front row, zone 4.`
+          }${cycleHint(G.role)}`;
         }
         if (st.phase === "rec") {
           const row = isFront(st.ri, G.role) ? "front" : "back";
@@ -6486,6 +6574,11 @@
           return gHintAttack(me);
         }
         return `When we serve there is no overlap rule, so everyone except the server stands in base defence before the serve: the front row in the middle of its zones, the back row deep. You are ${isFront(st.ri, G.role, "serve") ? "front" : "back"} row in this rotation.`;
+      }
+      function cycleHint(who) {
+        return rulesMode === "official" && MIDDLE_ROLES.includes(who)
+          ? ` ${thumbRef("cycle", "a middle goes 4, 3, 2, serve, off, off")}`
+          : "";
       }
       function gHintAttack(me) {
         if (me.kind === "back")
@@ -8484,6 +8577,7 @@
               .catch(() => {});
           renderRulesMode();
           renderLearn();
+          renderDrillMiddles();
           if (G) {
             G = null;
             gView("gSetup");
