@@ -6,7 +6,7 @@ Runs against the Firebase Realtime Database and Auth emulators:
     python src/tests/report_test.py --webkit   # WebKit, as on an iPhone
 
 Without the emulators running, the script restarts itself under
-``firebase emulators:exec --only auth,database`` (config in infra/firebase.json;
+``firebase emulators:exec --only auth,database`` on the ports of emulators.py (default 9000 and 9099;
 needs the Firebase CLI and Java, and /opt/homebrew/opt/openjdk/bin is added to PATH).
 html2canvas is stubbed in the browser for most checks; one check loads the real,
 pinned script from jsdelivr and takes a real screenshot.
@@ -14,10 +14,7 @@ pinned script from jsdelivr and takes a real screenshot.
 
 import json
 import os
-import shutil
 import signal
-import socket
-import subprocess
 import sys
 import threading
 import time
@@ -28,13 +25,12 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from emulators import PROJECT, run_under_emulators
 from playwright.sync_api import Browser, Page, sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 ROOT = Path(__file__).resolve().parents[2]
-PROJECT = "ksv-volleyball-xszpo"
 NAMESPACE = f"{PROJECT}-default-rtdb"
-PORTS = (9000, 9099)
 NAME, CODE = "Zed Secretname", "482715"
 SEED = (
     "localStorage.setItem('ksv51:role', JSON.stringify('OH1'));"
@@ -105,45 +101,6 @@ FAIL: list[str] = []
 def fail(message: str) -> None:
     FAIL.append(message)
     print("FAIL:", message, flush=True)
-
-
-def run_under_emulators() -> None:
-    """Restarts this script inside ``firebase emulators:exec`` and always stops the emulators afterwards."""
-    busy = []
-    for port in PORTS:
-        with socket.socket() as s:
-            if s.connect_ex(("127.0.0.1", port)) == 0:
-                busy.append(port)
-    if busy:
-        sys.exit(
-            f"Port(s) {busy} are in use, probably by an emulator left from an earlier run. "
-            f"Stop it first, for example: lsof -ti :{busy[0]} | xargs kill"
-        )
-    env = dict(os.environ)
-    env["PATH"] = "/opt/homebrew/opt/openjdk/bin:" + env.get("PATH", "")
-    firebase = shutil.which("firebase", path=env["PATH"])
-    assert firebase, "Firebase CLI not found; install it with npm install -g firebase-tools"
-    command = " ".join(f'"{arg}"' for arg in (sys.executable, Path(__file__).resolve(), *sys.argv[1:]))
-    process = subprocess.Popen(
-        [firebase, "emulators:exec", "--only", "auth,database", "--project", PROJECT, command],
-        cwd=ROOT / "infra",
-        env=env,
-        start_new_session=True,
-    )
-    try:
-        code = process.wait()
-    except KeyboardInterrupt:
-        code = 130
-    finally:
-        # The emulators run as Java children in the same session; kill the whole group so none is left behind.
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-            time.sleep(1)
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        (ROOT / "infra" / "database-debug.log").unlink(missing_ok=True)
-    sys.exit(code)
 
 
 def admin(emulator_db: str, path: str) -> Any:
@@ -626,5 +583,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     if "FIREBASE_DATABASE_EMULATOR_HOST" not in os.environ:
-        run_under_emulators()
+        run_under_emulators(__file__)
     main()
