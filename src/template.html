@@ -3199,6 +3199,13 @@
       }
       const flags = featureValues(FEATURES, ffOverride);
       const feature = (key) => !!flags[key];
+      if (feature("rules-official") && !store.get("officialReset", null)) {
+        store.del("rulesMode");
+        store.del("role");
+        store.set("officialReset", "1");
+        rulesMode = storedRules();
+        ROWS = RULE_ROWS[rulesMode];
+      }
       const nbOn = (id) => feature("neighbour-check") && $(id).checked;
       const SLOTS = new Map();
       function attach(el) {

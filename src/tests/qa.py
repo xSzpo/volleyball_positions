@@ -452,7 +452,10 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
     """The Drill steps picker: asks only the picked steps, is stored, keeps one step on and fits a 390 x 664 phone."""
     section("DRILL steps picker")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     errs: list[str] = []
     pg.on("pageerror", collect_errors(errs))
@@ -577,7 +580,10 @@ def check_learn_fit(browser: Browser, tag: str, quick: bool) -> None:
     """
     section("LEARN fit 390 x 664 and tap targets")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     pg.goto(URL)
     wait_ready(pg)
@@ -601,7 +607,10 @@ def check_learn_fit(browser: Browser, tag: str, quick: bool) -> None:
     check_targets(pg, tag + " 390 x 664")
     ctx.close()
     ctx = browser.new_context(viewport={"width": 1280, "height": 800})
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     pg.goto(URL)
     wait_ready(pg)
@@ -651,7 +660,10 @@ def check_zones(browser: Browser, tag: str) -> None:
     """Zone numbers on every court, on by default, one setting for Learn, Drill and Match, kept across reloads."""
     section("zone numbers")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     pg.goto(URL)
     wait_ready(pg)
@@ -868,6 +880,7 @@ def check_drill_rotate(browser: Browser, tag: str, quick: bool) -> None:
     ctx.add_init_script(
         "if (!localStorage.getItem('ksv51:role')) {"
         " localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"');"
         " localStorage.setItem('ksv51:drillSteps', '[\"start\"]'); }"
     )
     pg = ctx.new_page()
@@ -953,7 +966,10 @@ def check_drill_reset(browser: Browser, tag: str) -> None:
     """Reset next to the Drill score: in view without a fold, 44 px, two taps to reset, back after a timeout."""
     section("DRILL reset")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     errs: list[str] = []
     pg.on("pageerror", collect_errors(errs))
@@ -1033,7 +1049,10 @@ def check_drill_h_names(browser: Browser, tag: str) -> None:
     """Drill and Match name every rotation H<n> only (question, feedback, weak spots, review); Learn R<n> (H<n>)."""
     section("DRILL names by the setter")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"')")
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"')"
+    )
     pg = ctx.new_page()
     errs: list[str] = []
     pg.on("pageerror", collect_errors(errs))

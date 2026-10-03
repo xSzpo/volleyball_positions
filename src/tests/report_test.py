@@ -38,6 +38,7 @@ PORTS = (9000, 9099)
 NAME, CODE = "Zed Secretname", "482715"
 SEED = (
     "localStorage.setItem('ksv51:role', JSON.stringify('OH1'));"
+    "localStorage.setItem('ksv51:officialReset', JSON.stringify('1'));"
     f"localStorage.setItem('ksv51:onName', JSON.stringify('{NAME}'));"
     f"localStorage.setItem('ksv51:room', JSON.stringify('{CODE}'))"
 )

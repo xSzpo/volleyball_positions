@@ -3,7 +3,8 @@
 Checks the default mode and the role picker of each, that a stored "simple"
 or "drill" reads as Simplified, that Official needs the ``rules-official`` flag, the
 middle roles carried across a switch, the Simplified middle pair and SUB in
-Learn, and the Rules switch wording.
+Learn, the Rules switch wording, and the one-time reset of stored rules and role
+to a first visit in Official.
 
 Usage: python src/tests/rules_test.py
 """
@@ -11,6 +12,7 @@ Usage: python src/tests/rules_test.py
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from playwright.sync_api import Page, sync_playwright
 
@@ -26,11 +28,13 @@ def fail(message: str) -> None:
     print("FAIL:", message, flush=True)
 
 
-def open_app(page: Page, query: str, stored: dict[str, str]) -> None:
+def open_app(page: Page, query: str, stored: dict[str, Any]) -> None:
     page.goto(URL + query)
     page.evaluate(
-        "(s) => { localStorage.clear();"
-        " for (const [k, v] of Object.entries(s)) localStorage.setItem('ksv51:' + k, JSON.stringify(v)); }",
+        "(s) => { localStorage.clear(); localStorage.setItem('ksv51:officialReset', JSON.stringify('1'));"
+        " for (const [k, v] of Object.entries(s))"
+        " if (v === null) localStorage.removeItem('ksv51:' + k);"
+        " else localStorage.setItem('ksv51:' + k, JSON.stringify(v)); }",
         stored,
     )
     page.goto(URL + query)
@@ -112,6 +116,36 @@ def check_defaults(page: Page) -> None:
         fail(f"rules-official off: stored MB2 shows as {page.get_attribute('#roleChip', 'data-role')!r}, expected MB")
     if page.evaluate("JSON.parse(localStorage.getItem('ksv51:rulesMode'))") != "official":
         fail("rules-official off: a stored Official choice was overwritten")
+
+
+def stored_keys(page: Page, keys: list[str]) -> list[Any]:
+    values: list[Any] = page.evaluate("(keys) => keys.map((k) => JSON.parse(localStorage.getItem('ksv51:' + k)))", keys)
+    return values
+
+
+def check_official_reset(page: Page) -> None:
+    """One reset of the stored rules and role to a first visit in Official, progress kept, then a choice kept."""
+    stats = {"OH1|0|start": [1, 0]}
+    open_app(page, "", {"rulesMode": "simple", "role": "MB", "stats2": stats, "officialReset": None})
+    if checked_rules(page) != "official" or picker(page) != OFFICIAL_ROLES:
+        fail(f"reset: rules {checked_rules(page)}, role picker {picker(page)}")
+    if not page.is_visible("#setupNudge"):
+        fail("reset: the role list did not open with Pick your role")
+    after = stored_keys(page, ["rulesMode", "role", "stats2", "officialReset"])
+    if after != [None, None, stats, "1"]:
+        fail(f"reset: rules, role, stats and mark stored as {after}")
+    pick(page, role="OH2")
+    pick(page, rules="simple")
+    page.reload()
+    page.wait_for_function("document.readyState === 'complete' && !!document.querySelector('#setchips button')")
+    if checked_rules(page) != "simple" or page.get_attribute("#roleChip", "data-role") != "OH2":
+        fail(f"reset: after a reload rules {checked_rules(page)}, role {page.get_attribute('#roleChip', 'data-role')}")
+    if page.is_visible("#setupPanel"):
+        fail("reset: the role list opened again after a reload")
+    open_app(page, "?ff=all,-rules-official", {"rulesMode": "simple", "role": "OH1", "officialReset": None})
+    after = stored_keys(page, ["rulesMode", "role", "officialReset"])
+    if after != ["simple", "OH1", None] or page.is_visible("#setupPanel"):
+        fail(f"reset with rules-official off: stored {after}, role list open {page.is_visible('#setupPanel')}")
 
 
 def check_switch(page: Page) -> None:
@@ -246,6 +280,7 @@ def main() -> None:
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         check_defaults(page)
+        check_official_reset(page)
         check_switch(page)
         check_learn(page)
         check_short_phone(page)

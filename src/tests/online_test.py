@@ -31,7 +31,10 @@ from playwright.sync_api import Browser, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 # A stored role skips the first-visit role sheet, which covers the page.
-SEED_ROLE = "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'))"
+SEED_ROLE = (
+    "if (!localStorage.getItem('ksv51:role')) localStorage.setItem('ksv51:role', JSON.stringify('OH1'));"
+    " localStorage.setItem('ksv51:officialReset', JSON.stringify('1'))"
+)
 # The rooms play Simplified KSV, with its one MB; the rules switch test below plays both.
 SEED_RULES = (
     "if (!localStorage.getItem('ksv51:rulesMode')) localStorage.setItem('ksv51:rulesMode', JSON.stringify('simple'))"

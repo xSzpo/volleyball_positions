@@ -1066,3 +1066,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The owner asked on 2026-10-03 for Official as the default. With no stored `ksv51:rulesMode` the app runs Official, so a new user's role list shows MB1 and MB2 and a stored `MB` reads as MB1 (`roleIn()`). A stored choice is kept: `simple` stays Simplified, `official` stays Official, and a stored `drill` from v1 still reads as Simplified. With `rules-official` off the app still runs Simplified.
 - **Alternatives:** switch everyone to Official, including users who picked Simplified.
 - **Reversible by:** `storedRules()` in `src/template.html`.
+
+### 140. A one-time reset of rules and role to Official
+
+- **Issue:** none (owner decision, 2026-10-03)
+- **Problem:** With Official as the default (#139), everyone who had already opened the app kept Simplified, because v1 stored `ksv51:rulesMode` for every user, not only for those who picked it.
+- **Decision:** The owner decided on 2026-10-03 that everyone restarts in Official once. On start-up, while `rules-official` is on and `ksv51:officialReset` is not stored, the app removes `ksv51:rulesMode` and `ksv51:role` and stores the mark, so the next screen is a first visit for rules and role: Official, and the role list opens with "Pick your role". Progress, bests, theme, room, zones and every other key are kept. A user who then picks Simplified keeps it. A phone with `rules-official` off is not reset until the flag is on for it. Drill stats of the Simplified `MB` do not carry over to MB1 or MB2.
+- **Alternatives:** keep stored choices (#139 alone); map a stored `simple` to Official without clearing the role.
+- **Reversible by:** the `officialReset` block after `feature` in `src/template.html`.
