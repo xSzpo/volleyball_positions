@@ -80,8 +80,10 @@ def fail(message: str) -> None:
 def open_app(page: Page, stored: dict[str, str], url: str = URL) -> None:
     page.goto(url)
     page.evaluate(
-        "(s) => { localStorage.clear();"
-        " for (const [k, v] of Object.entries(s)) localStorage.setItem('ksv51:' + k, JSON.stringify(v)); }",
+        "(s) => { localStorage.clear(); localStorage.setItem('ksv51:officialReset', JSON.stringify('1'));"
+        " for (const [k, v] of Object.entries(s))"
+        " if (v === null) localStorage.removeItem('ksv51:' + k);"
+        " else localStorage.setItem('ksv51:' + k, JSON.stringify(v)); }",
         stored,
     )
     page.goto(url)

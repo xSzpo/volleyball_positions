@@ -1059,7 +1059,23 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** "OH1 is next to the setter"; count the zones as in `relation()` ("count 1 zone on").
 - **Reversible by:** `buildRotation()` in `src/template.html`.
 
-### 139. The pass tag reuses the title tag colours and hides at the pass
+### 139. Official is the default rule set
+
+- **Issue:** none (owner request, 2026-10-03)
+- **Problem:** The app opened in Simplified KSV, but the club plays Official rules and the owner wants new users to learn those first.
+- **Decision:** The owner asked on 2026-10-03 for Official as the default. With no stored `ksv51:rulesMode` the app runs Official, so a new user's role list shows MB1 and MB2 and a stored `MB` reads as MB1 (`roleIn()`). A stored choice is kept: `simple` stays Simplified, `official` stays Official, and a stored `drill` from v1 still reads as Simplified. With `rules-official` off the app still runs Simplified.
+- **Alternatives:** switch everyone to Official, including users who picked Simplified.
+- **Reversible by:** `storedRules()` in `src/template.html`.
+
+### 140. A one-time reset of rules and role to Official
+
+- **Issue:** none (owner decision, 2026-10-03)
+- **Problem:** With Official as the default (#139), everyone who had already opened the app kept Simplified, because v1 stored `ksv51:rulesMode` for every user, not only for those who picked it.
+- **Decision:** The owner decided on 2026-10-03 that everyone restarts in Official once. On start-up, while `rules-official` is on and `ksv51:officialReset` is not stored, the app removes `ksv51:rulesMode` and `ksv51:role` and stores the mark, so the next screen is a first visit for rules and role: Official, and the role list opens with "Pick your role". Progress, bests, theme, room, zones and every other key are kept. A user who then picks Simplified keeps it. A phone with `rules-official` off is not reset until the flag is on for it. Drill stats of the Simplified `MB` do not carry over to MB1 or MB2.
+- **Alternatives:** keep stored choices (#139 alone); map a stored `simple` to Official without clearing the role.
+- **Reversible by:** the `officialReset` block after `feature` in `src/template.html`.
+
+### 141. The pass tag reuses the title tag colours and hides at the pass
 
 - **Issue:** #152
 - **Problem:** The "pass" tag needed colours with enough contrast on the court in both themes, and a rule for when it shows during the Reception play.
@@ -1067,10 +1083,18 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** new `--pass-*` tokens; keep the tag through the whole play; a fixed offset below each marker.
 - **Reversible by:** `passTag()`, `passTagSpots()` and `paintPlay()` in `src/template.html`.
 
-### 140. Which common mistake a tap gets
+### 142. Which common mistake a tap gets
 
 - **Issue:** #152
 - **Problem:** The issue lists the mistakes to name but not how to tell them apart, or which one wins when a tap makes more than one.
-- **Decision:** `mistakeText()` checks in this order and names the first that fits: off court versus on (and the libero off at its serve); at Rotate a count along the rotation arrows (the tap is in the zone mirrored round the setter); an overlap fault against the real positions (Rotate and Receive); a passing lane at Receive (anyone but OH1, OH2 and L tapping between y 0.55 and 0.88 within 0.2 of a receiver); the wrong row at Rotate and Our serve (by the 3 m line); a back-row attacker in front of the 3 m line at Attack; the wrong side (the other half and more than 0.3 across); too deep or too close to the net (more than 0.08 and mostly in depth; the front middle at Attack "near the net, ready for the quick"); else one line for the step. Match Rotate and Drill Rotate name the arrows for any wrong marker counted along them, else your own marker's mistake. Same-device and online show none, as they show no verdict per turn.
+- **Decision:** `mistakeText()` checks in this order and names the first that fits: off court versus on (and the libero off at its serve; in Simplified only the libero goes off, when SUB serves); at Rotate a count along the rotation arrows (the tap is in the zone mirrored round the setter); an overlap fault against the real positions (Rotate and Receive); a passing lane at Receive (anyone but OH1, OH2 and L tapping between y 0.55 and 0.88, in front of a receiver and within 0.2 of it, and not within 0.24 of their own spot); the wrong row at Rotate and Our serve (by the 3 m line); a back-row attacker in front of the 3 m line at Attack (not a back-row opposite graded on its cover spot); the wrong side (the other half and more than 0.3 across); too deep or too close to the net (more than 0.08 and mostly in depth; the front middle at Attack "near the net, ready for the quick"); else one line for the step. Match Rotate and Drill Rotate name the arrows for any wrong marker counted along them, else your own marker's mistake. Same-device and online show none, as they show no verdict per turn.
 - **Alternatives:** name every mistake that fits; a line only for the listed cases and none otherwise.
 - **Reversible by:** `MISTAKES` and `mistakeText()` in `src/template.html`.
+
+### 143. Two flags for the pass tag and the common mistakes
+
+- **Issue:** #152
+- **Problem:** The issue asked for one flag key for both features.
+- **Decision:** Two keys, `passer-tag` (needs `learn-tab`) and `common-mistakes` (no need), both on by default, so each can be switched off alone: the tag is Learn only, the mistake line is Drill and Match only.
+- **Alternatives:** one key for both, as the issue asked.
+- **Reversible by:** `FEATURES` and `FEATURE_NEEDS` in `src/template.html`.

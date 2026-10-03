@@ -1834,9 +1834,7 @@
               <div class="roles" id="roles"></div>
               <div class="rulesmode" role="radiogroup" aria-label="Rules">
                 <span class="vislabel">Rules</span>
-                <button type="button" role="radio" aria-checked="false" data-rm="simple">
-                  Simplified
-                </button><button
+                <button
                   type="button"
                   role="radio"
                   aria-checked="false"
@@ -1844,6 +1842,8 @@
                   id="rmOfficial"
                 >
                   Official
+                </button><button type="button" role="radio" aria-checked="false" data-rm="simple">
+                  Simplified
                 </button>
                 <small id="rmSub"></small>
               </div>
@@ -2340,14 +2340,13 @@
           rows.map((r) => ({ ...r, short: r.name, name: `${r.name} (H${r.setter})` })),
         ]),
       );
-      // v1's Drill mode is dropped; a stored "drill" reads as Simplified.
+      // Official unless Simplified was picked; v1's Drill mode reads as Simplified.
       function storedRules() {
         try {
-          return JSON.parse(localStorage.getItem("ksv51:rulesMode")) === "official"
-            ? "official"
-            : "simple";
+          const mode = JSON.parse(localStorage.getItem("ksv51:rulesMode"));
+          return mode === "simple" || mode === "drill" ? "simple" : "official";
         } catch (e) {
-          return "simple";
+          return "official";
         }
       }
       let rulesMode = storedRules();
@@ -3305,6 +3304,13 @@
       }
       const flags = featureValues(FEATURES, ffOverride);
       const feature = (key) => !!flags[key];
+      if (feature("rules-official") && !store.get("officialReset", null)) {
+        store.del("rulesMode");
+        store.del("role");
+        store.set("officialReset", "1");
+        rulesMode = storedRules();
+        ROWS = RULE_ROWS[rulesMode];
+      }
       const nbOn = (id) => feature("neighbour-check") && $(id).checked;
       const SLOTS = new Map();
       function attach(el) {
