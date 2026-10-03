@@ -3287,6 +3287,7 @@
               Object.entries(st.mv).map(([p, m]) => [p, m.delay + m.glide]),
             ),
             appear: st.appear ?? null,
+            walk: st.walk ?? null,
             start: st.start,
             dur: st.dur,
           })),
@@ -3938,39 +3939,57 @@
           phase === "start" ? buildRotation(ri) : { ...buildReception(ri), fadeBack: true };
         return stageCache[key];
       }
-      // One player appears on their Rotation spot per stage, in the order the setter's zone gives them.
+      // One player appears per stage, walking the zones up from the setter's: S, OH1, a middle, OP, OH2, a middle.
+      // A last stage adds nobody and names the diagonal pairs as the check.
       function buildRotation(ri) {
         const list = players(ri, "start");
-        const order = list.map((o) => o.p);
         const from = spots(list);
-        const z = (p) => zoneOf(ri, p);
-        const known = ["S", "OP", "OH1", "OH2"];
-        const mid = order.find((p) => isFront(ri, p) && !known.includes(p));
-        const back = order.find((p) => !known.includes(p) && p !== mid);
-        const lines = [
-          ["S", `The setter tells you the rotation: zone ${z("S")}.`],
-          ["OP", `The opposite is always on the setter's diagonal: zone ${z("OP")}.`],
-          ["OH1", `Outside hitter 1 serves next after the setter, one zone on: zone ${z("OH1")}.`],
-          ["OH2", `Outside hitter 2 is on outside hitter 1's diagonal: zone ${z("OH2")}.`],
-          [
-            mid,
-            `The middle${rulesMode === "official" ? ` ${mid}` : ""} fills the empty front-row spot: zone ${z(mid)}.`,
-          ],
-          [
-            back,
-            middleServes(ri)
-              ? `${back} fills zone ${z(back)} and serves: the libero may not serve, so L is off.`
-              : `The libero fills the empty back-row spot: zone ${z(back)}.`,
-          ],
+        const n = zoneOf(ri, "S");
+        const swap = middleServes(ri);
+        const rule = (key, text) =>
+          feature("learn-guides")
+            ? `Rule ${THUMB.findIndex((t) => t.k === key) + 1}: ${text}`
+            : `${text[0].toUpperCase()}${text.slice(1)}`;
+        const middle = (z, p) => {
+          if (p === "L")
+            return `Zone ${z}: next is a middle; in the back row the libero replaces it.`;
+          if (swap && p === server(ri))
+            return `Zone ${z}: next is a middle, ${p}; it serves, so the libero is off.`;
+          return `Zone ${z}: next is a middle, ${p}.`;
+        };
+        const steps = [
+          () =>
+            rule(
+              "walk",
+              `setter in zone ${n} (H${n}). Count up: ${[1, 2, 3, 4, 5].map((k) => ((n - 1 + k) % 6) + 1).join(", ")}${n > 1 ? "; after 6 comes 1" : ""}.`,
+            ),
+          (z) => `Zone ${z}: next in the walk after the setter, outside hitter 1.`,
+          middle,
+          (z) => `Zone ${z}: next is the opposite, on the setter's diagonal.`,
+          (z) => `Zone ${z}: next is outside hitter 2, on outside hitter 1's diagonal.`,
+          middle,
         ];
+        const order = [];
+        const lines = steps.map((text, k) => {
+          const z = ((n - 1 + k) % 6) + 1;
+          const p = list.find((o) => zoneOf(ri, o.p) === z).p;
+          order.push(p);
+          return [p, text(z, p)];
+        });
+        lines.push([
+          null,
+          rule("corners", `same job, opposite corners: S–OP, OH–OH, MB–${swap ? "MB" : "L"}.`),
+        ]);
         const appear = {};
         const stages = lines.map(([p, text], k) => {
-          appear[p] = k * BUILD_MS;
+          if (p) appear[p] = k * BUILD_MS;
+          const walk = k ? [order[k - 1], order[k % order.length]] : null;
           return {
+            walk,
             moves: {},
             mv: {},
             src: {},
-            notes: { [p]: text },
+            notes: p ? { [p]: text } : {},
             team: text,
             appear: p,
             start: k * BUILD_MS,
@@ -4271,6 +4290,10 @@
           g.setAttribute("transform", `translate(${s.x * W} ${s.y * H})${pop}`);
           if (shown != null) g.setAttribute("opacity", f);
         });
+        a.walks?.forEach((g) => {
+          const t = a.t - tr.stages[g.dataset.stage].start;
+          g.setAttribute("opacity", Math.max(0, Math.min(1, t / POP_MS)));
+        });
         const i = stageAt(tr, a.t),
           st = tr.stages[i];
         let ball = null;
@@ -4439,6 +4462,12 @@
             s += `<polyline class="trail" data-p="${p}" data-stage="${k}" points="" fill="none" stroke="${routeOf(p)}" stroke-width="1" stroke-dasharray="2 1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" visibility="hidden"/>`;
           });
         });
+        tr.stages.forEach((st, k) => {
+          if (!st.walk) return;
+          const [a, b] = st.walk.map((p) => tr.from[p]);
+          const xy = shorten(a.x * W, a.y * H, b.x * W, b.y * H, MARKER_R + 1.5, MARKER_R + 2);
+          s += `<g class="walk" data-stage="${k}" data-from="${st.walk[0]}" data-to="${st.walk[1]}" opacity="0">${line(...xy, "court-line")}</g>`;
+        });
         tr.players
           .filter((p) => p !== r)
           .forEach((p) => {
@@ -4455,6 +4484,7 @@
         return {
           els,
           trails: [...svg.querySelectorAll(".trail")].map((el, i) => ({ el, ...trails[i] })),
+          walks: [...svg.querySelectorAll(".walk")],
           ball: svg.querySelector(".ball"),
         };
       }
@@ -4859,16 +4889,28 @@
       });
       const THUMB = [
         {
-          k: "overlap",
-          t: "Overlap counts only when they serve, at the whistle",
+          k: "walk",
+          t: "Walk from the setter",
           roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
-          d: "When they serve, stand in order with your overlap partners when the referee whistles. From the server's first movement you may move. This is the Volleyball Danmark rule from 1 October 2026. When we serve there is no overlap rule: stand in your defence spot (rows still count for blocking and attacking; FIVB rule 7.4). Not in the guide.",
+          d: "Start at the setter's zone and count up, against the rotation arrows; after 6 comes 1. You always meet Setter, Outside, Middle, Opposite, Outside, Middle. The libero replaces whichever middle is in the back row.",
+        },
+        {
+          k: "corners",
+          t: "Same job, opposite corners",
+          roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
+          d: "Setter and opposite, outside and outside, middle and middle stand diagonally opposite. Use it to check.",
+        },
+        {
+          k: "overlap",
+          t: "Overlap counts only when they serve",
+          roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
+          d: "When they serve, stand in order with your overlap partners at the whistle (from 1 October 2026). Once the server moves, so can you. When we serve, go straight to your defence spot.",
         },
         {
           k: "receive",
           t: "Three players receive",
           roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
-          d: "The two outside hitters and the libero pass the serve. Everyone else stays out of the passing lanes so the setter can set, the middle can run the quick and the opposite can attack. The middle opens for the quick in the middle of the front zone, not on the 3 m line: that is the back-row hitter's lane.",
+          d: "The two outsides and the libero pass. Everyone else keeps out of the passing lanes. The middle waits for the quick in the middle of the front zone, not on the 3 m line.",
         },
         {
           k: "middles",
@@ -4878,27 +4920,27 @@
         },
         {
           k: "outside-left",
-          t: "The front-row outside hitter starts left",
+          t: "The front-row outside starts left",
           roles: ["OH1", "OH2", "OP"],
-          d: "They attack from zone 4, so starting left is the shortest route to the approach. Exception R1, setter in position 1: outside hitter 1 is in zone 2, receives on the right and attacks right, while the opposite takes the left.",
+          d: "They attack from zone 4, so left is the shortest way. Except R1: outside hitter 1 is in zone 2 and attacks right; the opposite takes the left.",
         },
         {
           k: "back-cover",
-          t: "Back-row movement still follows the attack",
+          t: "Back row: cover first, then base",
           roles: ["OH1", "OH2", "L"],
-          d: "The arrows show where back-row players end up (libero zone 5, outside zone 6). Cover the hitter first, then finish the movement after the attack.",
+          d: "Cover the hitter first. After the attack, go to base: libero zone 5, outside zone 6.",
         },
         {
           k: "opposite",
           t: "The back-row opposite covers deep",
           roles: ["OP"],
-          d: "In R4 to R6 the opposite is back row, and the setter sets zone 4. Come in to cover deep, right of the middle, behind the 3 m line.",
+          d: "In R4 to R6 the opposite is back row. Cover deep, right of the middle, behind the 3 m line.",
         },
         {
           k: "names",
           t: "H in R2 (H6) is the setter",
           roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
-          d: "H is Danish hæver, the setter, as in the club guide. The number after H is the setter's zone: in R2 (H6) the setter is in zone 6. Find the setter first to know the rotation.",
+          d: "H is Danish hæver, the setter. The number after H is the setter's zone: in R2 (H6) the setter is in zone 6.",
         },
       ];
       const RLAB = ROWS.map((r) => r.name);
@@ -4921,10 +4963,10 @@
         const T = {
           "@THUMB_MIDDLES_T": off
             ? "The libero replaces the back-row middle"
-            : "MB plays the front middle, L the back middle",
+            : "MB plays the front middle, L the back",
           "@THUMB_MIDDLES_D": off
-            ? "The libero goes on for whichever middle is in the back row: MB2 in R1, R2 and R6, MB1 in R3, R4 and R5, only while the ball is out of play. The libero may never serve. So in R3 and R6 that middle is in zone 1, serves and stays on until your team loses the serve; the libero comes back on for the reception (FIVB 19.3)."
-            : "A training convention for one middle, not in the guide. MB always plays the front-row middle and the libero the back-row middle. Into R3 and R6 the pair resets: MB walks along the net from zone 2 to zone 4, L across the back from zone 5 to zone 1. The libero may never serve, so in R3 and R6 a substitute (SUB) serves and defends zone 6 until your team loses the serve.",
+            ? "Only while the ball is out of play. The libero never serves: in R3 and R6 the middle in zone 1 serves and stays on until we lose the serve (FIVB 19.3)."
+            : "A training convention, not in the guide. Into R3 and R6, MB moves from zone 2 to 4, L from 5 to 1. The libero never serves: in R3 and R6 SUB serves and defends zone 6.",
         };
         return lab(x in T ? T[x] : x);
       }
