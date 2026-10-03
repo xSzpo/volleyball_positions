@@ -409,6 +409,11 @@ def check_rotation_names(page: Page) -> None:
             fail(f"{mode}: the rotation chip aria-labels lack the H names: {labels}")
         if any(OLD_NAME.search(label) for label in labels):
             fail(f"{mode}: an aria-label still uses S")
+        chips: list[list[str]] = page.eval_on_selector_all(
+            ".rot", "els => els.map(e => [e.textContent.trim(), e.getAttribute('aria-label')])"
+        )
+        if chips != [[name.split(" ")[1].strip("()"), name] for name in ROTATION_NAMES]:
+            fail(f"{mode}: the rotation chips do not read H1 H6 H5 H4 H3 H2 with the full name as aria-label: {chips}")
         thumbs = " ".join(page.inner_text("#thumbs").split())
         if "hæver" not in thumbs or "setter's zone" not in thumbs:
             fail(f"{mode}: Rules of thumb do not explain H: {thumbs!r}")
