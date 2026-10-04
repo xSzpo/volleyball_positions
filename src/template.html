@@ -2936,7 +2936,7 @@
         if (!("off" in m)) return "";
         const pl = m.spots ? players(m.ri, "start") : answerSpots(m.ri, m.phase, role),
           me = pl.find((o) => o.p === role);
-        let s = courtBase(!me || m.off);
+        let s = courtBase(!me);
         (m.spots || [])
           .filter((o) => o.p !== role)
           .forEach((o) => {
@@ -6093,6 +6093,7 @@
           G.results[G.i].pts += 30;
           G.results[G.i].bd.set = 30;
         }
+        gSave();
         if (G.mp || G.online) {
           nbSaved("gsc", b);
           if (G.online) onWrite(true);
@@ -6318,7 +6319,10 @@
           (r.set == null || typeof r.set.ask === "string"));
       function gSave() {
         if (!G || G.mp || G.online) return;
-        store.set("match", Object.fromEntries(MATCH_SAVE.map((k) => [k, G[k]])));
+        const o = Object.fromEntries(MATCH_SAVE.map((k) => [k, G[k]]));
+        // An answered moment is saved as done, so Resume cannot ask it again.
+        if (G.answered) o.i = G.i + 1;
+        store.set("match", o);
       }
       function gSaved() {
         const o = store.get("match", null);
@@ -6330,7 +6334,7 @@
           o.queue.every(isStep) &&
           Number.isInteger(o.i) &&
           o.i >= 0 &&
-          o.i < o.queue.length &&
+          o.i <= o.queue.length &&
           ["score", "streak", "perfect", "close", "helps", "nbOk", "nbN", "setOk", "setN"].every(
             (k) => isNum(o[k]),
           ) &&
@@ -6351,14 +6355,21 @@
         const o = gSaved(),
           live = !!o && o.key === gKey();
         if (o && !live) store.del("match");
-        $("gResume").hidden = !live;
+        $("gResume").hidden = !live || gPlayersMode() !== "solo";
         if (live)
-          $("gResumeText").textContent = `Resume match (moment ${o.i + 1} of ${o.queue.length})`;
+          $("gResumeText").textContent =
+            o.i < o.queue.length
+              ? `Resume match (moment ${o.i + 1} of ${o.queue.length})`
+              : "Resume match (see results)";
       }
       $("gResumeBtn").onclick = () => {
         const o = gSaved();
         if (!o || o.key !== gKey()) return gResumeRender();
         G = Object.assign(gFresh(o.queue, !!o.replay), o);
+        if (G.i >= G.queue.length) {
+          G.i = G.queue.length - 1;
+          return gFinish();
+        }
         gView("gPlay");
         gShow();
       };
@@ -6416,6 +6427,7 @@
       }
       function gShow() {
         const st = G.queue[G.i];
+        quitDisarm($("gQuit"));
         watchClose($("gWatch"));
         G.help = 0;
         G.answered = false;
@@ -6663,6 +6675,7 @@
           bd: { base: Math.round(base * mult), speed, streak: streakB, mult: vm, nb: 0, set: 0 },
         };
         if (q === "miss") G.misses.push({ ...st, ...picOf(G.tap, G.rot) });
+        gSave();
         const d = describe(st.ri, st.phase, G.role);
         const title = { perfect: "Spot on", close: "Close enough", miss: "Not there" }[q];
         if (G.mp) {
@@ -6728,6 +6741,7 @@
                     G.results[G.i].pts += bonus;
                     G.results[G.i].bd.nb = bonus;
                   }
+                  gSave();
                   if (G.mp || G.online) {
                     nbSaved("gnb", b);
                     if (G.online) onWrite(true);
@@ -7167,7 +7181,7 @@
         if (G.mp.turn < G.mp.players.length) mpPass();
         else mpReveal();
       }
-      const initial = (p) => (p.name.trim()[0] || "?").toUpperCase();
+      const initial = (p) => ([...p.name.trim()][0] || "?").toUpperCase();
       // A tap shows the player's initial, or the player's number when two players share it.
       function tapKeys(ps) {
         const all = ps.map(initial);

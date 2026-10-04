@@ -2133,6 +2133,11 @@ def check_quit_confirm(browser: Browser) -> None:
     page.wait_for_timeout(3300)
     if page.text_content("#gQuit") != "Quit" or not page.is_visible("#gPlay"):
         fail(f"solo Quit: not back to Quit after 3 s: {page.text_content('#gQuit')!r}")
+    tap_spot(page, "OH1", 0, "rec")
+    page.click("#gQuit")
+    press_next(page)
+    if page.text_content("#gQuit") != "Quit" or "armed" in (page.get_attribute("#gQuit", "class") or ""):
+        fail(f"solo Quit: an armed Quit carries over to the next moment: {page.text_content('#gQuit')!r}")
     page.click("#gQuit")
     page.click("#gQuit")
     if not page.is_visible("#gSetup"):
@@ -2159,19 +2164,31 @@ def check_resume(browser: Browser) -> None:
     for ri in range(3):
         tap_spot(page, "OH1", ri, "rec")
         press_next(page)
+    tap_at(page, 0.5, 0.03)
+    press_next(page)
     score = page.inner_text("#gScore")
     page.reload()
     page.click("#tabGame")
-    if not page.is_visible("#gResume") or page.inner_text("#gResumeText") != "Resume match (moment 4 of 6)":
-        fail(f"resume: offer reads {page.inner_text('#gResumeText')!r}")
+    if not page.is_visible("#gResume") or page.inner_text("#gResumeText") != "Resume match (moment 5 of 6)":
+        fail(f"resume: after a miss the offer reads {page.inner_text('#gResumeText')!r}")
     page.click("#gResumeBtn")
-    if page.inner_text("#gStepName") != "Reception · moment 4 of 6" or page.inner_text("#gScore") != score:
+    if page.inner_text("#gStepName") != "Reception · moment 5 of 6" or page.inner_text("#gScore") != score:
         fail(f"resume: {page.inner_text('#gStepName')!r} with score {page.inner_text('#gScore')} ({score} before)")
-    for ri in range(3, 6):
+    for ri in range(4, 6):
         tap_spot(page, "OH1", ri, "rec")
-        press_next(page)
-    if not page.is_visible("#gEnd") or "100%" not in page.inner_text("#gStats"):
-        fail("resume: the resumed match does not finish with every answer")
+        if ri < 5:
+            press_next(page)
+    page.reload()
+    page.click("#tabGame")
+    if page.inner_text("#gResumeText") != "Resume match (see results)":
+        fail(f"resume: after the last answer the offer reads {page.inner_text('#gResumeText')!r}")
+    page.click("#gResumeBtn")
+    if (
+        not page.is_visible("#gEnd")
+        or "5/6" not in page.inner_text("#gStats")
+        or page.locator("#gMist li").count() != 1
+    ):
+        fail(f"resume: the resumed match does not finish with every answer: {page.inner_text('#gEnd')!r}")
     if stored(page, "match") is not None:
         fail("resume: the saved match is kept after the end")
 
@@ -2189,6 +2206,10 @@ def check_resume(browser: Browser) -> None:
     page.click("#tabGame")
     if not page.is_visible("#gResume"):
         fail("resume: no offer for a match left at moment 1")
+    for mode, shown in (("mp", False), ("online", False), ("solo", True)):
+        page.check(f'input[name="gPlayers"][value="{mode}"]')
+        if page.is_visible("#gResume") != shown:
+            fail(f"resume: the offer is {'hidden' if shown else 'shown'} with {mode} picked")
     if page.get_attribute("#gOpts", "open") is None:
         page.click("#gOpts > summary")
     page.check('input[name="gOrder"][value="mixed"]')
@@ -2236,8 +2257,8 @@ def check_mistake_pictures(browser: Browser) -> None:
     found = pictures(page, "#gMist li")
     if len(found) != 2 or any(p["pics"] != 1 or p["tap"] != 1 or p["ring"] != 1 for p in found):
         fail(f"mistake pictures: {found}")
-    elif found[0]["pill"] != 30 or found[1]["pill"] != 40:
-        fail(f"mistake pictures: the off-court answer does not show the pill: {found}")
+    elif found[0]["pill"] != 30 or found[1]["pill"] != 30:
+        fail(f"mistake pictures: an on-court moment answered off court shows the solid pill: {found}")
     elif found[0]["top"] != found[1]["top"]:
         fail(f"mistake pictures: not two per row at 390 px: {found}")
     page.close()
@@ -2299,6 +2320,9 @@ def check_reveal_labels(browser: Browser) -> None:
     labels, text = reveal_labels(browser, ("Anna", "Ben"))
     if labels != ["A", "B"] or "(" in text.split("·")[0]:
         fail(f"reveal labels for Anna and Ben: {labels}, {text!r}")
+    labels, text = reveal_labels(browser, ("\U0001f600 Ann", "Ben"))
+    if labels != ["B", "\U0001f600"]:
+        fail(f"reveal labels for a name starting with an emoji: {labels}")
     print("same-device reveal labels", flush=True)
 
 

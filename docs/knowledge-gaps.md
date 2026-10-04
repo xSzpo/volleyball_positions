@@ -1177,7 +1177,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** none (usability audit, owner approved, 2026-10-03)
 - **Problem:** A reload or a phone killing the tab lost a solo match. The audit left same-device persistence optional and did not say when to save or what to do when the settings change.
-- **Decision:** A solo match is saved in `ksv51:match` at the start of each moment, so a reload mid-answer asks that moment again. Match setup shows "Resume match (moment 7 of 24)" with Resume and Discard at the top; there is no automatic switch to the Match tab. Finish, Quit, Discard, another role, a settings change (`gKey()`) and a stored value that does not validate drop it. Replay my mistakes is saved too. Same-device play is not saved: the phone is passed round and a half-played turn would leak answers.
+- **Decision:** A solo match is saved in `ksv51:match` at the start of each moment and again after each answer, saved as done, so a reload mid-answer asks that moment again, a reload after an answer goes on with the next moment, and one after the last answer goes to the results. Match setup shows "Resume match (moment 7 of 24)" with Resume and Discard at the top, only while Solo is picked; there is no automatic switch to the Match tab. Finish, Quit, Discard, another role, a settings change (`gKey()`) and a stored value that does not validate drop it. Replay my mistakes is saved too. Same-device play is not saved: the phone is passed round and a half-played turn would leak answers.
 - **Alternatives:** save after each answer; also save same-device play.
 - **Reversible by:** `gSave()`, `gSaved()` and `gResumeRender()` in `src/template.html`.
 
@@ -1185,7 +1185,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** none (usability audit, owner approved, 2026-10-03)
 - **Problem:** The end screen listed mistakes as text only. The audit did not say what a Rotate mistake or an online mistake shows.
-- **Decision:** Each mistake gets a small court (two per row at 390 px) with your tap (`circle.yourtap`) and the right spot as a ring, joined by a dashed line. An off-court answer shows the solid pill with your dot beside it; a Rotate mistake shows every marker you placed and where it belongs. Online mistakes have no picture, because the room keeps no tap per miss. Drill's Review done shows a picture for every reviewed item, right or not, and hides the empty court so Back to drill is in view.
+- **Decision:** Each mistake gets a small court (two per row at 390 px) with your tap (`circle.yourtap`) and the right spot as a ring, joined by a dashed line. An off-court answer shows your dot beside the pill; the pill is solid only when you really are off court in that moment; a Rotate mistake shows every marker you placed and where it belongs. Online mistakes have no picture, because the room keeps no tap per miss. Drill's Review done shows a picture for every reviewed item, right or not, and hides the empty court so Back to drill is in view.
 - **Alternatives:** pictures only for wrong items in the review; storing the taps online.
 - **Reversible by:** `picOf()` and `answerPic()` in `src/template.html`.
 
