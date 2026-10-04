@@ -1345,6 +1345,7 @@ def sweep_match(pg: Page, tag: str, combos: list[tuple[str, ...]], quick: bool) 
                 elif pg.locator("#gOff").is_enabled():
                     tap(pg, "#courtG")
             pg.click("#gQuit")
+            pg.click("#gQuit")
             if not pg.is_visible("#gSetup"):
                 fail(f"{tag} quit did not return to setup")
     # no steps selected -> start disabled

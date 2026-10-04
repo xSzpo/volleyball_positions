@@ -1210,6 +1210,38 @@
       font-family: "Barlow Condensed", sans-serif;
       font-size: 17px;
     }
+    .mist.pics {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      column-gap: 12px;
+    }
+    .mist.pics li {
+      font-size: 14px;
+    }
+    .resume {
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border: 2px solid var(--accent);
+      border-radius: var(--radius);
+    }
+    svg.mpic {
+      display: block;
+      width: 100%;
+      max-width: 220px;
+      height: auto;
+      aspect-ratio: 108 / 127;
+      margin: 0 0 4px;
+      border-radius: var(--radius);
+      background: linear-gradient(var(--court-g0), var(--court-g1) 50%, var(--court-g2));
+    }
+    .btn.quit {
+      min-width: 76px;
+      white-space: nowrap;
+    }
+    .btn.quiet.quit.armed {
+      border-color: var(--bad);
+      color: var(--bad);
+    }
     .switch {
       display: flex;
       align-items: center;
@@ -2111,6 +2143,13 @@
         <p class="onnote" id="onNote" role="status" hidden></p>
         <div class="card" id="gSetup">
           <h2>Match mode</h2>
+          <div class="resume" id="gResume" hidden>
+            <p id="gResumeText" style="margin:0"></p>
+            <div class="row">
+              <button type="button" class="btn primary" id="gResumeBtn">Resume</button
+              ><button type="button" class="btn quiet" id="gDiscard">Discard</button>
+            </div>
+          </div>
           <fieldset class="steps one" style="margin-bottom:10px">
             <legend>Who is playing?</legend>
             <label><input type="radio" name="gPlayers" value="solo"> Just me</label>
@@ -2246,7 +2285,7 @@
           <button type="button" class="btn primary bigbtn" id="pReady">I'm ready</button>
           <div class="board" id="pBoard"></div>
           <div class="row">
-            <button type="button" class="btn quiet" id="pQuit">Quit match</button>
+            <button type="button" class="btn quiet quit" id="pQuit">Quit match</button>
           </div>
         </div>
 
@@ -2295,7 +2334,7 @@
           <div class="board" id="rBoard"></div>
           <div class="row">
             <button type="button" class="btn primary" id="rNext">Next moment</button
-            ><button type="button" class="btn quiet" id="rQuit">Quit</button>
+            ><button type="button" class="btn quiet quit" id="rQuit">Quit</button>
           </div>
           <p class="hint" id="rWait" hidden>Waiting for the host to go on.</p>
         </div>
@@ -2326,7 +2365,7 @@
             <button type="button" class="btn primary" id="gNext" disabled>Continue</button>
             <button type="button" class="btn" id="gOff" aria-pressed="false">I'm off court</button>
             <button type="button" class="btn" id="gHelp">Help</button>
-            <button type="button" class="btn quiet" id="gQuit">Quit</button>
+            <button type="button" class="btn quiet quit" id="gQuit">Quit</button>
           </div>
           <div class="watch" id="gWatch" hidden></div>
           <div class="fb" id="gFb"></div>
@@ -2933,6 +2972,38 @@
       // Your answer after scoring: the accent dot of "your spot", so it does not read as part of the play.
       function tapMark(tap) {
         return `<circle class="yourtap" cx="${tap.x * W}" cy="${tap.y * H}" r="3" fill="var(--accent)" stroke="var(--marker-edge)" stroke-width="0.6"/>`;
+      }
+      // What a still of an answer needs: your tap or off court, and every Rotate marker placed.
+      function picOf(tap, r) {
+        if (!r) return { tap: tap || null, off: !tap, spots: null };
+        return {
+          tap: r.off ? null : r.spots[r.role] || null,
+          off: r.off,
+          spots: r.order.filter((p) => r.spots[p]).map((p) => ({ p, ...r.spots[p] })),
+        };
+      }
+      // A small still for the end screens: your tap as a dot, the right spot ringed, the pill when off court.
+      function answerPic(m, role) {
+        if (!("off" in m)) return "";
+        const pl = m.spots ? players(m.ri, "start") : answerSpots(m.ri, m.phase, role),
+          me = pl.find((o) => o.p === role);
+        let s = courtBase(!me);
+        (m.spots || [])
+          .filter((o) => o.p !== role)
+          .forEach((o) => {
+            const right = pl.find((q) => q.p === o.p);
+            if (!right) return;
+            s += `<line x1="${o.x * W}" y1="${o.y * H}" x2="${right.x * W}" y2="${right.y * H}" stroke="var(--net-label)" stroke-width="0.5" stroke-dasharray="1 1" opacity=".7"/>`;
+            s += chip(right, { dim: true });
+            s += `<circle class="theirtap" cx="${o.x * W}" cy="${o.y * H}" r="2.2" fill="${fillOf(o.p)}" stroke="var(--marker-edge)" stroke-width="0.5"/>`;
+          });
+        if (me && m.tap)
+          s += `<line x1="${m.tap.x * W}" y1="${m.tap.y * H}" x2="${me.x * W}" y2="${me.y * H}" stroke="var(--net-label)" stroke-width="0.6" stroke-dasharray="1 1"/>`;
+        if (me)
+          s += `<circle class="target" cx="${me.x * W}" cy="${me.y * H}" r="8.3" fill="none" stroke="var(--ring)" stroke-width="0.8" stroke-dasharray="1.6 1.2"/>${chip(me, { me: true })}`;
+        // Off court, the dot sits beside the pill.
+        s += tapMark(m.tap || { x: 0.46, y: 1.0725 });
+        return `<svg class="mpic" viewBox="-4 -14 108 127" role="img" aria-label="Your answer (dot) and the right spot (ring)">${s}</svg>`;
       }
       function fromTap(a, tap) {
         return `<line class="fromtap" x1="${a.x * W}" y1="${a.y * H}" x2="${tap.x * W}" y2="${tap.y * H}" stroke="var(--net-label)" stroke-width="0.5" opacity=".8"/>`;
@@ -5179,6 +5250,7 @@
         store.set("visGame", v);
         drawVis("game", v);
         gVisText();
+        gResumeRender();
       }
       document.querySelectorAll(".vis[data-vis]").forEach((g) => {
         g.addEventListener("click", (e) => {
@@ -5552,6 +5624,7 @@
           }),
           i: -1,
           ok: 0,
+          seen: [],
         };
         cur = null;
         newQuestion();
@@ -5566,21 +5639,31 @@
         $("dNbBox").innerHTML = "";
         $("nextBtn").disabled = false;
         delete $("nextBtn").dataset.label;
+        $("courtD").style.display = "";
         if (review) {
           review.i++;
           if (review.i >= review.queue.length) {
             const n = review.queue.length,
-              ok = review.ok;
+              ok = review.ok,
+              seen = review.seen;
             review = null;
             $("dq").textContent = "Review done";
             $("dsub").textContent = "";
-            $("courtD").innerHTML = DEFS + courtBase();
+            // No empty court: Back to drill and the pictures of the review come up instead.
+            $("courtD").innerHTML = "";
+            $("courtD").style.display = "none";
             $("offBtn").disabled = true;
             $("nextBtn").hidden = false;
             $("nextBtn").textContent = "Back to drill";
             $("fb").className = "fb good";
             $("fb").innerHTML =
-              `<b>${ok} of ${n} right</b><p style="margin:2px 0 0">${weakKeys().length ? "Some spots still need work. Come back to them tomorrow." : "No weak spots left. Great work."}</p>`;
+              `<b>${ok} of ${n} right</b><p style="margin:2px 0 0">${weakKeys().length ? "Some spots still need work. Come back to them tomorrow." : "No weak spots left. Great work."}</p>` +
+              `<ul class="mist pics" id="reviewPics">${seen
+                .map(
+                  (m) =>
+                    `<li>${answerPic(m, m.role)}<b>${hName(m.ri)} · ${FULL[m.phase]}</b><br>${m.ok ? "Right" : "Not there"}</li>`,
+                )
+                .join("")}</ul>`;
             cur = null;
             updateScore();
             return;
@@ -5679,6 +5762,14 @@
         } else streak = 0;
         store.set("score2", score);
         if (review && ok) review.ok++;
+        if (review)
+          review.seen.push({
+            ri: cur.ri,
+            phase: cur.phase,
+            role: cur.role,
+            ok,
+            ...picOf(rot ? null : lastTap, rot),
+          });
         store.set("lastPractice", Date.now());
         answered = true;
         glideStart();
@@ -6057,6 +6148,7 @@
           G.results[G.i].pts += 30;
           G.results[G.i].bd.set = 30;
         }
+        gSave();
         if (G.mp || G.online) {
           nbSaved("gsc", b);
           if (G.online) onWrite(true);
@@ -6155,6 +6247,7 @@
         const best = mp || online ? null : store.get("gameBest", {})[gKey()];
         $("gBest").textContent = best ? `Your best with these settings: ${best} points.` : "";
         gOptText();
+        gResumeRender();
       }
       function gView(v) {
         ["gWatch", "rWatch"].forEach((id) => {
@@ -6163,9 +6256,12 @@
         ["gSetup", "gPass", "gLobby", "gReveal", "gPlay", "gEnd"].forEach((id) => {
           $(id).hidden = id !== v;
         });
+        ["gQuit", "rQuit", "pQuit"].forEach((id) => {
+          quitDisarm($(id));
+        });
       }
-      function gStart(queue, replay = false, mp = null) {
-        G = {
+      function gFresh(queue, replay) {
+        return {
           queue,
           i: 0,
           score: 0,
@@ -6192,6 +6288,9 @@
           rot: null,
           mp: null,
         };
+      }
+      function gStart(queue, replay = false, mp = null) {
+        G = gFresh(queue, replay);
         track("match_started", {
           mode: mp ? "device" : "solo",
           role: mp ? null : role,
@@ -6232,6 +6331,107 @@
         gView("gPlay");
         gShow();
       }
+      // A solo match is saved at the start of each moment, so a reload resumes it there.
+      const MATCH_SAVE = [
+        "queue",
+        "i",
+        "score",
+        "streak",
+        "perfect",
+        "close",
+        "helps",
+        "misses",
+        "results",
+        "replay",
+        "role",
+        "key",
+        "mixed",
+        "vis0",
+        "nbOk",
+        "nbN",
+        "setOk",
+        "setN",
+      ];
+      const isNum = (v) => typeof v === "number" && Number.isFinite(v);
+      const isSpot = (t) => !!t && typeof t === "object" && isNum(t.x) && isNum(t.y);
+      const isStep = (q) =>
+        !!q &&
+        typeof q === "object" &&
+        Number.isInteger(q.ri) &&
+        q.ri >= 0 &&
+        q.ri < 6 &&
+        STEP_ORDER.includes(q.phase);
+      const isMiss = (m) =>
+        isStep(m) &&
+        (m.tap == null || isSpot(m.tap)) &&
+        (m.spots == null ||
+          (Array.isArray(m.spots) && m.spots.every((o) => isSpot(o) && typeof o.p === "string")));
+      const isResult = (r) =>
+        r == null ||
+        (typeof r === "object" &&
+          r.q in FULL_PTS &&
+          isNum(r.pts) &&
+          (r.set == null || typeof r.set.ask === "string"));
+      function gSave() {
+        if (!G || G.mp || G.online) return;
+        const o = Object.fromEntries(MATCH_SAVE.map((k) => [k, G[k]]));
+        // An answered moment is saved as done, so Resume cannot ask it again.
+        if (G.answered) o.i = G.i + 1;
+        store.set("match", o);
+      }
+      function gSaved() {
+        const o = store.get("match", null);
+        const ok =
+          !!o &&
+          typeof o === "object" &&
+          Array.isArray(o.queue) &&
+          o.queue.length > 0 &&
+          o.queue.every(isStep) &&
+          Number.isInteger(o.i) &&
+          o.i >= 0 &&
+          o.i <= o.queue.length &&
+          ["score", "streak", "perfect", "close", "helps", "nbOk", "nbN", "setOk", "setN"].every(
+            (k) => isNum(o[k]),
+          ) &&
+          Array.isArray(o.misses) &&
+          o.misses.every(isMiss) &&
+          Array.isArray(o.results) &&
+          o.results.every(isResult) &&
+          typeof o.key === "string" &&
+          o.role === role;
+        if (!ok) {
+          store.del("match");
+          return null;
+        }
+        return o;
+      }
+      // A saved match with other settings than the current ones is dropped.
+      function gResumeRender() {
+        const o = gSaved(),
+          live = !!o && o.key === gKey();
+        if (o && !live) store.del("match");
+        $("gResume").hidden = !live || gPlayersMode() !== "solo";
+        if (live)
+          $("gResumeText").textContent =
+            o.i < o.queue.length
+              ? `Resume match (moment ${o.i + 1} of ${o.queue.length})`
+              : "Resume match (see results)";
+      }
+      $("gResumeBtn").onclick = () => {
+        const o = gSaved();
+        if (!o || o.key !== gKey()) return gResumeRender();
+        G = Object.assign(gFresh(o.queue, !!o.replay), o);
+        if (G.i >= G.queue.length) {
+          G.i = G.queue.length - 1;
+          return gFinish();
+        }
+        gView("gPlay");
+        gShow();
+      };
+      $("gDiscard").onclick = () => {
+        store.del("match");
+        gResumeRender();
+      };
       function gQueue() {
         const q = [];
         const order = [0, 1, 2, 3, 4, 5];
@@ -6282,6 +6482,7 @@
       }
       function gShow() {
         const st = G.queue[G.i];
+        quitDisarm($("gQuit"));
         watchClose($("gWatch"));
         G.help = 0;
         G.answered = false;
@@ -6331,6 +6532,7 @@
         if (G.rot) gRotRefresh();
         else gDraw();
         G.t0 = performance.now();
+        gSave();
       }
       function gHelpArea(me) {
         const jx = me.x + (G.jit ? G.jit[0] : 0),
@@ -6527,7 +6729,8 @@
           pts,
           bd: { base: Math.round(base * mult), speed, streak: streakB, mult: vm, nb: 0, set: 0 },
         };
-        if (q === "miss") G.misses.push(st);
+        if (q === "miss") G.misses.push({ ...st, ...picOf(G.tap, G.rot) });
+        gSave();
         const d = describe(st.ri, st.phase, G.role);
         const title = { perfect: "Spot on", close: "Close enough", miss: "Not there" }[q];
         if (G.mp) {
@@ -6593,6 +6796,7 @@
                     G.results[G.i].pts += bonus;
                     G.results[G.i].bd.nb = bonus;
                   }
+                  gSave();
                   if (G.mp || G.online) {
                     nbSaved("gnb", b);
                     if (G.online) onWrite(true);
@@ -6701,12 +6905,40 @@
           gShow();
         } else gFinish();
       };
-      $("gQuit").onclick = () => {
+      // Quit takes two taps, like Drill Reset: the first arms it for RESET_ARM_MS.
+      const quitTimers = new Map();
+      function quitDisarm(btn) {
+        clearTimeout(quitTimers.get(btn));
+        if (!btn.classList.contains("armed")) return;
+        btn.classList.remove("armed");
+        btn.textContent = btn.dataset.label;
+        btn.style.width = "";
+        btn.removeAttribute("aria-label");
+      }
+      function quitArm(btn, quit) {
+        btn.onclick = () => {
+          if (btn.classList.contains("armed")) {
+            quitDisarm(btn);
+            return quit();
+          }
+          btn.dataset.label = btn.textContent;
+          btn.style.width = `${btn.offsetWidth}px`;
+          btn.textContent = "Sure?";
+          btn.setAttribute("aria-label", "Tap again to quit");
+          btn.classList.add("armed");
+          quitTimers.set(
+            btn,
+            setTimeout(() => quitDisarm(btn), RESET_ARM_MS),
+          );
+        };
+      }
+      quitArm($("gQuit"), () => {
         if (ON) return onQuit();
+        store.del("match");
         G = null;
         gRenderSetup();
         gView("gSetup");
-      };
+      });
       function gShownHtml(r) {
         const v = G.online ? G.online.meta.vis : G.vis0;
         const m = VIS_MULT[v] ?? 1;
@@ -6739,6 +6971,7 @@
         gTrackFinish();
         if (G.online) return mpFinish(onList(G.online.room, G.i));
         if (G.mp) return mpFinish();
+        store.del("match");
         const n = G.queue.length,
           acc = Math.round(((G.perfect + G.close) / n) * 100);
         let best = false;
@@ -6760,10 +6993,10 @@
         $("gStats").innerHTML =
           `<div><strong>${G.score}</strong><span>points${best && !G.replay ? " · new best" : ""}</span></div><div><strong>${acc}%</strong><span>right or close</span></div><div><strong>${G.perfect}/${n}</strong><span>spot on</span></div><div><strong>${G.helps}</strong><span>help used</span></div>${G.nbN ? `<div class="wide"><strong>${G.nbOk}/${G.nbN}</strong><span>neighbour checks right</span></div>` : ""}${G.setN ? `<div class="wide"><strong>${G.setOk}/${G.setN}</strong><span>set calls right</span></div>` : ""}${gShownHtml(G.role)}`;
         $("gMist").innerHTML = G.misses.length
-          ? `<h2 style="font-size:20px;margin-top:4px">Where you should have been</h2><ul class="mist">${G.misses
+          ? `<h2 style="font-size:20px;margin-top:4px">Where you should have been</h2><ul class="mist pics">${G.misses
               .map((m) => {
                 const d = describe(m.ri, m.phase, G.role);
-                return hOnly(`<li><b>${hName(m.ri)} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`);
+                return `<li>${answerPic(m, G.role)}${hOnly(`<b>${hName(m.ri)} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}`)}</li>`;
               })
               .join("")}</ul>`
           : "<p>No mistakes. " +
@@ -7003,6 +7236,12 @@
         if (G.mp.turn < G.mp.players.length) mpPass();
         else mpReveal();
       }
+      const initial = (p) => ([...p.name.trim()][0] || "?").toUpperCase();
+      // A tap shows the player's initial, or the player's number when two players share it.
+      function tapKeys(ps) {
+        const all = ps.map(initial);
+        return all.map((c, k) => (all.filter((d) => d === c).length > 1 ? String(k + 1) : c));
+      }
       function mpReveal(ps = G.mp.players) {
         const st = G.queue[G.i],
           roles = [...new Set(ps.map((p) => p.role))],
@@ -7044,10 +7283,11 @@
           s += `<circle cx="${me.x * W}" cy="${me.y * H}" r="8.3" fill="none" stroke="${owners[0].color}" stroke-width="1.4"/>`;
           s += glideChip(me, owners.find((p) => p.taps[G.i]?.tap)?.taps[G.i].tap);
         });
-        ps.forEach((p) => {
+        const keys = tapKeys(ps);
+        ps.forEach((p, k) => {
           const t = p.taps[G.i];
           if (!t?.tap) return;
-          s += `<circle cx="${t.tap.x * W}" cy="${t.tap.y * H}" r="3.2" fill="${p.color}" stroke="#fff" stroke-width="0.5"/><text class="tapname" x="${t.tap.x * W}" y="${t.tap.y * H + 1.3}" text-anchor="middle" font-size="3.8" font-weight="800" fill="#fff" font-family="Barlow,sans-serif">${esc(p.name.trim()[0] || "?").toUpperCase()}</text>`;
+          s += `<circle cx="${t.tap.x * W}" cy="${t.tap.y * H}" r="3.2" fill="${p.color}" stroke="#fff" stroke-width="0.5"/><text class="tapname" x="${t.tap.x * W}" y="${t.tap.y * H + 1.3}" text-anchor="middle" font-size="3.8" font-weight="800" fill="#fff" font-family="Barlow,sans-serif">${esc(keys[k])}</text>`;
         });
         if (st.phase === "ar") s += momentBall(st.ri, st.phase, "r", shared);
         // A live room re-renders the reveal on every change; a play on its court keeps running.
@@ -7068,14 +7308,16 @@
         $("rSub").textContent = `Moment ${G.i + 1} of ${G.queue.length}`;
         const lab = { perfect: "Spot on", close: "Close enough", miss: "Not there" };
         $("rList").innerHTML = ps
-          .map((p) => {
+          .map((p, k) => {
             const t = p.taps[G.i] || {},
               r = t.res || { q: "miss", pts: 0 };
             const bd = t.res ? `<small class="bd">${bdHtml(r, p.role, true)}</small>` : "";
             const grades = t.grades
               ? `<small class="rotgrades">${t.grades.map(({ p: q, g }) => `${q}: ${g}`).join(" · ")}</small>`
               : "";
-            return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b> · ${NAMES[p.role]}: ${t.res ? lab[r.q] : "No answer"}${t.res && !t.tap ? " (said off court)" : ""}${grades}${bd}</div><span class="rp">+${r.pts}</span></li>`;
+            const key =
+              keys[k] === initial(p) ? "" : ` <span class="tapkey">(${esc(keys[k])})</span>`;
+            return `<li><i style="background:${p.color}"></i><div><b>${esc(p.name)}</b>${key} · ${NAMES[p.role]}: ${t.res ? lab[r.q] : "No answer"}${t.res && !t.tap ? " (said off court)" : ""}${grades}${bd}</div><span class="rp">+${r.pts}</span></li>`;
           })
           .join("");
         $("rWhy").innerHTML = roles
@@ -7101,12 +7343,14 @@
           mpMomentStart();
         } else gFinish();
       };
-      $("rQuit").onclick = $("pQuit").onclick = () => {
-        if (ON) return onQuit();
-        G = null;
-        gRenderSetup();
-        gView("gSetup");
-      };
+      ["rQuit", "pQuit"].forEach((id) => {
+        quitArm($(id), () => {
+          if (ON) return onQuit();
+          G = null;
+          gRenderSetup();
+          gView("gSetup");
+        });
+      });
       function mpFinish(list = G.mp.players) {
         const n = G.queue.length,
           ps = [...list].sort((a, b) => b.score - a.score);
@@ -7127,12 +7371,10 @@
         $("gMist").innerHTML = list
           .map((p) =>
             p.misses.length
-              ? `<details class="pm"><summary><span style="color:${p.color}">●</span> ${esc(p.name)}: where you should have been (${p.misses.length})</summary><ul class="mist">${p.misses
+              ? `<details class="pm"><summary><span style="color:${p.color}">●</span> ${esc(p.name)}: where you should have been (${p.misses.length})</summary><ul class="mist pics">${p.misses
                   .map((m) => {
                     const d = describe(m.ri, m.phase, p.role);
-                    return hOnly(
-                      `<li><b>${hName(m.ri)} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}</li>`,
-                    );
+                    return `<li>${answerPic(m, p.role)}${hOnly(`<b>${hName(m.ri)} · ${FULL[m.phase]}</b><br>${d.t}. ${d.d}`)}</li>`;
                   })
                   .join("")}</ul></details>`
               : `<p><span style="color:${p.color}">●</span> ${esc(p.name)}: no mistakes.</p>`,
