@@ -2284,6 +2284,8 @@ def check_review_pictures(browser: Browser) -> None:
     for _ in range(2):
         tap_at(page, 0.5, 0.03, "courtD")
         page.click("#nextBtn")
+        page.wait_for_selector("#nextBtn:not([aria-disabled])")
+        page.click("#nextBtn")
     if page.inner_text("#dq") != "Review done":
         fail(f"review pictures: the review did not finish: {page.inner_text('#dq')!r}")
     page.evaluate("() => window.scrollTo(0, 0)")

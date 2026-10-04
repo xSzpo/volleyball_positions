@@ -1185,7 +1185,7 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** none (phone usability audit, 2026-10-03)
 - **Problem:** After an answer the verdict, the checks and Next could sit below the screen, and the neighbour or set call check could look like it blocks Next.
-- **Decision:** While answering the row stays in the flow, so it never covers the court. After scoring it turns sticky at the bottom (`#dActs.sticky`, `#gActs.sticky`), the page scrolls just enough that the verdict starts on screen, the verdict comes before the optional checks, and Match hides "I'm off court" and Help, which do nothing after scoring.
+- **Decision:** While answering the row stays in the flow, so it never covers the court. After scoring it turns sticky (`#dActs.sticky`, `#gActs.sticky`), held at the top of the screen as you scroll down to the feedback, the page scrolls just enough that the verdict starts on screen, the verdict comes before the optional checks, and Match hides "I'm off court" and Help, which do nothing after scoring.
 - **Alternatives:** always sticky (it covered the court's end line while answering); scroll to the bottom of the feedback.
 - **Reversible by:** `verdictFit()`, `answerFit()` and the `.sticky` rules in `src/template.html`.
 

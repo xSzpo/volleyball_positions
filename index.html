@@ -5980,7 +5980,7 @@
         if (dOff) {
           dOff = false;
           $("offBtn").setAttribute("aria-pressed", "false");
-          $("nextBtn").disabled = !dTap;
+          $("nextBtn").disabled = true;
           return drawDrill();
         }
         dPick(null);
@@ -8474,8 +8474,8 @@
         G.tap = a.tap;
         if (G.rot) $("gAsk").textContent = "";
         $("gNext").hidden = true;
-        $("gOff").disabled = true;
-        $("gHelp").disabled = true;
+        $("gOff").hidden = true;
+        $("gHelp").hidden = true;
         $("gFb").className = "fb";
         $("gFb").innerHTML = ON_SAVED;
         gDraw();
