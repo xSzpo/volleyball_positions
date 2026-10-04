@@ -46,11 +46,11 @@ SERVING_MIDDLE = {("official", "MB1", 2), ("official", "MB2", 5), ("simple", "MB
 # The overlap limits count at the whistle for the serve; before 1 October 2026 they counted at the service hit.
 OLD_TIMING = re.compile(r"service hit|when the ball is served|at the serve\b|until the serve is made", re.IGNORECASE)
 THUMB_MOVE = "Once the server moves, so can you."
-WHISTLE_MOVE = "From the server's first movement you may move."
+WHISTLE_MOVE = "From the server's first movement you may move freely."
 OVERLAP_WHEN = {
-    "start": "This is your rotation order. It counts at the whistle when the other team serves."
-    " We serve now, so you may stand anywhere.",
-    "rec": "These limits count at the whistle, not during the pass. " + WHISTLE_MOVE,
+    "start": "This is your rotation order. It counts at the referee's whistle when the other team serves."
+    " We serve now, so you may stand anywhere in your court.",
+    "rec": "These limits count at the referee's whistle, not during the pass. " + WHISTLE_MOVE,
 }
 # Simplified R3/R6 Rotation: OM's zone 4 slot is MB's at the whistle for their serve, so its limit reads MB.
 OM_LIMIT = {"MB": "OM"}
@@ -376,8 +376,8 @@ def check_rules_of_thumb(page: Page) -> None:
             fail(f"{mode} Rules of thumb lack the whistle timing: {text!r}")
         if OLD_TIMING.search(text):
             fail(f"{mode} Rules of thumb use the old overlap timing: {text!r}")
-        if "1 October 2026" not in text:
-            fail(f"{mode} Rules of thumb do not date the Volleyball Danmark rule")
+        if "1 October 2026" in text:
+            fail(f"{mode} Rules of thumb still date the Volleyball Danmark rule, which is in force")
         if "@" in text:
             fail(f"{mode} Rules of thumb show a placeholder: {text!r}")
         for word in want:
@@ -621,8 +621,10 @@ def check_official_libero(page: Page) -> None:
         ):
             fail(f"Official {ROTATION_NAMES[ri]} Attack: L text in Drill and Match lacks the finger-set rule")
         learn(page, ri, "ar")
-        if "nobody may attack that ball above the net" not in page.inner_text("#cue"):
-            fail(f"Official {ROTATION_NAMES[ri]} Base: L's cue lacks the finger-set rule")
+        if "overhand finger pass in the front zone, nobody may attack that ball above the net" not in page.inner_text(
+            "#cue"
+        ):
+            fail(f"Official {ROTATION_NAMES[ri]} Base: L's cue lacks the overhand finger pass rule")
     for ri in range(6):
         for ph in PHASES:
             learn(page, ri, ph)
@@ -630,6 +632,8 @@ def check_official_libero(page: Page) -> None:
             want = ri in (2, 5) and ph in ("start", "rec")
             if shown != want:
                 fail(f"Official {ROTATION_NAMES[ri]} {ph}: libero rule in the cue is {shown}, expected {want}")
+            if want and "may not serve (19.3.2.2)" not in page.inner_text("#cue"):
+                fail(f"Official {ROTATION_NAMES[ri]} {ph}: the libero rule does not cite 19.3.2.2 for the serve")
     open_app(page, {"role": "L", "rulesMode": "simple"})
     learn(page, 2, "serve")
     if "FIVB 19.3" in page.inner_text("#cue"):

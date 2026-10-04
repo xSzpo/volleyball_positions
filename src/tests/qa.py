@@ -542,6 +542,37 @@ def drill_picked(pg: Page) -> list[str]:
     ]
 
 
+CHIP_LOOK_JS = """(sel) => [...document.querySelectorAll(sel)].map((e) => {
+  const c = getComputedStyle(e), tick = getComputedStyle(e, '::before');
+  return { on: e.getAttribute('aria-pressed') || e.getAttribute('aria-checked'), fill: c.backgroundColor,
+    tick: tick.content, gap: e.previousElementSibling && e.previousElementSibling.tagName === 'BUTTON'
+      ? e.getBoundingClientRect().left - e.previousElementSibling.getBoundingClientRect().right : null };
+})"""
+ACCENT_JS = (
+    "(() => { const e = document.createElement('i'); e.style.color = 'var(--accent)';"
+    " document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; })()"
+)
+
+
+def check_chip_kinds(pg: Page, tag: str) -> None:
+    """Several-choice chips are apart with a tick box, ticked when on; one-choice rows are joined, one filled."""
+    accent = pg.evaluate(ACCENT_JS)
+    for chip in pg.evaluate(CHIP_LOOK_JS, "#dSteps button"):
+        if chip["fill"] == accent or (chip["on"] == "true") != ("✓" in chip["tick"]):
+            fail(f"{tag} a drill step chip is filled or its tick does not follow its state: {chip}")
+        if chip["gap"] is not None and chip["gap"] < 2:
+            fail(f"{tag} drill step chips are joined: {chip}")
+    for sel in ('.vis[data-vis="drill"] button', "#dName button", ".rulesmode button"):
+        chips = pg.evaluate(CHIP_LOOK_JS, sel)
+        filled = [c for c in chips if c["fill"] == accent]
+        if len(filled) != 1 or filled[0]["on"] != "true":
+            fail(f"{tag} {sel} does not fill exactly the chosen segment: {chips}")
+        if any(c["tick"] not in ("none", "normal") for c in chips):
+            fail(f"{tag} {sel} shows a tick box: {chips}")
+        if any(c["gap"] is not None and c["gap"] > 0.5 for c in chips):
+            fail(f"{tag} {sel} segments are not joined: {chips}")
+
+
 def check_drill_steps(browser: Browser, tag: str) -> None:
     """The Drill steps picker in Drill options: asks only the picked steps, is stored, keeps one on, fits 390 px."""
     section("DRILL steps picker")
@@ -582,6 +613,7 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
         "[...document.querySelectorAll('#dSteps, #dSteps button')].some(e => e.scrollWidth > e.clientWidth)"
     ):
         fail(f"{tag} drill step chip text overflows its chip")
+    check_chip_kinds(pg, tag)
     check_page(pg, f"{tag} drill steps")
     for step in ["serve", "rec", "ar"]:
         pg.tap(f'#dSteps [data-s="{step}"]')
@@ -640,6 +672,7 @@ BOX_JS = "els => els.map(e => { const r = e.getBoundingClientRect(); return [r.w
 # Selector of each tap target, and whether its width must be 44 px too.
 TARGETS = {
     "drill": [
+        ("#dSteps button", True),
         ('.vis[data-vis="drill"] button', False),
         ("#dName button", True),
         ("#nbDrillCheck", False),
@@ -654,15 +687,26 @@ TARGETS = {
         (".scoring > summary", False),
         ("#gStart", True),
     ],
+    "mp": [
+        ("#mpList input", False),
+        ("#mpList select", False),
+        ("#mpList button", True),
+        ("#mpAdd", True),
+    ],
+    "online": [("#onName", False), ("#onCode", False), ("#onCreate", True), ("#onJoin", True)],
     "sets": [("#setchips button", False)],
 }
-TAB_BUTTON = {"drill": "#tabDrill", "game": "#tabGame", "sets": "#tabSets"}
+TAB_BUTTON = {"drill": "#tabDrill", "game": "#tabGame", "mp": "#tabGame", "online": "#tabGame", "sets": "#tabSets"}
+# Who is playing picks before measuring a Match setup box.
+PLAYERS = {"game": "solo", "mp": "mp", "online": "online"}
 
 
 def check_targets(pg: Page, tag: str) -> None:
-    """The Drill, Match and Sets controls are tap targets at least 44 px high."""
+    """The Drill, Match setup (solo, same device, online) and Sets controls are tap targets at least 44 px high."""
     for tab, targets in TARGETS.items():
         pg.click(TAB_BUTTON[tab])
+        if tab in PLAYERS:
+            pg.check(f'input[name="gPlayers"][value="{PLAYERS[tab]}"]')
         for fold in ("#dOpts", "#gOpts"):
             if pg.is_visible(fold):
                 open_fold(pg, fold)
@@ -673,6 +717,8 @@ def check_targets(pg: Page, tag: str) -> None:
             for w, h in boxes:
                 if h < 44 or (wide and w < 44):
                     fail(f"{tag} tap target {sel} is {w:.0f} x {h:.0f} px")
+    pg.click("#tabGame")
+    pg.check('input[name="gPlayers"][value="solo"]')
     pg.click("#tabLearn")
 
 
@@ -741,10 +787,21 @@ def in_view(pg: Page, *sels: str) -> list[str]:
     return [sel for sel in sels if not pg.evaluate(IN_VIEW_JS, sel)]
 
 
+# Continue scores, Next moves on: no text before scoring says to press Next, and none after it says Continue.
+WRONG_PRESS = {False: "press Next", True: "press Continue"}
+
+
+def check_press_words(pg: Page, ctx: str, card: str, scored: bool) -> None:
+    """The visible text of `card` names the button the answer is at: Continue before scoring, Next after."""
+    if WRONG_PRESS[scored] in pg.inner_text(card):
+        fail(f"{ctx}: {'after' if scored else 'before'} scoring the text says {WRONG_PRESS[scored]!r}")
+
+
 def check_answered(pg: Page, ctx: str, row: str, next_: str, fb: str, nb: str, hidden: list[str]) -> None:
     """After Continue: Next in view and locked for a moment, the verdict on screen, the row sticky, checks optional."""
     if pg.text_content(next_) == "Continue":
         fail(f"{ctx}: the primary button still reads Continue after scoring")
+    check_press_words(pg, ctx, "#drill" if next_ == "#nextBtn" else "#gPlay", True)
     if pg.get_attribute(next_, "aria-disabled") != "true":
         fail(f"{ctx}: {next_} is not locked right after scoring")
     if in_view(pg, next_) or pg.locator(fb).bounding_box() is None:
@@ -799,6 +856,7 @@ def check_answer_fit(browser: Browser, tag: str) -> None:
             fail(f"{ctx_n}: {in_view(pg, '#drill .prompt', '#courtD', '#nextBtn', '#offBtn')} out of view")
         if pg.text_content("#nextBtn") != "Continue" or pg.is_enabled("#nextBtn"):
             fail(f"{ctx_n}: the primary button reads {pg.inner_text('#nextBtn')!r} and is usable before a pick")
+        check_press_words(pg, ctx_n, "#drill", False)
         stats = pg.evaluate("localStorage.getItem('ksv51:stats2')")
         tap_spot(pg, 0.3, 0.6)
         tap_spot(pg, 0.6 if n % 2 else 0.5, 0.5)
@@ -831,6 +889,7 @@ def check_answer_fit(browser: Browser, tag: str) -> None:
             fail(f"{ctx_n}: {in_view(pg, '#gPlay .prompt', '#courtG', '#gNext')} out of view")
         if "sticky" in (pg.get_attribute("#gActs", "class") or ""):
             fail(f"{ctx_n}: the action row is sticky while answering")
+        check_press_words(pg, ctx_n, "#gPlay", False)
         for i in range(8):
             if pg.is_enabled("#gNext"):
                 break

@@ -1376,7 +1376,7 @@
     .rulesmode {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 0;
       flex-wrap: wrap;
       margin-bottom: 12px;
       padding-bottom: 10px;
@@ -1405,9 +1405,6 @@
       border-color: var(--accent);
       background: var(--accent);
       color: var(--on-accent);
-    }
-    .rulesmode button[aria-checked="true"]::before {
-      content: "\2713  ";
     }
     .rulesmode button:disabled {
       opacity: 0.6;
@@ -1450,19 +1447,79 @@
       letter-spacing: 0.01em;
       cursor: pointer;
     }
-    .vis button[aria-checked="true"],
-    .vis button[aria-pressed="true"] {
+    .vis button[aria-checked="true"] {
+      border-color: var(--accent);
       background: var(--accent);
       color: var(--on-accent);
     }
-    .dsteps {
-      flex-wrap: nowrap;
+    /* Single choice: one joined row with one filled segment. */
+    .vis[role="radiogroup"],
+    .rulesmode {
+      gap: 0;
+    }
+    .vis[role="radiogroup"] button,
+    .rulesmode button {
+      position: relative;
+      border-radius: 0;
+    }
+    .vis[role="radiogroup"] button + button,
+    .rulesmode button + button {
+      margin-left: -2px;
+    }
+    .vis[role="radiogroup"] button:first-of-type,
+    .rulesmode button:first-of-type {
+      border-radius: var(--radius) 0 0 var(--radius);
+    }
+    .vis[role="radiogroup"] button:last-of-type,
+    .rulesmode button:last-of-type {
+      border-radius: 0 var(--radius) var(--radius) 0;
+    }
+    .vis[role="radiogroup"] button[aria-checked="true"],
+    .rulesmode button[aria-checked="true"] {
+      z-index: 1;
+    }
+    /* Several choices: separate chips, each with its own tick box. */
+    .vis .vislabel {
+      flex-basis: 100%;
+      margin-bottom: 2px;
     }
     .dsteps button {
       flex: 1 1 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
       min-height: 44px;
-      padding: 6px 4px;
+      padding: 6px 3px;
+      font-size: 14px;
+      letter-spacing: 0;
       white-space: nowrap;
+    }
+    .dsteps button::before {
+      content: "";
+      flex: none;
+      box-sizing: border-box;
+      width: 13px;
+      height: 13px;
+      border: 2px solid var(--muted);
+      border-radius: 3px;
+      font:
+        700 11px / 10px Barlow,
+        sans-serif;
+      text-align: center;
+    }
+    .dsteps button[aria-pressed="true"] {
+      border-color: var(--accent);
+    }
+    .dsteps button[aria-pressed="true"]::before {
+      content: "\2713";
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--on-accent);
+    }
+    .steps input,
+    .check input {
+      accent-color: var(--accent);
     }
     .visbox {
       margin: 12px 0 0;
@@ -1592,6 +1649,7 @@
       background: var(--panel);
       color: var(--ink);
       min-width: 0;
+      min-height: 44px;
     }
     .mprow button {
       border: 0;
@@ -1600,6 +1658,8 @@
       font-size: 18px;
       cursor: pointer;
       padding: 6px;
+      min-width: 44px;
+      min-height: 44px;
     }
     .mprow button:disabled {
       opacity: 0.7;
@@ -1635,6 +1695,7 @@
       background: var(--panel);
       color: var(--ink);
       min-width: 0;
+      min-height: 44px;
     }
     #onCode {
       text-transform: uppercase;
@@ -1679,6 +1740,7 @@
         sans-serif;
       padding: 6px 8px;
       min-width: 44px;
+      min-height: 44px;
       border-radius: var(--radius);
       cursor: pointer;
     }
@@ -2110,7 +2172,7 @@
             <summary>Drill options <small id="dOptSum"></small></summary>
             <div class="foldbody">
               <div class="vis dsteps" id="dSteps" role="group" aria-label="Steps to drill">
-                <span class="vislabel">Train</span>
+                <span class="vislabel">Steps to drill</span>
               </div>
               <div
                 class="vis "
@@ -2134,11 +2196,11 @@
               </div>
               <label class="check" id="nbDrillCheck"
                 ><input type="checkbox" id="nbDrill">
-                Neighbour check (who stands next to you) in reception</label
+                Ask who stands next to you at Receive</label
               >
               <label class="check" id="dZonesCheck"
                 ><input type="checkbox" id="dZones">
-                Zone numbers on the court</label
+                Show zone numbers on the court</label
               >
               <div
                 class="vis"
@@ -2146,7 +2208,7 @@
                 role="radiogroup"
                 aria-label="Name the rotation at Rotate as"
               >
-                <span class="vislabel">Rotate names</span>
+                <span class="vislabel">Name the rotation as</span>
                 <button type="button" role="radio" aria-checked="false" data-n="h">H</button
                 ><button type="button" role="radio" aria-checked="false" data-n="r">R</button
                 ><button type="button" role="radio" aria-checked="false" data-n="mixed">
@@ -2160,7 +2222,7 @@
                 aria-label="Which middle to drill"
                 hidden
               >
-                <span class="vislabel">Middle</span>
+                <span class="vislabel">Middle to drill</span>
                 <button type="button" role="radio" aria-checked="false" data-m="mine">Mine</button
                 ><button type="button" role="radio" aria-checked="false" data-m="both">Both</button>
               </div>
@@ -2275,15 +2337,15 @@
               </fieldset>
               <label class="check" id="nbGameCheck"
                 ><input type="checkbox" id="nbGame">
-                Neighbour check (who stands next to you) in reception, +30 points</label
+                Ask who stands next to you at Receive, +30 points</label
               >
               <label class="check" id="setGameCheck"
                 ><input type="checkbox" id="setGame">
-                Set call check after the pass, +30 points</label
+                Ask the set call after the pass, +30 points</label
               >
               <label class="check" id="gZonesCheck"
                 ><input type="checkbox" id="gZones">
-                Zone numbers on the court</label
+                Show zone numbers on the court</label
               >
               <p class="hint" id="setGameHint" hidden>Needs the Attack step</p>
             </div>
@@ -2586,16 +2648,16 @@
         return s[0].toUpperCase() + s.slice(1);
       }
 
-      const WHISTLE_MOVE = "From the server's first movement you may move.";
+      const WHISTLE_MOVE = "From the server's first movement you may move freely.";
       const OVERLAP_WHEN = {
         start:
-          "This is your rotation order. It counts at the whistle when the other team serves. We serve now, so you may stand anywhere.",
-        rec: `These limits count at the whistle, not during the pass. ${WHISTLE_MOVE}`,
+          "This is your rotation order. It counts at the referee's whistle when the other team serves. We serve now, so you may stand anywhere in your court.",
+        rec: `These limits count at the referee's whistle, not during the pass. ${WHISTLE_MOVE}`,
       };
       const LIBERO_RULE =
-        "Libero rules (FIVB 19.3): the libero replaces only a back-row player, only while the ball is out of play and before the whistle for the serve. The libero may not serve, block or try to block, or attack a ball above the net. A completed rally must come between two replacements.";
+        "Libero rules (FIVB 19.3): the libero replaces only a back-row player, only while the ball is out of play and before the whistle for the serve. The libero may not serve (19.3.2.2), block or try to block, or attack a ball above the net. A completed rally must come between two replacements.";
       const FINGER_SET =
-        "If you set with fingers from the front zone, nobody may attack that ball above the net.";
+        "If you make an overhand finger pass in the front zone, nobody may attack that ball above the net.";
       const SERVE_RULE =
         "The serving team may stand anywhere: the overlap rule is only for the receiving team (FIVB 7.4). You stay in your row for play: a back-row player may not block, or attack from the front zone above the net.";
       function describe(ri, phase, role) {
@@ -3148,7 +3210,8 @@
         liberoServes: "The libero may not serve: wait off court while the middle serves.",
         liberoIn: "The libero is in for you in the back row: wait off court.",
         arrows: "You counted along the arrows: count on from the setter's zone, 1→2→3→4→5→6.",
-        overlap: (words, p) => `Overlap fault: at the whistle you must stand ${words} ${p}.`,
+        overlap: (words, p) =>
+          `Overlap fault: at the referee's whistle you must stand ${words} ${p}.`,
         lane: "In a passing lane: only OH1, OH2 and L pass, so keep clear of them.",
         front: "Wrong row: you are front row here, in front of the 3 m line.",
         back: "Wrong row: you are back row here, behind the 3 m line.",
@@ -5125,7 +5188,7 @@
           k: "overlap",
           t: "Overlap counts only when they serve",
           roles: ["OH1", "OH2", "MB", "MB1", "MB2", "OP", "S", "L"],
-          d: "When they serve, stand in order with your overlap partners at the whistle (from 1 October 2026). Once the server moves, so can you. When we serve, go straight to your defence spot.",
+          d: "When they serve, stand in order with your overlap partners at the whistle. Once the server moves, so can you. When we serve, go straight to your defence spot.",
         },
         {
           k: "receive",
