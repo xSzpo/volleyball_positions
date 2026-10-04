@@ -1281,15 +1281,15 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** none (rules audit, wording and taps, 2026-10-04)
 - **Problem:** `WHISTLE_MOVE`, `OVERLAP_WHEN` and the overlap Common mistake worded the moment differently, and the overlap rule of thumb still said "(from 1 October 2026)" after that date.
-- **Decision:** Every overlap text names the referee's whistle; `WHISTLE_MOVE` is "From the server's first movement you may move freely."; at the Rotation step while we serve, "you may stand anywhere in your court"; the overlap Common mistake reads "Overlap fault: at the referee's whistle you must stand …". The date is gone from the rule of thumb.
+- **Decision:** The rule texts name the referee's whistle (the short texts, the rule of thumb, the neighbour questions and the Match hint, keep "at the whistle"); `WHISTLE_MOVE` is "From the server's first movement you may move freely."; at the Rotation step while we serve, "you may stand anywhere in your court"; the overlap Common mistake reads "Overlap fault: at the referee's whistle you must stand …". The date is gone from the rule of thumb.
 - **Alternatives:** keep the date until the end of the season.
 - **Reversible by:** `WHISTLE_MOVE`, `OVERLAP_WHEN`, `MISTAKES.overlap` and `THUMB` in `src/template.html`.
 
-### 167. The libero rule cites 19.3.2.2 and the finger-set rule says "overhand finger pass"
+### 167. The libero rule cites 19.3.1.3 and the finger-set rule says "overhand finger pass"
 
 - **Issue:** none (rules audit, wording and taps, 2026-10-04)
 - **Problem:** `LIBERO_RULE` cited FIVB 19.3 for "may not serve", and `FINGER_SET` did not use the rule book's wording for the finger set.
-- **Decision:** "The libero may not serve (19.3.2.2), …" and "If you make an overhand finger pass in the front zone, nobody may attack that ball above the net."
+- **Decision:** "The libero may not serve (19.3.1.3), …" and "If you make an overhand finger pass in the front zone, nobody may attack that ball above the net."
 - **Alternatives:** cite only 19.3; "set with your fingers".
 - **Reversible by:** `LIBERO_RULE` and `FINGER_SET` in `src/template.html`.
 

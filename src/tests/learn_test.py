@@ -632,8 +632,8 @@ def check_official_libero(page: Page) -> None:
             want = ri in (2, 5) and ph in ("start", "rec")
             if shown != want:
                 fail(f"Official {ROTATION_NAMES[ri]} {ph}: libero rule in the cue is {shown}, expected {want}")
-            if want and "may not serve (19.3.2.2)" not in page.inner_text("#cue"):
-                fail(f"Official {ROTATION_NAMES[ri]} {ph}: the libero rule does not cite 19.3.2.2 for the serve")
+            if want and "may not serve (19.3.1.3)" not in page.inner_text("#cue"):
+                fail(f"Official {ROTATION_NAMES[ri]} {ph}: the libero rule does not cite 19.3.1.3 for the serve")
     open_app(page, {"role": "L", "rulesMode": "simple"})
     learn(page, 2, "serve")
     if "FIVB 19.3" in page.inner_text("#cue"):

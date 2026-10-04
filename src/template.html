@@ -1511,6 +1511,12 @@
     .dsteps button[aria-pressed="true"] {
       border-color: var(--accent);
     }
+    @media (max-width: 379px) {
+      .dsteps button {
+        padding-inline: 2px;
+        font-size: 13px;
+      }
+    }
     .dsteps button[aria-pressed="true"]::before {
       content: "\2713";
       border-color: var(--accent);
@@ -2655,7 +2661,7 @@
         rec: `These limits count at the referee's whistle, not during the pass. ${WHISTLE_MOVE}`,
       };
       const LIBERO_RULE =
-        "Libero rules (FIVB 19.3): the libero replaces only a back-row player, only while the ball is out of play and before the whistle for the serve. The libero may not serve (19.3.2.2), block or try to block, or attack a ball above the net. A completed rally must come between two replacements.";
+        "Libero rules (FIVB 19.3): the libero replaces only a back-row player, only while the ball is out of play and before the whistle for the serve. The libero may not serve (19.3.1.3), block or try to block, or attack a ball above the net. A completed rally must come between two replacements.";
       const FINGER_SET =
         "If you make an overhand finger pass in the front zone, nobody may attack that ball above the net.";
       const SERVE_RULE =

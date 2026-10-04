@@ -563,7 +563,11 @@ def check_chip_kinds(pg: Page, tag: str) -> None:
         if chip["gap"] is not None and chip["gap"] < 2:
             fail(f"{tag} drill step chips are joined: {chip}")
     for sel in ('.vis[data-vis="drill"] button', "#dName button", ".rulesmode button"):
+        if sel == ".rulesmode button":
+            open_setup(pg)
         chips = pg.evaluate(CHIP_LOOK_JS, sel)
+        if not all(pg.locator(sel).nth(i).is_visible() for i in range(len(chips))):
+            fail(f"{tag} {sel} is hidden, so its segments cannot be measured")
         filled = [c for c in chips if c["fill"] == accent]
         if len(filled) != 1 or filled[0]["on"] != "true":
             fail(f"{tag} {sel} does not fill exactly the chosen segment: {chips}")
@@ -571,6 +575,7 @@ def check_chip_kinds(pg: Page, tag: str) -> None:
             fail(f"{tag} {sel} shows a tick box: {chips}")
         if any(c["gap"] is not None and c["gap"] > 0.5 for c in chips):
             fail(f"{tag} {sel} segments are not joined: {chips}")
+    close_setup(pg)
 
 
 def check_drill_steps(browser: Browser, tag: str) -> None:
@@ -598,7 +603,7 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
     if summary != "All steps · Show: Nobody":
         fail(f"{tag} the Drill options summary reads {summary!r}")
     open_fold(pg, "#dOpts")
-    pg.locator("#dSteps").scroll_into_view_if_needed()
+    pg.locator("#dSteps").evaluate("e => e.scrollIntoView({ block: 'center' })")
     view = pg.evaluate("[innerWidth, innerHeight]")
     boxes = pg.eval_on_selector_all(
         "#dSteps button",
@@ -609,6 +614,13 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
     for x, y, w, h in boxes:
         if w < 44 or h < 44 or x < 0 or x + w > view[0] or y < 0 or y + h > view[1]:
             fail(f"{tag} drill step chip {x, y, w, h} under 44 px or off the {view} screen")
+    size = pg.viewport_size
+    pg.set_viewport_size({"width": 360, "height": 664})
+    tops = pg.eval_on_selector_all("#dSteps button", "els => els.map(e => Math.round(e.getBoundingClientRect().y))")
+    if len(set(tops)) != 1:
+        fail(f"{tag} drill step chips wrap onto more than one row at 360 px: {tops}")
+    if size:
+        pg.set_viewport_size(size)
     if pg.evaluate(
         "[...document.querySelectorAll('#dSteps, #dSteps button')].some(e => e.scrollWidth > e.clientWidth)"
     ):

@@ -283,12 +283,20 @@ def check_short_phone(page: Page) -> None:
 
 
 def court_point(page: Page, court: str) -> tuple[float, float]:
-    """A point on the court, above the off court pill and below the open role list."""
-    box = page.locator(court).bounding_box()
-    menu = page.locator("#setup").bounding_box()
-    assert box is not None and menu is not None
-    top = max(box["y"], menu["y"] + menu["height"] + 10)
-    return box["x"] + box["width"] * 0.5, (top + box["y"] + box["height"] * 0.85) / 2
+    """A point on the court that the open role list does not cover, above the off court pill."""
+    point = page.locator(court).evaluate(
+        """svg => {
+            const box = svg.getBoundingClientRect();
+            for (let fy = 0.8; fy >= 0.1; fy -= 0.05)
+                for (let fx = 0.1; fx <= 0.9; fx += 0.1) {
+                    const x = box.left + box.width * fx, y = box.top + box.height * fy;
+                    if (svg.contains(document.elementFromPoint(x, y))) return [x, y];
+                }
+            return null;
+        }"""
+    )
+    assert point is not None, f"no point on {court} clear of the role list"
+    return point[0], point[1]
 
 
 def tap_court_with_list_open(page: Page, court: str) -> None:
@@ -300,6 +308,8 @@ def tap_court_with_list_open(page: Page, court: str) -> None:
 
 def check_outside_tap(page: Page) -> None:
     """A tap on the Drill or Match court that closes the role list does not answer."""
+    # At 390 px the open list covers the court; at 800 px it leaves part of it clear.
+    page.set_viewport_size({"width": 800, "height": 900})
     open_app(page, "?anim=0", {"role": "OH1"})
     page.click("#tabDrill")
     page.click("#dOpts > summary")
