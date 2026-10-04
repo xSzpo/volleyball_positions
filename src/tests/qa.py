@@ -341,8 +341,13 @@ def check_court_look(pg: Page, tag: str, phone: bool) -> None:
     check_drill_pill(pg, tag)
 
 
+def verdict(pg: Page) -> bool:
+    """Whether the Drill feedback shows a verdict, not the hint."""
+    return pg.locator("#fb.good, #fb.close, #fb.bad").count() > 0
+
+
 def check_drill_pill(pg: Page, tag: str) -> None:
-    """In Drill a tap on the off court pill answers "I'm off court"; the feedback shows the solid pill when off."""
+    """In Drill a tap on the off court pill picks "I'm off court"; the feedback shows the solid pill when off."""
     pg.click("#tabDrill")
     wait_ready(pg)
     pg.locator("#courtD").scroll_into_view_if_needed()
@@ -357,6 +362,10 @@ def check_drill_pill(pg: Page, tag: str) -> None:
             fail(f"{tag} a tap on the Drill off court pill at Rotate did not mark you off: {texts}")
         pg.click("#tabLearn")
         return
+    if pg.get_attribute("#offBtn", "aria-pressed") != "true" or verdict(pg):
+        fail(f"{tag} a tap on the Drill off court pill did not only mark you off: {pg.inner_text('#fb')!r}")
+    pg.click("#nextBtn")
+    texts = pg.eval_on_selector_all("#courtD > text", "els => els.map(e => e.textContent)")
     feedback = pg.inner_text("#fb")
     if "you are off" not in feedback and "you are on court" not in feedback:
         fail(f"{tag} a tap on the Drill off court pill scored as a spot: {feedback!r}")
@@ -405,6 +414,17 @@ def play_match(pg: Page, ctx: str, maxsteps: int = 200) -> bool:
         return False
     fail(f"{ctx}: match did not finish in {maxsteps} actions")
     return False
+
+
+def drill_vis(pg: Page, v: str) -> None:
+    open_fold(pg, "#dOpts")
+    pg.click(f'.vis[data-vis="drill"] button[data-v="{v}"]')
+
+
+def drill_off(pg: Page) -> None:
+    """Answer the open Drill question "I'm off court" and score it."""
+    pg.click("#offBtn")
+    pg.click("#nextBtn")
 
 
 def drill_steps(pg: Page, ctx: str, k: int = 30) -> None:
@@ -459,7 +479,7 @@ def sweep_drill(pg: Page, tag: str, quick: bool) -> None:
                 continue
             pick_role(pg, role)
             for v in [["none", "ref", "all"][ri % 3]] if quick else ["none", "ref", "all"]:
-                pg.click(f'.vis[data-vis="drill"] button[data-v="{v}"]')
+                drill_vis(pg, v)
                 if random.random() < 0.5:
                     open_fold(pg, "#dOpts")
                     pg.click("#nbDrill")
@@ -475,6 +495,7 @@ def sweep_drill(pg: Page, tag: str, quick: bool) -> None:
         open_fold(pg, "#dOpts")
         pg.click("#nbDrill")
     tap(pg, "#courtD", 0.5, 0.7)
+    pg.click("#nextBtn")
     pick_role(pg, "L")
     drill_steps(pg, f"{tag} drill after role switch mid-check", 5)
     # tab switch mid-check and back
@@ -484,6 +505,7 @@ def sweep_drill(pg: Page, tag: str, quick: bool) -> None:
             break
         drill_steps(pg, tag + " seek", 1)
     tap(pg, "#courtD", 0.5, 0.7)
+    pg.click("#nextBtn")
     pg.click("#tabLearn")
     pg.click("#tabDrill")
     drill_steps(pg, f"{tag} drill after tab switch mid-check", 5)
@@ -521,7 +543,7 @@ def drill_picked(pg: Page) -> list[str]:
 
 
 def check_drill_steps(browser: Browser, tag: str) -> None:
-    """The Drill steps picker: asks only the picked steps, is stored, keeps one step on and fits a 390 x 664 phone."""
+    """The Drill steps picker in Drill options: asks only the picked steps, is stored, keeps one on, fits 390 px."""
     section("DRILL steps picker")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
     ctx.add_init_script(
@@ -539,7 +561,13 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
     labels = pg.eval_on_selector_all("#dSteps button", "els => els.map(e => e.textContent.trim())")
     if labels != ["Rotate", "Our serve", "Receive", "Attack"]:
         fail(f"{tag} drill step chips read {labels}")
-    pg.evaluate("window.scrollTo(0, 0)")
+    if pg.get_attribute("#dOpts", "open") is not None:
+        fail(f"{tag} Drill options open on arrival")
+    summary = pg.inner_text("#dOptSum")
+    if summary != "All steps · Show: Nobody":
+        fail(f"{tag} the Drill options summary reads {summary!r}")
+    open_fold(pg, "#dOpts")
+    pg.locator("#dSteps").scroll_into_view_if_needed()
     view = pg.evaluate("[innerWidth, innerHeight]")
     boxes = pg.eval_on_selector_all(
         "#dSteps button",
@@ -548,23 +576,19 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
     if len({round(b[1]) for b in boxes}) != 1:
         fail(f"{tag} drill step chips wrap onto more than one row: {boxes}")
     for x, y, w, h in boxes:
-        if w < 44 or h < 44 or x < 0 or x + w > view[0] or y + h > view[1]:
+        if w < 44 or h < 44 or x < 0 or x + w > view[0] or y < 0 or y + h > view[1]:
             fail(f"{tag} drill step chip {x, y, w, h} under 44 px or off the {view} screen")
     if pg.evaluate(
         "[...document.querySelectorAll('#dSteps, #dSteps button')].some(e => e.scrollWidth > e.clientWidth)"
     ):
         fail(f"{tag} drill step chip text overflows its chip")
-    picker = pg.locator("#dSteps").bounding_box()
-    court = pg.locator("#courtD").bounding_box()
-    off = pg.locator("#offBtn").bounding_box()
-    assert picker and court and off
-    if picker["y"] + picker["height"] > court["y"] or picker["y"] + picker["height"] > off["y"]:
-        fail(f"{tag} drill steps picker {picker} covers the court {court} or the buttons {off}")
     check_page(pg, f"{tag} drill steps")
     for step in ["serve", "rec", "ar"]:
         pg.tap(f'#dSteps [data-s="{step}"]')
     if drill_picked(pg) != ["start"] or pg.get_attribute('#dSteps [data-s="start"]', "aria-disabled") != "true":
         fail(f"{tag} drill steps after switching three off: {drill_picked(pg)}")
+    if pg.inner_text("#dOptSum") != "Rotate · Show: Nobody":
+        fail(f"{tag} the Drill options summary reads {pg.inner_text('#dOptSum')!r} with only Rotate")
     look = (
         "e => { const c = getComputedStyle(e);"
         " return [c.outlineStyle, c.outlineWidth, c.outlineColor, c.boxShadow, c.borderColor, c.backgroundColor]; }"
@@ -615,13 +639,20 @@ def check_drill_steps(browser: Browser, tag: str) -> None:
 BOX_JS = "els => els.map(e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; })"
 # Selector of each tap target, and whether its width must be 44 px too.
 TARGETS = {
-    "drill": [('.vis[data-vis="drill"] button', False), ("#dName button", True), ("#nbDrillCheck", False)],
+    "drill": [
+        ('.vis[data-vis="drill"] button', False),
+        ("#dName button", True),
+        ("#nbDrillCheck", False),
+        ("#offBtn", True),
+        ("#nextBtn", True),
+    ],
     "game": [
         ('.visbox .vis[data-vis="game"] button', False),
         ("#gOpts .steps label", False),
         ("#nbGameCheck", False),
         ("#setGameCheck", False),
         (".scoring > summary", False),
+        ("#gStart", True),
     ],
     "sets": [("#setchips button", False)],
 }
@@ -646,9 +677,10 @@ def check_targets(pg: Page, tag: str) -> None:
 
 
 def check_learn_fit(browser: Browser, tag: str, quick: bool) -> None:
-    """At 390 x 664 every Learn screen opens with all markers above the sticky Next row, which is in view.
+    """At 390 x 664 every Learn screen arrives with the court and the caption's first line above the sticky Next row.
 
-    The quick sweep checks one role; your ring is the only marker that changes with the role.
+    The rotation chips stay in view. The quick sweep checks one role; your ring is the only marker that changes
+    with the role.
     """
     section("LEARN fit 390 x 664 and tap targets")
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
@@ -662,7 +694,13 @@ def check_learn_fit(browser: Browser, tag: str, quick: bool) -> None:
     fit = """() => { const row = document.querySelector('.lctl').getBoundingClientRect();
       const marks = [...document.querySelectorAll('#courtL .mk circle:not(.hit)')]
         .map(e => [e.closest('.mk').dataset.p, e.getBoundingClientRect().bottom]);
-      return [row.top, row.bottom, marks]; }"""
+      const m = document.getElementById('courtL').getScreenCTM();
+      const cap = document.getElementById('lCap');
+      const lh = parseFloat(getComputedStyle(cap).lineHeight);
+      const line = cap.textContent.trim() ? cap.getBoundingClientRect().top + lh : 0;
+      const rots = document.getElementById('rots').getBoundingClientRect().top;
+      return [row.top, row.bottom, marks, m.d * 112.5 + m.f, line, rots]; }"""
+    pg.click('.rot[data-i="5"]')
     for mode in RULES:
         pick_rules(pg, mode)
         for role in ["OH1"] if quick else MODE_ROLES[mode]:
@@ -671,11 +709,15 @@ def check_learn_fit(browser: Browser, tag: str, quick: bool) -> None:
                 for phase in STEPS:
                     pg.click(f'.rot[data-i="{ri}"]')
                     pg.click(f'.ph[data-k="{phase}"]')
-                    pg.evaluate("window.scrollTo(0, 0)")
-                    top, bottom, marks = pg.evaluate(fit)
+                    top, bottom, marks, pill, line, rots = pg.evaluate(fit)
                     low = [p for p, b in marks if b > top]
+                    where = f"{tag} {mode} {role} R{ri + 1} {phase}"
                     if low or not marks or bottom > 664:
-                        fail(f"{tag} {mode} {role} R{ri + 1} {phase}: {low} under the Next row at {top:.0f} px")
+                        fail(f"{where}: {low} under the Next row at {top:.0f} px")
+                    if pill > top + 0.5 or line > top + 0.5 or rots < 0:
+                        fail(
+                            f"{where}: court {pill:.0f}, caption line {line:.0f}, Next row {top:.0f}, chips {rots:.0f}"
+                        )
     check_targets(pg, tag + " 390 x 664")
     ctx.close()
     ctx = browser.new_context(viewport={"width": 1280, "height": 800})
@@ -687,6 +729,123 @@ def check_learn_fit(browser: Browser, tag: str, quick: bool) -> None:
     pg.goto(URL)
     wait_ready(pg)
     check_targets(pg, tag + " 1280 x 800")
+    ctx.close()
+
+
+IN_VIEW_JS = """(sel) => { const r = document.querySelector(sel).getBoundingClientRect();
+  return r.height > 0 && r.top >= -0.5 && r.bottom <= innerHeight + 0.5; }"""
+
+
+def in_view(pg: Page, *sels: str) -> list[str]:
+    """The selectors of `sels` not wholly on screen."""
+    return [sel for sel in sels if not pg.evaluate(IN_VIEW_JS, sel)]
+
+
+def check_answered(pg: Page, ctx: str, row: str, next_: str, fb: str, nb: str, hidden: list[str]) -> None:
+    """After Continue: Next in view and locked for a moment, the verdict on screen, the row sticky, checks optional."""
+    if pg.text_content(next_) == "Continue":
+        fail(f"{ctx}: the primary button still reads Continue after scoring")
+    if pg.get_attribute(next_, "aria-disabled") != "true":
+        fail(f"{ctx}: {next_} is not locked right after scoring")
+    if in_view(pg, next_) or pg.locator(fb).bounding_box() is None:
+        fail(f"{ctx}: {in_view(pg, next_)} out of view after scoring")
+    box = pg.locator(fb).bounding_box()
+    if box and box["y"] + min(box["height"], 40) > 664:
+        fail(f"{ctx}: the verdict starts at {box['y']:.0f} px, below the 664 px screen")
+    if "sticky" not in (pg.get_attribute(row, "class") or ""):
+        fail(f"{ctx}: the action row is not sticky after scoring")
+    for sel in hidden:
+        if pg.is_visible(sel):
+            fail(f"{ctx}: {sel} still shown after scoring")
+    if pg.locator(f"{nb} .hint").count() and "press Next" not in pg.inner_text(f"{nb} .hint"):
+        fail(f"{ctx}: the optional check hint reads {pg.inner_text(f'{nb} .hint')!r}")
+    pg.mouse.wheel(0, 900)
+    pg.wait_for_timeout(150)
+    if in_view(pg, next_):
+        fail(f"{ctx}: Next scrolled out of view after scoring")
+    pg.mouse.wheel(0, -2000)
+    pg.wait_for_timeout(150)
+    if in_view(pg, next_):
+        fail(f"{ctx}: Next scrolled out of view above the feedback")
+
+
+def check_answer_fit(browser: Browser, tag: str) -> None:
+    """At 390 x 664 Drill and Match show the whole court and Continue while answering, and Next after scoring.
+
+    A court tap only places your spot; Continue scores and reads Next, locked for 400 ms against a double tap.
+    """
+    section("DRILL and MATCH fit 390 x 664")
+    ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
+    ctx.add_init_script(
+        "if (!localStorage.getItem('ksv51:role')) {"
+        " localStorage.setItem('ksv51:role', '\"OH1\"');"
+        " localStorage.setItem('ksv51:officialReset', '\"1\"');"
+        ' localStorage.setItem(\'ksv51:drillSteps\', \'["serve", "rec", "ar"]\'); }'
+    )
+    pg = ctx.new_page()
+    errs: list[str] = []
+    pg.on("pageerror", collect_errors(errs))
+    pg.goto(URL)
+    wait_ready(pg)
+    pg.click("#tabDrill")
+    open_fold(pg, "#dOpts")
+    if not pg.is_checked("#nbDrill"):
+        pg.click("#nbDrill")
+    pg.click("#dOpts > summary")
+    pg.evaluate("window.scrollTo(0, 0)")
+    for n in range(6):
+        ctx_n = f"{tag} drill {n + 1} {pg.inner_text('#dq')}"
+        if in_view(pg, "#drill .prompt", "#courtD", "#nextBtn", "#offBtn"):
+            fail(f"{ctx_n}: {in_view(pg, '#drill .prompt', '#courtD', '#nextBtn', '#offBtn')} out of view")
+        if pg.text_content("#nextBtn") != "Continue" or pg.is_enabled("#nextBtn"):
+            fail(f"{ctx_n}: the primary button reads {pg.inner_text('#nextBtn')!r} and is usable before a pick")
+        stats = pg.evaluate("localStorage.getItem('ksv51:stats2')")
+        tap_spot(pg, 0.3, 0.6)
+        tap_spot(pg, 0.6 if n % 2 else 0.5, 0.5)
+        if pg.locator("#courtD g.myspot").count() != 1 or verdict(pg):
+            fail(f"{ctx_n}: two taps did not leave one placed spot and no verdict")
+        if pg.evaluate("localStorage.getItem('ksv51:stats2')") != stats or not pg.is_enabled("#nextBtn"):
+            fail(f"{ctx_n}: a court tap scored, or Continue stayed disabled")
+        pg.click("#offBtn")
+        if pg.get_attribute("#offBtn", "aria-pressed") != "true" or pg.locator("#courtD g.myspot").count():
+            fail(f"{ctx_n}: I'm off court is not pressed, or your spot stays")
+        if n % 2 == 0:
+            pg.click("#offBtn")
+            if pg.get_attribute("#offBtn", "aria-pressed") != "false" or pg.is_enabled("#nextBtn"):
+                fail(f"{ctx_n}: a second tap on I'm off court did not clear the pick")
+            tap_spot(pg, 0.5, 0.5)
+        question = pg.inner_text("#dq")
+        pg.click("#nextBtn")
+        pg.evaluate("document.getElementById('nextBtn').click()")
+        if pg.inner_text("#dq") != question or not verdict(pg):
+            fail(f"{ctx_n}: a double tap on Continue skipped the feedback")
+        check_answered(pg, ctx_n, "#dActs", "#nextBtn", "#fb", "#dnb", ["#offBtn"])
+        pg.click("#nextBtn")
+    pg.click("#tabGame")
+    pg.click("#gStart")
+    for n in range(8):
+        if pg.is_visible("#gEnd"):
+            break
+        ctx_n = f"{tag} match {n + 1} {pg.inner_text('#gStepName')}"
+        if in_view(pg, "#gPlay .prompt", "#courtG", "#gNext"):
+            fail(f"{ctx_n}: {in_view(pg, '#gPlay .prompt', '#courtG', '#gNext')} out of view")
+        if "sticky" in (pg.get_attribute("#gActs", "class") or ""):
+            fail(f"{ctx_n}: the action row is sticky while answering")
+        for i in range(8):
+            if pg.is_enabled("#gNext"):
+                break
+            box = pg.locator("#courtG").bounding_box()
+            assert box is not None
+            pg.mouse.click(box["x"] + box["width"] * (0.15 + 0.14 * i), box["y"] + box["height"] * 0.55)
+        pg.click("#gNext")
+        check_answered(pg, ctx_n, "#gActs", "#gNext", "#gFb", "#gNbBox", ["#gOff", "#gHelp"])
+        pg.click("#gNext")
+    for sel in ("#gNext", "#gQuit"):
+        box = pg.locator(sel).bounding_box()
+        if box and (box["height"] < 44 or box["width"] < 44):
+            fail(f"{tag} tap target {sel} is {box['width']:.0f} x {box['height']:.0f} px")
+    if errs:
+        fail(f"{tag} answer fit JS errors: {errs[:3]}")
     ctx.close()
 
 
@@ -832,7 +991,7 @@ def drill_miss(pg: Page) -> None:
             tap_spot(pg, 0.1 + 0.2 * (i % 5), 0.93)
         pg.click("#nextBtn")
     else:
-        pg.click("#offBtn")
+        drill_off(pg)
     pg.click("#nextBtn")
 
 
@@ -963,7 +1122,7 @@ def check_drill_rotate(browser: Browser, tag: str, quick: bool) -> None:
     pg.goto(URL)
     wait_ready(pg)
     pg.click("#tabDrill")
-    pg.click('.vis[data-vis="drill"] button[data-v="all"]')
+    drill_vis(pg, "all")
     if pg.get_attribute('#dName [data-n="h"]', "aria-checked") != "true":
         fail(f"{tag} Rotate names do not default to H")
     open_fold(pg, "#dOpts")
@@ -1171,7 +1330,7 @@ def check_drill_middles(browser: Browser, tag: str, quick: bool) -> None:
     for _ in range(4):
         if "You are" in pg.inner_text("#dq"):
             fail(f"{tag} Mine names the middle: {pg.inner_text('#dq')!r}")
-        pg.click("#offBtn")
+        drill_off(pg)
         pg.click("#nextBtn")
     pg.click('#dMiddles [data-m="both"]')
     if pg.evaluate("localStorage.getItem('ksv51:drillMiddles')") != '"both"':
@@ -1191,7 +1350,7 @@ def check_drill_middles(browser: Browser, tag: str, quick: bool) -> None:
         asked.add(middle)
         key = f"{middle}|{ri}|rec"
         before = pg.evaluate(f"(JSON.parse(localStorage.getItem('ksv51:stats2') || '{{}}'))['{key}'] || null")
-        pg.click("#offBtn")
+        drill_off(pg)
         after = pg.evaluate(f"(JSON.parse(localStorage.getItem('ksv51:stats2') || '{{}}'))['{key}'] || null")
         old = before or {"ok": 0, "miss": 0}
         if not after or after["ok"] + after["miss"] != old["ok"] + old["miss"] + 1:
@@ -1252,7 +1411,7 @@ def check_drill_h_names(browser: Browser, tag: str) -> None:
     pg.goto(URL)
     wait_ready(pg)
     pg.click("#tabDrill")
-    pg.click('.vis[data-vis="drill"] button[data-v="all"]')
+    drill_vis(pg, "all")
     seen: set[str] = set()
     for rm in RULES:
         pick_rules(pg, rm)
@@ -1401,7 +1560,7 @@ def check_persistence(pg: Page, tag: str) -> None:
     pick_rules(pg, "official")
     pick_role(pg, "OP")
     pg.click("#tabDrill")
-    pg.click('.vis[data-vis="drill"] button[data-v="ref"]')
+    drill_vis(pg, "ref")
     pg.reload()
     wait_ready(pg)
     if pg.get_attribute('.role[data-r="OP"]', "aria-pressed") != "true":
@@ -1448,6 +1607,7 @@ def main() -> None:
         check_drill_steps(b, tag)
         check_drill_reset(b, tag)
         check_learn_fit(b, tag, args.quick)
+        check_answer_fit(b, tag)
         check_zones(b, tag)
         check_drill_rotate(b, tag, args.quick)
         check_drill_h_names(b, tag)

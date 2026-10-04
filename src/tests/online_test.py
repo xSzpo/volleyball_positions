@@ -450,6 +450,7 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
             assert "neighbour question" in guest.inner_text("#wText"), "pending player not told to continue"
             rejoin(guest, code)
             guest.wait_for_selector("#gWait", state="visible", timeout=20000)
+            assert guest.is_hidden("#gOff") and guest.is_hidden("#gHelp"), "Off court or Help shown after a rejoin"
             answer(host, "OH1", i)
             host.wait_for_selector("#gReveal", state="visible", timeout=4000)
             print("rejoin during the neighbour check marks the answer done")

@@ -44,7 +44,9 @@ def is_posthog(url: str) -> bool:
 
 def use_app(page: Page) -> None:
     page.click("#tabDrill")
-    page.click("#courtD", position={"x": 100, "y": 100})
+    page.click("#offBtn")
+    if page.is_enabled("#nextBtn"):
+        page.click("#nextBtn")
     page.click("#tabSets")
     page.locator("#setanswers button").first.click()
     page.click("#tabGame")

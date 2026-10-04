@@ -292,7 +292,7 @@ def court_point(page: Page, court: str) -> tuple[float, float]:
 
 
 def tap_court_with_list_open(page: Page, court: str) -> None:
-    page.locator(court).scroll_into_view_if_needed()
+    page.locator(court).evaluate("e => e.scrollIntoView({ block: 'start' })")
     open_setup(page)
     x, y = court_point(page, court)
     page.mouse.click(x, y)
@@ -302,6 +302,7 @@ def check_outside_tap(page: Page) -> None:
     """A tap on the Drill or Match court that closes the role list does not answer."""
     open_app(page, "?anim=0", {"role": "OH1"})
     page.click("#tabDrill")
+    page.click("#dOpts > summary")
     stats = page.evaluate("localStorage.getItem('ksv51:stats2')")
     court = page.inner_html("#courtD")
     tap_court_with_list_open(page, "#courtD")

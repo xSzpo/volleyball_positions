@@ -658,6 +658,18 @@
       .ttag {
         margin-bottom: 4px;
       }
+      .card:has(> .prompt) {
+        padding-top: 8px;
+      }
+      .prompt {
+        margin-bottom: 6px;
+      }
+      .prompt .sub {
+        line-height: 1.25;
+      }
+      #dActs {
+        margin-top: 6px;
+      }
     }
     svg.court,
     svg.netsvg {
@@ -953,6 +965,7 @@
         sans-serif;
       text-transform: uppercase;
       letter-spacing: 0.02em;
+      min-height: 44px;
       cursor: pointer;
     }
     .btn.primary {
@@ -1766,6 +1779,10 @@
       padding: 8px 0;
       margin-bottom: -8px;
     }
+    #dActs.sticky,
+    #gActs.sticky {
+      top: 0;
+    }
     .bd {
       margin: 4px 0 0;
       font-size: 14px;
@@ -2070,38 +2087,51 @@
               <span class="sronly" id="dResetNote" role="status"></span>
             </div>
           </div>
-          <div class="vis dsteps" id="dSteps" role="group" aria-label="Steps to drill">
-            <span class="vislabel">Train</span>
-          </div>
-          <div class="vis " role="radiogroup" aria-label="Who to show on court" data-vis="drill">
-            <span class="vislabel">Show on court</span>
-            <button type="button" role="radio" aria-checked="false" data-v="none">Nobody</button
-            ><button type="button" role="radio" aria-checked="false" data-v="ref" class="refbtn">
-              Setter
-            </button><button type="button" role="radio" aria-checked="false" data-v="all">
-              Everyone
-            </button>
-          </div>
           <svg
             class="court"
             id="courtD"
             viewBox="-4 -14 108 127"
             aria-label="Tap where you stand"
           ></svg>
-          <div id="dNbBox"></div>
-          <div class="row">
-            <button type="button" class="btn" id="offBtn">I'm off court</button>
-            <button type="button" class="btn primary" id="nextBtn" hidden>Next</button>
+          <div class="row" id="dActs">
+            <button type="button" class="btn primary" id="nextBtn" disabled>Continue</button>
+            <button type="button" class="btn" id="offBtn" aria-pressed="false">
+              I'm off court
+            </button>
           </div>
           <div class="watch" id="dWatch" hidden></div>
           <div class="fb" id="fb"></div>
+          <div id="dNbBox"></div>
           <div class="weak" id="weak"></div>
           <div class="row" id="reviewRow">
             <button type="button" class="btn" id="reviewBtn" hidden>Review weak spots</button>
           </div>
           <details class="fold inner" id="dOpts">
-            <summary>Drill options</summary>
+            <summary>Drill options <small id="dOptSum"></small></summary>
             <div class="foldbody">
+              <div class="vis dsteps" id="dSteps" role="group" aria-label="Steps to drill">
+                <span class="vislabel">Train</span>
+              </div>
+              <div
+                class="vis "
+                role="radiogroup"
+                aria-label="Who to show on court"
+                data-vis="drill"
+              >
+                <span class="vislabel">Show on court</span>
+                <button type="button" role="radio" aria-checked="false" data-v="none">Nobody</button
+                ><button
+                  type="button"
+                  role="radio"
+                  aria-checked="false"
+                  data-v="ref"
+                  class="refbtn"
+                >
+                  Setter
+                </button><button type="button" role="radio" aria-checked="false" data-v="all">
+                  Everyone
+                </button>
+              </div>
               <label class="check" id="nbDrillCheck"
                 ><input type="checkbox" id="nbDrill">
                 Neighbour check (who stands next to you) in reception</label
@@ -2360,7 +2390,6 @@
             viewBox="-4 -14 108 127"
             aria-label="Tap where you stand"
           ></svg>
-          <div id="gNbBox"></div>
           <div class="row" id="gActs">
             <button type="button" class="btn primary" id="gNext" disabled>Continue</button>
             <button type="button" class="btn" id="gOff" aria-pressed="false">I'm off court</button>
@@ -2369,6 +2398,7 @@
           </div>
           <div class="watch" id="gWatch" hidden></div>
           <div class="fb" id="gFb"></div>
+          <div id="gNbBox"></div>
           <div id="gWait" hidden>
             <p class="hint" id="wText"></p>
             <div class="row">
@@ -3604,8 +3634,23 @@
         phase = nextPhase;
         renderLearn();
         if (!changed) return;
+        learnArrive();
         fadeCourt();
         nudgePlay();
+      }
+      // A phone court cannot fit under the tabs with its controls and caption: scroll the chips to the
+      // top only as far as the caption's first line needs to clear the sticky Next row.
+      function learnArrive() {
+        if ($("learn").hidden) return;
+        const cap = $("lCap");
+        const line = parseFloat(getComputedStyle(cap).lineHeight) || 22;
+        const end = cap.textContent.trim()
+          ? cap.getBoundingClientRect().top + line
+          : $("lPanel").getBoundingClientRect().bottom;
+        const down = end - (innerHeight - $("lCtl").offsetHeight - 4),
+          top = $("rots").getBoundingClientRect().top - 4;
+        const dy = top < 0 ? top : Math.max(0, Math.min(down, top));
+        if (dy) scrollBy(0, dy);
       }
       $("lNext").onclick = () => {
         const at = PHASES.findIndex(([k]) => k === phase);
@@ -4409,6 +4454,11 @@
         return out;
       }
       const numbered = (list) => `<ol>${list.map((c) => `<li>${c}</li>`).join("")}</ol>`;
+      // Before a Rotation play, the caption says where you stand and the reason: the setter's zone.
+      function rotationWhy(ri) {
+        const d = describe(ri, "start", role);
+        return `<b>You (${role}):</b> ${d.t}. ${d.d.split(". ")[0].replace(/\.$/, "")}.`;
+      }
       function captionHtml(ri, phase, tr) {
         const still = restCaption(ri, phase, role);
         const list = tr.stages.map((st) => stageCaption(st, role));
@@ -4419,6 +4469,7 @@
           return [still, line].filter(Boolean).join("<br>");
         }
         if (animated()) {
+          if (tr.build && !still) return rotationWhy(ri);
           if (restList !== `${rulesMode}|${ri}|${phase}` || !list.length) return still;
           return `${still}<div class="then"><b>Then:</b>${numbered(list)}</div>`;
         }
@@ -5211,6 +5262,7 @@
         document.querySelectorAll(".refbtn").forEach((b) => {
           b.textContent = role === "S" ? "Opposite" : "Setter";
         });
+        dOptText();
         if ($("gVisSub")) gVisText();
       }
       let visDrill = store.get("visDrill", "none"),
@@ -5242,6 +5294,7 @@
         visDrill = v;
         store.set("visDrill", v);
         drawVis("drill", v);
+        dOptText();
         if (cur) drawDrill(lastTap);
       }
       function setVisGame(v) {
@@ -5294,8 +5347,8 @@
         if (!a || !b) return "";
         return `<line x1="${a.x * W}" y1="${a.y * H}" x2="${b.x * W}" y2="${b.y * H}" stroke="var(--accent)" stroke-width="1.3" stroke-dasharray="0.1 2.4" stroke-linecap="round"/>`;
       }
-      function nbHtml(nq, id) {
-        return `<div class="nbq" id="${id}"><b>Neighbour check</b> <span class="hint">optional bonus: answer, or just press Next</span><p style="margin:2px 0 0">${nq.q}</p><div class="opts">${nq.opts.map((p) => `<button type="button" data-p="${p}">${p}</button>`).join("")}</div></div>`;
+      function nbHtml(nq, id, next) {
+        return `<div class="nbq" id="${id}"><b>Neighbour check</b> <span class="hint">optional bonus: answer, or just press ${esc(next)}</span><p style="margin:2px 0 0">${nq.q}</p><div class="opts">${nq.opts.map((p) => `<button type="button" data-p="${p}">${p}</button>`).join("")}</div></div>`;
       }
       function nbMark(id, nq, choice) {
         const box = $(id);
@@ -5334,6 +5387,8 @@
         score = store.get("score2", { ok: 0, n: 0 }),
         streak = 0,
         lastTap = null,
+        dTap = null,
+        dOff = false,
         dLimits = false,
         review = null,
         dNb = null;
@@ -5356,6 +5411,14 @@
             b.setAttribute("aria-pressed", on);
             b.setAttribute("aria-disabled", on && drillPick.length === 1);
           });
+        dOptText();
+      }
+      function dOptText() {
+        const steps =
+          drillPick.length === STEP_ORDER.length
+            ? "All steps"
+            : drillPick.map((k) => STEP_SHORT[k]).join(", ");
+        $("dOptSum").textContent = `${steps} · Show: ${visName(visDrill, role)}`;
       }
       $("dSteps").insertAdjacentHTML(
         "beforeend",
@@ -5552,8 +5615,6 @@
         const ok = grades.every((o) => o.g === "right");
         record(ok);
         $("dsub").textContent = "Dots are your taps; the markers stand where they should.";
-        $("nextBtn").textContent = "Next";
-        $("nextBtn").disabled = false;
         drawDrill();
         feedback(ok ? "good" : "bad", ok ? "Spot on" : "Not there");
         $("fb").insertAdjacentHTML(
@@ -5565,6 +5626,7 @@
       }
       function rotRefresh() {
         $("dsub").textContent = rotPrompt(rot);
+        $("offBtn").setAttribute("aria-pressed", String(rot.off));
         $("nextBtn").disabled = !!rotNext(rot);
         drawDrill();
       }
@@ -5599,9 +5661,9 @@
         return s;
       }
       const ROT_HINT =
-        '<p class="hint">Place each marker in turn; tap a placed one to move it. If the libero is in for you, press “I\'m off court”.</p>';
+        '<p class="hint">Place each marker in turn; tap a placed one to move it. Then press Continue. If the libero is in for you, press “I\'m off court”.</p>';
       const HINT =
-        '<p class="hint">Tap the court where you stand. If the libero is in for you, press “I\'m off court”.</p>';
+        '<p class="hint">Tap the court where you stand, then press Continue. If the libero is in for you, press “I\'m off court”.</p>';
       function weakKeys() {
         const out = [];
         for (const k in stats) {
@@ -5634,10 +5696,15 @@
         watchClose($("dWatch"));
         rot = null;
         lastTap = null;
+        dTap = null;
+        dOff = false;
         dLimits = false;
         dNb = null;
         $("dNbBox").innerHTML = "";
+        $("dActs").classList.remove("sticky");
+        $("offBtn").setAttribute("aria-pressed", "false");
         $("nextBtn").disabled = false;
+        $("nextBtn").removeAttribute("aria-disabled");
         delete $("nextBtn").dataset.label;
         $("courtD").style.display = "";
         if (review) {
@@ -5652,8 +5719,8 @@
             // No empty court: Back to drill and the pictures of the review come up instead.
             $("courtD").innerHTML = "";
             $("courtD").style.display = "none";
+            $("offBtn").hidden = true;
             $("offBtn").disabled = true;
-            $("nextBtn").hidden = false;
             $("nextBtn").textContent = "Back to drill";
             $("fb").className = "fb good";
             $("fb").innerHTML =
@@ -5698,9 +5765,9 @@
             cur.role,
             drillName === "mixed" ? (Math.random() < 0.5 ? "h" : "r") : drillName,
           );
-        $("nextBtn").hidden = !rot;
-        $("nextBtn").textContent = rot ? "Continue" : "Next";
-        $("nextBtn").disabled = !!rot;
+        $("nextBtn").textContent = "Continue";
+        $("nextBtn").disabled = true;
+        $("offBtn").hidden = false;
         $("offBtn").disabled = false;
         $("dq").textContent =
           `${review ? `Review ${review.i + 1}/${review.queue.length} · ` : ""}${rot ? rot.name : hName(cur.ri)} · ${FULL[cur.phase]}${cur.role !== role || drillRoles().length > 1 ? ` · You are ${cur.role}` : ""}`;
@@ -5710,6 +5777,7 @@
         $("fb").innerHTML = rot ? ROT_HINT : HINT;
         drawDrill();
         updateScore();
+        if (!$("drill").hidden) answerFit($("drill").querySelector(".prompt"), $("nextBtn"));
       }
       function drawDrill(tap) {
         watchYield($("courtD"));
@@ -5719,10 +5787,10 @@
           return;
         }
         const pl = answerSpots(cur.ri, cur.phase, cur.role);
-        let s = DEFS + courtBase(answered && !pl.some((o) => o.p === cur.role));
+        let s = DEFS + courtBase(answered ? !pl.some((o) => o.p === cur.role) : dOff);
         if (answered && cur.phase === "ar") s += arLayer(cur.ri, pl, cur.role);
         if (answered && cur.phase === "serve") s += serveLayer(cur.ri, pl, cur.role);
-        if (!answered && cur.phase === "ar") s += fromLayer(cur.ri, cur.role, null, "d");
+        if (!answered && cur.phase === "ar") s += fromLayer(cur.ri, cur.role, dTap, "d");
         if (answered && cur.phase === "ar" && tap) {
           const a = players(cur.ri, "rec").find((o) => o.p === cur.role);
           if (a) s += fromTap(a, tap);
@@ -5738,6 +5806,7 @@
             small: !answered && visDrill === "ref",
           });
         });
+        if (!answered && dTap) s += mySpot(dTap);
         if (answered && dNb?.done) s += nbLayer(pl, cur.role, dNb.a);
         if (answered && dLimits) s += limitsLayer(cur.ri, cur.role);
         if (answered)
@@ -5773,7 +5842,10 @@
         store.set("lastPractice", Date.now());
         answered = true;
         glideStart();
-        $("nextBtn").hidden = false;
+        $("dActs").classList.add("sticky");
+        $("nextBtn").textContent = "Next";
+        $("nextBtn").disabled = false;
+        $("offBtn").hidden = true;
         $("offBtn").disabled = true;
         $("nextBtn").focus({ preventScroll: true });
         updateScore();
@@ -5802,8 +5874,7 @@
           if (nq) {
             dNb = nq;
             nbLock("nextBtn", true);
-            $("dNbBox").innerHTML = nbHtml(nq, "dnb");
-            $("dnb").scrollIntoView({ block: "nearest", behavior: "smooth" });
+            $("dNbBox").innerHTML = nbHtml(nq, "dnb", $("nextBtn").textContent);
             $("dnb")
               .querySelectorAll("button")
               .forEach((b) => {
@@ -5826,6 +5897,31 @@
         $("fb").insertAdjacentHTML("beforeend", limitsHtml(cur.ri, cur.role, when));
       }
       const onPill = (p) => p.x <= 44 && p.y >= 102.5 && p.y <= 112.5;
+      function mySpot(tap) {
+        return `<g class="myspot"><circle cx="${tap.x * W}" cy="${tap.y * H}" r="3.7" fill="var(--accent)" stroke="var(--marker-edge)" stroke-width="0.6"/><text x="${tap.x * W}" y="${tap.y * H - 5.2}" text-anchor="middle" font-size="3.8" font-weight="700" fill="var(--net-label)" font-family="Barlow,sans-serif">your spot</text></g>`;
+      }
+      function rendered(el) {
+        return el.getClientRects().length > 0;
+      }
+      // The question and its Continue button in view together, scrolling as little as possible.
+      function answerFit(top, bottom) {
+        if (!rendered(top) || !rendered(bottom)) return;
+        const above = top.getBoundingClientRect().top - 8,
+          below = bottom.getBoundingClientRect().bottom + 8 - innerHeight;
+        const dy = above < 0 ? above : below > 0 ? Math.min(above, below) : 0;
+        if (dy) scrollBy(0, dy);
+      }
+
+      // The verdict's first lines in view under the action row, which never leaves the top.
+      function verdictFit(row, fb) {
+        if (!rendered(fb)) return;
+        const f = fb.getBoundingClientRect();
+        const dy = Math.min(
+          f.top + Math.min(f.height, 110) + 8 - innerHeight,
+          row.getBoundingClientRect().top,
+        );
+        if (dy > 0) scrollBy(0, dy);
+      }
       function svgPoint(svg, e) {
         const pt = svg.createSVGPoint();
         pt.x = e.clientX;
@@ -5841,8 +5937,25 @@
           rotTap(rot, tap);
           return rotRefresh();
         }
+        dPick(tap);
+      });
+      function dPick(tap) {
+        dTap = tap;
+        dOff = !tap;
+        $("offBtn").setAttribute("aria-pressed", String(dOff));
+        $("nextBtn").disabled = false;
+        drawDrill();
+      }
+      function dScore() {
+        const tap = dOff ? null : dTap;
         lastTap = tap;
         const me = answerSpots(cur.ri, cur.phase, cur.role).find((o) => o.p === cur.role);
+        if (!tap) {
+          record(!me);
+          drawDrill();
+          feedback(me ? "bad" : "good", me ? "No, you are on court" : "Right, you are off");
+          return;
+        }
         if (!me) {
           record(false);
           drawDrill(tap);
@@ -5850,38 +5963,42 @@
           return;
         }
         const dist = Math.hypot(tap.x - me.x, (tap.y - me.y) * 0.67);
-        if (dist < 0.14) {
-          record(true);
-          drawDrill(tap);
-          feedback("good", "Spot on");
-        } else if (dist < 0.24) {
-          record(true);
-          drawDrill(tap);
-          feedback("close", "Close enough, fine-tune it");
-        } else {
-          record(false);
-          drawDrill(tap);
-          feedback("bad", "Not there");
-        }
-      });
+        const grade = dist < 0.14 ? "good" : dist < 0.24 ? "close" : "bad";
+        record(grade !== "bad");
+        drawDrill(tap);
+        feedback(
+          grade,
+          { good: "Spot on", close: "Close enough, fine-tune it", bad: "Not there" }[grade],
+        );
+      }
       $("offBtn").onclick = () => {
-        if (answered) return;
+        if (answered || !cur) return;
         if (rot) {
           rotOff(rot);
           return rotRefresh();
         }
-        const me = answerSpots(cur.ri, cur.phase, cur.role).find((o) => o.p === cur.role);
-        if (!me) {
-          record(true);
-          drawDrill();
-          feedback("good", "Right, you are off");
-        } else {
-          record(false);
-          drawDrill();
-          feedback("bad", "No, you are on court");
+        if (dOff) {
+          dOff = false;
+          $("offBtn").setAttribute("aria-pressed", "false");
+          $("nextBtn").disabled = true;
+          return drawDrill();
         }
+        dPick(null);
       };
-      $("nextBtn").onclick = () => (rot && !answered ? rotScore() : newQuestion());
+      $("nextBtn").onclick = () => {
+        const next = $("nextBtn");
+        if (cur && !answered) {
+          if (rot ? rotNext(rot) : !(dTap || dOff)) return;
+          rot ? rotScore() : dScore();
+          verdictFit($("dActs"), $("fb"));
+          // The same button scores and moves on; a double tap must not skip the feedback.
+          next.setAttribute("aria-disabled", "true");
+          setTimeout(() => next.removeAttribute("aria-disabled"), 400);
+          return;
+        }
+        if (next.hasAttribute("aria-disabled")) return;
+        newQuestion();
+      };
       $("reviewBtn").onclick = startReview;
       const RESET_ARM_MS = 3000,
         RESET_NOTE_MS = 2000;
@@ -6116,8 +6233,8 @@
         const rest = shuffle(others.filter((s) => s !== near)).slice(0, 2);
         return { ask, opts: shuffle([ask, near, ...rest]), who, done: false };
       }
-      function setHtml(q) {
-        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press Next</span><p style="margin:2px 0 0">${{ setter: "You set this ball. What is the call?", hitter: "The setter sets this ball for you. What is the call?", other: "The setter sets this ball. What is the call?" }[q.who]}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false, plain: true })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
+      function setHtml(q, next) {
+        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press ${esc(next)}</span><p style="margin:2px 0 0">${{ setter: "You set this ball. What is the call?", hitter: "The setter sets this ball for you. What is the call?", other: "The setter sets this ball. What is the call?" }[q.who]}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false, plain: true })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
       }
       function setMark(q, pick) {
         const ok = pick === q.ask[0];
@@ -6517,8 +6634,10 @@
         $("gScore").textContent = G.score;
         $("gStreak").textContent = G.streak;
         $("gOff").disabled = false;
+        $("gOff").hidden = false;
         $("gOff").setAttribute("aria-pressed", "false");
         $("gHelp").disabled = false;
+        $("gHelp").hidden = false;
         $("gHelp").textContent = "Help";
         $("gNext").hidden = false;
         $("gNext").disabled = true;
@@ -6531,6 +6650,7 @@
           : '<p class="hint">Tap the court where you stand, then press Continue. If the libero is in for you, press “I\'m off court”.</p>';
         if (G.rot) gRotRefresh();
         else gDraw();
+        answerFit($("gPlay").querySelector(".prompt"), $("gNext"));
         G.t0 = performance.now();
         gSave();
       }
@@ -6575,8 +6695,7 @@
         });
         if (shown && G.nb?.done) s += nbLayer(pl, G.role, G.nb.a);
         if (shown && st.phase === "rec" && (!G.nb || G.nb.done)) s += limitsLayer(st.ri, G.role);
-        if (!G.answered && G.tap)
-          s += `<g class="myspot"><circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="3.7" fill="var(--accent)" stroke="var(--marker-edge)" stroke-width="0.6"/><text x="${G.tap.x * W}" y="${G.tap.y * H - 5.2}" text-anchor="middle" font-size="3.8" font-weight="700" fill="var(--net-label)" font-family="Barlow,sans-serif">your spot</text></g>`;
+        if (!G.answered && G.tap) s += mySpot(G.tap);
         if (G.answered && (G.mp || G.online) && G.tap)
           s += `<circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="2.3" fill="var(--net-label)" opacity=".8"/>`;
         if (shown) {
@@ -6761,6 +6880,8 @@
         if (G.rot) $("gAsk").textContent = "";
         $("gOff").disabled = true;
         $("gHelp").disabled = true;
+        $("gOff").hidden = true;
+        $("gHelp").hidden = true;
         $("gNext").hidden = false;
         $("gNext").disabled = false;
         $("gNext").textContent = G.mp
@@ -6778,8 +6899,7 @@
           if (nq) {
             G.nb = nq;
             nbLock("gNext", true);
-            $("gNbBox").innerHTML = nbHtml(nq, "gnb");
-            $("gnb").scrollIntoView({ block: "nearest", behavior: "smooth" });
+            $("gNbBox").innerHTML = nbHtml(nq, "gnb", $("gNext").textContent);
             $("gnb")
               .querySelectorAll("button")
               .forEach((b) => {
@@ -6817,19 +6937,19 @@
           const sq = setQ(st.ri, G.role);
           if (sq) {
             G.sc = sq;
-            $("gNbBox").innerHTML = setHtml(sq);
+            $("gNbBox").innerHTML = setHtml(sq, $("gNext").textContent);
             $("gsc")
               .querySelectorAll("button")
               .forEach((b) => {
                 b.onclick = () => setAnswer(b);
               });
-            $("gNext").parentElement.scrollIntoView({ block: "end", behavior: "smooth" });
           }
         }
         if (st.phase === "rec" && !G.mp && !G.online && !G.nb)
           $("gFb").insertAdjacentHTML("beforeend", limitsHtml(st.ri, G.role, true));
         if (!G.mp && !G.online) gBdRender();
         gDraw();
+        verdictFit($("gActs"), $("gFb"));
         if (G.online) onAnswered();
       }
       function gPick(tap) {
@@ -8354,8 +8474,8 @@
         G.tap = a.tap;
         if (G.rot) $("gAsk").textContent = "";
         $("gNext").hidden = true;
-        $("gOff").disabled = true;
-        $("gHelp").disabled = true;
+        $("gOff").hidden = true;
+        $("gHelp").hidden = true;
         $("gFb").className = "fb";
         $("gFb").innerHTML = ON_SAVED;
         gDraw();
