@@ -577,6 +577,11 @@ def persistent_room(host: Page, guest: Page, emulator_db: str, code: str) -> Non
     assert "PERMISSION_DENIED" in denied.upper(), f"the host could set a guest's score: {denied}"
     print("Back to lobby resets the room for both")
 
+    small = guest.eval_on_selector_all(
+        "#lList .lroles button",
+        "els => els.map(e => e.getBoundingClientRect()).filter(r => r.width < 44 || r.height < 44).length",
+    )
+    assert not small, f"{small} lobby role buttons under 44 x 44 px"
     guest.click('#lList .lroles button[data-r="OH2"]')
     host.wait_for_function("document.getElementById('lList').textContent.includes('Outside 2')")
     assert guest.evaluate("JSON.parse(localStorage.getItem('ksv51:role'))") == "OH2", "lobby role not stored"

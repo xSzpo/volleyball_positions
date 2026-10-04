@@ -1016,7 +1016,7 @@ def check_breakdown(browser: Browser) -> None:
                     f'#gnb button[data-p="{want}"]' if right else f'#gnb button:not([data-p="{want}"])'
                 ).first.click()
                 marked = page.inner_text("#gnb")
-                if "From the server's first movement you may move." not in marked or "serve is made" in marked:
+                if "From the server's first movement you may move freely." not in marked or "serve is made" in marked:
                     fail(f"neighbour feedback does not give the whistle timing: {marked!r}")
             if page.locator("#gsc").count():
                 want = asked_set(page)
@@ -2044,7 +2044,7 @@ def check_common_mistakes(browser: Browser) -> None:
             ("rec",),
             "?anim=0",
             [
-                (0.3, 0.73, "Overlap fault: at the whistle you must stand right of MB."),
+                (0.3, 0.73, "Overlap fault: at the referee's whistle you must stand right of MB."),
                 (0.84, 0.72, ""),
                 (None, None, "Only the libero goes off, while MB serves"),
             ],

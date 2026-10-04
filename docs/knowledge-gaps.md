@@ -1260,3 +1260,43 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** A tap carries the player's initial; when two players share an initial, each carries their number in the list instead, and the list shows it after the name ("Player 1 (1)").
 - **Alternatives:** always the number; two letters.
 - **Reversible by:** `tapKeys()` in `src/template.html`.
+
+### 164. Several-choice chips get a tick box, one-choice rows are joined segments
+
+- **Issue:** none (usability audit, wording and taps, 2026-10-04)
+- **Problem:** The Drill steps chips (pick any) looked like Show on court, Rotate names, Middle and the Rules switch (pick one): separate chips with the chosen ones filled, so nothing told you whether a tap adds or replaces.
+- **Decision:** The Drill steps chips stay apart, unfilled, with a small box that shows a tick on the accent fill when the step is on. One-choice rows (Show on court, Rotate names, Middle, the Rules switch) are one joined bar with exactly the chosen segment filled and no tick. The Match options steps and order stay native checkboxes and radio buttons in the accent colour; the Learn speed toggle (1×/0.5×) stays a single toggle button.
+- **Alternatives:** a tick on every chosen chip; native checkboxes for the Drill steps.
+- **Reversible by:** the `.dsteps button`, `.vis[role="radiogroup"]` and `.rulesmode` rules in `src/template.html`.
+
+### 165. Drill and Match option labels say what the option does
+
+- **Issue:** none (usability audit, wording and taps, 2026-10-04)
+- **Problem:** Some option labels named a feature, not what it does ("Neighbour check (who stands next to you) in reception", "Set call check after the pass", "Rotate names", "Middle", "Train").
+- **Decision:** "Steps to drill", "Ask who stands next to you at Receive", "Ask the set call after the pass, +30 points", "Show zone numbers on the court", "Name the rotation as", "Middle to drill". Each label sits on its own line above its choices, so no row breaks at 390 px.
+- **Alternatives:** keep the names and add a help line under each.
+- **Reversible by:** the option labels in `src/template.html`.
+
+### 166. The overlap texts say "referee's whistle" and "move freely"
+
+- **Issue:** none (rules audit, wording and taps, 2026-10-04)
+- **Problem:** `WHISTLE_MOVE`, `OVERLAP_WHEN` and the overlap Common mistake worded the moment differently, and the overlap rule of thumb still said "(from 1 October 2026)" after that date.
+- **Decision:** The rule texts name the referee's whistle (the short texts, the rule of thumb, the neighbour questions and the Match hint, keep "at the whistle"); `WHISTLE_MOVE` is "From the server's first movement you may move freely."; at the Rotation step while we serve, "you may stand anywhere in your court"; the overlap Common mistake reads "Overlap fault: at the referee's whistle you must stand …". The date is gone from the rule of thumb.
+- **Alternatives:** keep the date until the end of the season.
+- **Reversible by:** `WHISTLE_MOVE`, `OVERLAP_WHEN`, `MISTAKES.overlap` and `THUMB` in `src/template.html`.
+
+### 167. The libero rule cites 19.3.1.3 and the finger-set rule says "overhand finger pass"
+
+- **Issue:** none (rules audit, wording and taps, 2026-10-04)
+- **Problem:** `LIBERO_RULE` cited FIVB 19.3 for "may not serve", and `FINGER_SET` did not use the rule book's wording for the finger set.
+- **Decision:** "The libero may not serve (19.3.1.3), …" and "If you make an overhand finger pass in the front zone, nobody may attack that ball above the net."
+- **Alternatives:** cite only 19.3; "set with your fingers".
+- **Reversible by:** `LIBERO_RULE` and `FINGER_SET` in `src/template.html`.
+
+### 168. Every tap target on the setup screens is at least 44 px
+
+- **Issue:** none (usability audit, wording and taps, 2026-10-04)
+- **Problem:** At 390 × 664 the same-device player name fields, role selects and remove buttons, the online name and code fields, and the lobby role buttons were under 44 px.
+- **Decision:** They are all at least 44 px high, the remove button 44 × 44. The Continue/Next rule needed no change: every primary button reads Continue before scoring and Next (or its end label) after, and every hint names the button as it reads then.
+- **Alternatives:** none.
+- **Reversible by:** the `.mprow`, `.onrow` and `.lroles` rules in `src/template.html`.
