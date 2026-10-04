@@ -4,7 +4,7 @@ Walks every role, rotation and step of both rule sets with the Next button and
 checks the cue, the overlap boundary lines and when they count (at the
 whistle, from 1 October 2026), the Our serve rule text, that Next stays in
 view on a phone, the Simplified MB and L texts, the Official walk-through table of
-docs/v2.md and the Official libero rules.
+docs/v2.md, the middle cycle line in the cue and the Official libero rules.
 
 Usage: python src/tests/learn_test.py
 """
@@ -445,6 +445,31 @@ def check_middle_cycle(page: Page) -> None:
         fail("simple: the Official middle cycle rule of thumb is listed")
 
 
+def check_learn_cycle(page: Page) -> None:
+    """An Official MB1 or MB2 sees its cycle step under the Learn cue on every screen; nobody else does."""
+    from qa import cycle_step
+
+    for middle in ("MB1", "MB2"):
+        open_app(page, {"role": middle, "rulesMode": "official"})
+        for ri in range(6):
+            page.click(f'.rot[data-i="{ri}"]')
+            for phase in PHASES:
+                page.click(f'.ph[data-k="{phase}"]')
+                step = cycle_step(middle, ri, "rec" if phase == "ar" else phase)
+                want = f"Your cycle: 4, 3, 2, serve, off, off — you are at {step}."
+                lines = page.locator("#cue .cycle").all_inner_texts()
+                if lines != [want]:
+                    fail(f"official {middle} R{ri + 1} {phase}: the cue cycle line reads {lines}, expected {want!r}")
+    for mode, role in (("official", "OH1"), ("official", "L"), ("simple", "MB")):
+        open_app(page, {"role": role, "rulesMode": mode})
+        for ri in range(6):
+            page.click(f'.rot[data-i="{ri}"]')
+            for phase in PHASES:
+                page.click(f'.ph[data-k="{phase}"]')
+                if page.locator("#cue .cycle").count():
+                    fail(f"{mode} {role} R{ri + 1} {phase}: the cue shows a middle cycle line")
+
+
 def check_rotation_names(page: Page) -> None:
     """Rotations are named with the Danish H in the table and the rotation chips, and Rules of thumb explain it."""
     for mode, roles in MODES.items():
@@ -693,10 +718,12 @@ def check_title_ball(page: Page) -> None:
 
 
 def check_role_text(page: Page) -> None:
-    """Below 480 px the role button shows the role code and the rules initial; from 480 px the full names."""
+    """Below 480 px the role button shows the role code over the rules name; from 480 px the full names."""
     for width, rules, want in (
-        (479, "simple", "OP · S"),
-        (479, "official", "MB1 · O"),
+        (479, "simple", "OP Simplified"),
+        (360, "simple", "OP Simplified"),
+        (479, "official", "MB1 Official"),
+        (360, "official", "MB1 Official"),
         (480, "simple", "Opposite · Simplified"),
         (480, "official", "Middle 1 · Official"),
     ):
@@ -729,6 +756,7 @@ def main() -> None:
         check_texts(page)
         check_rules_of_thumb(page)
         check_middle_cycle(page)
+        check_learn_cycle(page)
         check_rotation_names(page)
         check_table_off(page)
         check_official_walkthrough(page)

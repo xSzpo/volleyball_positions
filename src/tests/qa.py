@@ -122,6 +122,60 @@ def menu_open(pg: Page) -> bool:
     return pg.is_visible("#setupPanel") and pg.get_attribute("#roleChip", "aria-expanded") == "true"
 
 
+def check_first_list(pg: Page, tag: str) -> None:
+    """First visit: the Rules switch above the roles in view, no role ticked, and Close keeps the list asking."""
+    if pg.text_content("#setupTitle") != "Pick your role":
+        fail(f"{tag} first visit: the list title is {pg.text_content('#setupTitle')!r}")
+    if pg.locator(".role[aria-pressed='true']").count():
+        fail(f"{tag} first visit: a role is ticked before any pick")
+    rules = pg.locator(".rulesmode").bounding_box()
+    first_role = pg.locator(".role >> nth=0").bounding_box()
+    if (
+        not pg.is_visible(".rulesmode")
+        or rules is None
+        or first_role is None
+        or rules["y"] + rules["height"] > first_role["y"]
+        or rules["y"] + rules["height"] > pg.evaluate("innerHeight")
+    ):
+        fail(f"{tag} first visit: the Rules switch is not in view above the roles: {rules}, {first_role}")
+    close = pg.locator("#setupClose").bounding_box()
+    if not pg.is_visible("#setupClose") or close is None or close["height"] < 44:
+        fail(f"{tag} first visit: no 44 px Close: {close}")
+    pg.click("#setupClose")
+    if pg.is_visible("#setupPanel") or pg.evaluate("document.activeElement.id") != "roleChip":
+        fail(f"{tag} Close did not close the list and focus the button")
+    if pg.evaluate("localStorage.getItem('ksv51:role')") is not None:
+        fail(f"{tag} Close stored a role")
+    pg.click("#roleChip")
+    if not pg.is_visible("#setupNudge") or pg.locator(".role[aria-pressed='true']").count():
+        fail(f"{tag} after Close the list no longer asks for a role")
+    pg.keyboard.press("Escape")
+    if pg.is_visible("#setupPanel"):
+        fail(f"{tag} first visit: Escape did not close the list")
+    pg.click("#roleChip")
+    pg.mouse.click(5, 5)
+    if pg.is_visible("#setupPanel"):
+        fail(f"{tag} first visit: a tap outside did not close the list")
+    pg.click("#roleChip")
+    for mode in ("simple", "official"):
+        pg.click(f'.rulesmode [data-rm="{mode}"]')
+        if not pg.is_visible("#setupNudge") or pg.locator("#rulesNote").inner_text():
+            fail(f"{tag} first visit: a rules pick closed the list or spoke before a role was picked")
+
+
+def check_rules_note(pg: Page, tag: str) -> None:
+    """A rules pick says in one status line what changed for your role, until the next tap."""
+    note = pg.locator("#rulesNote")
+    if note.get_attribute("role") != "status" or not note.is_visible():
+        fail(f"{tag} no rules note after a rules pick")
+    text = note.inner_text()
+    if not text.startswith("Simplified:") or "MB" not in text:
+        fail(f"{tag} rules note reads {text!r}")
+    pg.mouse.click(5, 5)
+    if note.is_visible() or note.inner_text():
+        fail(f"{tag} the rules note stayed after the next tap")
+
+
 def check_header(pg: Page, tag: str) -> None:
     """The role and rules list unrolls under the header button.
 
@@ -129,10 +183,9 @@ def check_header(pg: Page, tag: str) -> None:
     """
     if not menu_open(pg) or not pg.is_visible("#setupNudge"):
         fail(f"{tag} first visit: role list not open with nudge")
-    if pg.is_visible(".rulesmode"):
-        fail(f"{tag} first visit: the role list has more than one job")
     if not pg.is_visible("#subtitle"):
         fail(f"{tag} first visit: subtitle hidden")
+    check_first_list(pg, tag)
     pg.click('.role[data-r="OH1"]')
     if pg.is_visible("#setupPanel"):
         fail(f"{tag} role pick did not close the list")
@@ -140,9 +193,14 @@ def check_header(pg: Page, tag: str) -> None:
         pg.get_attribute("#roleChip", "aria-label") or ""
     ):
         fail(f"{tag} role button does not show the role")
-    want = "OH1 · O" if pg.evaluate("innerWidth") < 480 else "Outside 1 · Official"
+    want = "OH1 Official" if pg.evaluate("innerWidth") < 480 else "Outside 1 · Official"
     if " ".join(pg.inner_text("#roleChip").split()) != want:
         fail(f"{tag} role button text is {pg.inner_text('#roleChip')!r}")
+    if (
+        pg.get_attribute(".role[aria-pressed='true']", "data-r") != "OH1"
+        or pg.text_content("#setupTitle") != "Your role"
+    ):
+        fail(f"{tag} after a pick the list does not tick the role or still asks to pick")
     chip = pg.locator("#roleChip").bounding_box()
     assert chip is not None
     if chip["height"] < 44 or chip["height"] > 48:
@@ -186,6 +244,7 @@ def check_header(pg: Page, tag: str) -> None:
         fail(f"{tag} role button label does not name the rules")
     pg.click("#roleChip")
     pg.click('.rulesmode [data-rm="simple"]')
+    check_rules_note(pg, tag)
     pg.click("#roleChip")
     pg.click("#roleChip")
     if pg.is_visible("#setupPanel") or pg.get_attribute("#roleChip", "aria-expanded") != "false":
@@ -209,6 +268,10 @@ def check_header(pg: Page, tag: str) -> None:
     pg.keyboard.press("Tab")
     if pg.evaluate("document.activeElement.dataset.rm") != "simple":
         fail(f"{tag} Tab from Official did not move to Simplified")
+    pg.keyboard.press("Tab")
+    if pg.evaluate("document.activeElement.dataset.r") != pg.get_attribute(".role >> nth=0", "data-r"):
+        fail(f"{tag} Tab from Simplified did not move to the first role")
+    pg.focus(".role >> nth=-1")
     pg.keyboard.press("Tab")
     if pg.is_visible("#setupPanel") or pg.evaluate("document.activeElement.id") != "themeBtn":
         fail(f"{tag} Tab past the list did not close it and move on")
