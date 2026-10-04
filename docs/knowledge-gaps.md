@@ -1164,3 +1164,35 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `flags` now holds two device settings that help when reading a report: `animation` (false with `?anim=0` or reduced motion) and `zones` (the zone numbers shown). The rules stay as they are.
 - **Alternatives:** make `flags` optional in `infra/database.rules.json` and drop it, which breaks reports until the rules are applied; a fixed placeholder such as `{v2: true}`.
 - **Reversible by:** `reportContext()` in `src/template.html`.
+
+### 152. Drill scores on Continue, as Match does
+
+- **Issue:** none (phone usability audit, 2026-10-03)
+- **Problem:** A Drill court tap scored at once, so a slip of the finger on a phone was a miss with no way back, and Drill and Match behaved differently.
+- **Decision:** A court tap only places your spot and a second tap moves it; "I'm off court" is a toggle (`aria-pressed`) that a court tap clears. `#nextBtn` reads Continue, disabled until a pick; Continue scores, then reads Next with `aria-disabled` for 400 ms, so a double tap cannot skip the feedback. "I'm off court" hides after scoring. Rotate still places every marker before Continue. The neighbour check stays optional, and its hint names the visible button ("or press Next").
+- **Alternatives:** keep one-tap scoring with an undo; an "Are you sure?" step.
+- **Reversible by:** `dPick()`, `dScore()` and `record()` in `src/template.html`.
+
+### 153. Drill steps and Show on court live in Drill options
+
+- **Issue:** none (phone usability audit, 2026-10-03)
+- **Problem:** At 390 × 664 the steps picker and Show on court above the Drill court pushed Continue below the screen.
+- **Decision:** Both move into the closed Drill options fold, whose summary says what is set ("All steps · Show: Nobody", or the picked steps, "Rotate · Show: Nobody"). The court and Continue now fit at 390 × 664 and 360 × 640.
+- **Alternatives:** a second, smaller court; a horizontal scroll of chips above the court.
+- **Reversible by:** the `#dOpts` markup and `dOptText()` in `src/template.html`.
+
+### 154. After scoring the Drill and Match button row turns sticky
+
+- **Issue:** none (phone usability audit, 2026-10-03)
+- **Problem:** After an answer the verdict, the checks and Next could sit below the screen, and the neighbour or set call check could look like it blocks Next.
+- **Decision:** While answering the row stays in the flow, so it never covers the court. After scoring it turns sticky at the bottom (`#dActs.sticky`, `#gActs.sticky`), the page scrolls just enough that the verdict starts on screen, the verdict comes before the optional checks, and Match hides "I'm off court" and Help, which do nothing after scoring.
+- **Alternatives:** always sticky (it covered the court's end line while answering); scroll to the bottom of the feedback.
+- **Reversible by:** `verdictFit()`, `answerFit()` and the `.sticky` rules in `src/template.html`.
+
+### 155. Learn scrolls on arrival at a new screen
+
+- **Issue:** none (phone usability audit, 2026-10-03)
+- **Problem:** At 390 × 664 the court's 381 px floor (#10) leaves no room for the chips, court, caption and the sticky Next row together, so the end line (zones 5, 6, 1) and the caption sat under the Next row. #97 decided nothing scrolls on arrival.
+- **Decision:** This reverses #97 for moves between screens: Next, the phase and rotation chips and the arrow keys scroll the page just enough that the court and the caption's first line sit above the Next row, never past the rotation chips (`learnArrive()`). Page load and the Learn tab do not scroll, so the page opens at its top. At rest on Rotation, before a play, the caption gives one line: your zone and why (the setter's zone, `rotationWhy()`). At 360 × 640 the chips stay in view and the caption's first line ends about 18 px under the Next row.
+- **Alternatives:** a smaller court below the 36 px marker floor; scroll on page load too, which hides the header on open.
+- **Reversible by:** `learnArrive()` and `rotationWhy()` in `src/template.html`.

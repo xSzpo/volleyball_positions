@@ -293,6 +293,7 @@ def check_our_serve(browser: Browser) -> None:
     if court_picture(page, "courtD")["ball"]:
         fail("drill our serve draws a ball before the answer, expected none")
     tap_at(page, 0.5, 0.5, court="courtD")
+    page.click("#nextBtn")
     if court_picture(page, "courtD")["ball"]:
         fail("drill our serve feedback draws a ball, expected none")
     page.close()
@@ -1535,6 +1536,7 @@ def check_receive_limits_elsewhere(browser: Browser) -> None:
                 fail(f"{tag}: limit lines before the answer")
             spot = next((x, y) for p, x, y in lineup(ri, rules)["rec"] if p == "OH1")
             tap_at(page, *spot, court="courtD")
+            page.click("#nextBtn")
             want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
             if limit_lines(page, "courtD") != want or "Overlap: stay" not in page.inner_text("#fb"):
                 fail(f"{tag}: {limit_lines(page, 'courtD')} limit lines, Learn draws {want}")
@@ -1557,6 +1559,7 @@ def check_receive_limits_elsewhere(browser: Browser) -> None:
     ri = drill_ri(page.inner_text("#dq"))
     spot = next((x, y) for p, x, y in lineup(ri, "simple")["rec"] if p == "OH1")
     tap_at(page, *spot, court="courtD")
+    page.click("#nextBtn")
     page.wait_for_selector("#dnb button")
     if limit_lines(page, "courtD") or "Overlap: stay" in page.inner_text("#fb"):
         fail("limits drill: shown while the neighbour check is open")
@@ -1640,6 +1643,7 @@ def check_attack_drill(browser: Browser, rules: RulesMode) -> None:
             lands = pass_lands(page, ri)
             spot = lands["OH1"]
             tap_at(page, *spot, court="courtD")
+            page.click("#nextBtn")
             check_tap_line(court_picture(page, "courtD"), rows[ri], "OH1", spot, tag)
             picture = court_picture(page, "courtD")
             check_ball_at_setter(picture, rows[ri], lands, f"{tag} feedback", page, ri, "OH1")
@@ -1688,7 +1692,7 @@ def drill_page(browser: Browser, steps: list[str], query: str = "", reduced: boo
 
 
 def tap_far(page: Page, court: str = "courtD") -> dict[str, Any]:
-    """Taps the court on the other side from your right spot and reads the answer picture in the same task."""
+    """Taps the court on the other side from your right spot, presses Continue and reads the answer in the same task."""
     result: dict[str, Any] = page.evaluate(
         """([id, ri]) => {
             const svg = document.getElementById(id);
@@ -1698,6 +1702,7 @@ def tap_far(page: Page, court: str = "courtD") -> dict[str, Any]:
             const m = svg.getScreenCTM();
             svg.dispatchEvent(new PointerEvent('pointerup', {bubbles: true,
                 clientX: m.a * x * 100 + m.e, clientY: m.d * y * 100 + m.f}));
+            document.getElementById('nextBtn').click();
             const g = svg.querySelector('g.glide');
             const at = g && /translate[(]([-0-9.e]+) ([-0-9.e]+)[)]/.exec(g.getAttribute('transform') || '');
             const next = document.getElementById('nextBtn');
@@ -1800,6 +1805,7 @@ def check_answer_glide(browser: Browser) -> None:
     page.wait_for_timeout(600)
     if glide_shift(page, "courtD") != 0:
         fail(f"glide: marker not on its spot after 600 ms ({glide_shift(page, 'courtD')})")
+    page.click("#nextBtn")
     for _ in range(20):
         if tap_far(page)["on"]:
             break
@@ -1882,6 +1888,7 @@ def check_watch_move(browser: Browser) -> None:
     page.close()
     page = drill_page(browser, ["serve"])
     tap_at(page, 0.5, 0.5, "courtD")
+    page.click("#nextBtn")
     page.wait_for_timeout(200)
     if page.is_visible("#dWatch"):
         fail("watch: offered at Our serve")
