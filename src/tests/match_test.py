@@ -473,6 +473,8 @@ def check_match_rotate(browser: Browser) -> None:
         page.wait_for_selector("#gOff:enabled")
         wrong = ri == 5
         answer_match_rotate(page, ctx, ri, "OH1", wrong)
+        if page.locator("#courtG rect.larea").count() != 1:
+            fail(f"{ctx}: {page.locator('#courtG rect.larea').count()} overlap areas after Continue, expected 1")
         line = page.inner_text("#gBd")
         parts, total = breakdown_total(line)
         if parts != total or "%" in line:

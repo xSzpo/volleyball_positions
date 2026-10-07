@@ -1305,6 +1305,6 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** [#167](https://github.com/xSzpo/volleyball_positions/issues/167) (user report)
 - **Problem:** The overlap limits were only lines from your marker to each partner, so the space you may stand in at the whistle had to be read from several lines.
-- **Decision:** Wherever the limit lines are drawn (Learn Rotation and Reception, Drill and Match Receive after the answer, the reveal), a shaded rectangle (`--limit-area`) under the zone numbers, lines and markers shows where your marker centre may be: across between your row neighbours (else the sidelines), along between your column partner and the net or end line. A limit inside your marker still bounds it. The lines stay, as they name each partner by colour and the caption refers to them.
+- **Decision:** Wherever the limit lines are drawn (Learn Rotation and Reception, Drill and Match Rotate and Receive after the answer, the reveal), a shaded rectangle (`--limit-area`) under the zone numbers, lines and markers shows where your marker centre may be: across between your row neighbours (else the sidelines), along between your column partner and the net or end line. A limit inside your marker still bounds it. The lines stay, as they name each partner by colour and the caption refers to them.
 - **Alternatives:** a toggle between lines and the area; the area only, without lines.
 - **Reversible by:** `area` in `boundLines()` and `withArea()` in `src/template.html`.

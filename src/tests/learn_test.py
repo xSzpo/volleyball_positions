@@ -442,6 +442,53 @@ def check_rules_of_thumb(page: Page) -> None:
             fail(f"{mode} L: the middles rule is not marked as your rule: {mine}")
 
 
+def area_from_data(ri: int, role: str) -> dict[str, float]:
+    """Official Reception area edges for ``role`` from data.py: column partner and row neighbours by lineup."""
+    sys.path.insert(0, str(ROOT / "src"))
+    from data import ROWS
+
+    row = ROWS[ri]
+    spot = {p: (x, y) for p, x, y in row["rec"]}
+    front, back = row["front"], row["back"]
+    line, other = (front, back) if role in front else (back, front)
+    i = line.index(role)
+    edges = {"left": 0.0, "right": 100.0, "front": 0.0, "behind": 100.0}
+    edges["behind" if line is front else "front"] = 100 * spot[other[i]][1]
+    if i > 0:
+        edges["left"] = 100 * spot[line[i - 1]][0]
+    if i < 2:
+        edges["right"] = 100 * spot[line[i + 1]][0]
+    return edges
+
+
+def check_area_from_data(page: Page) -> None:
+    """The Reception area of every Official role in every rotation, against data.py and not the app's partners."""
+    sys.path.insert(0, str(ROOT / "src"))
+    from data import ROWS
+
+    hand = {"left": 7.0, "right": 80.0, "front": 0.0, "behind": 73.0}
+    if any(abs(area_from_data(0, "MB1")[k] - v) > 0.01 for k, v in hand.items()):
+        fail(f"R1 MB1 area from data.py reads {area_from_data(0, 'MB1')}")
+    checked = 0
+    for role in MODES["official"]:
+        open_app(page, {"role": role, "rulesMode": "official"})
+        for ri, row in enumerate(ROWS):
+            if role not in row["front"] + row["back"]:
+                continue
+            learn(page, ri, "rec")
+            area = page.evaluate(STATE)["area"]
+            want = area_from_data(ri, role)
+            drawn = (
+                {"left": area["x"], "right": area["x"] + area["w"], "front": area["y"], "behind": area["y"] + area["h"]}
+                if area
+                else None
+            )
+            if not drawn or any(abs(drawn[k] - want[k]) > 0.01 for k in want):
+                fail(f"official {role} {ROTATION_NAMES[ri]} Reception: area {drawn}, data.py gives {want}")
+            checked += 1
+    print(f"overlap area: {checked} Official Reception areas match data.py", flush=True)
+
+
 def middle_cycle(middle: str) -> tuple[list[str], str]:
     """The H names where a middle is front row (zone 4, 3, 2 in turn) and the one where it serves, from data.py."""
     sys.path.insert(0, str(ROOT / "src"))
@@ -790,6 +837,7 @@ def main() -> None:
         for mode, roles in MODES.items():
             for role in roles:
                 check_walk(page, mode, role)
+        check_area_from_data(page)
         check_reception_animated(page)
         check_pass_tags(page)
         check_next_in_view(page)
