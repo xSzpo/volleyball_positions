@@ -9,6 +9,7 @@ plays all 15.
 
 import argparse
 import itertools
+import json
 import random
 import re
 import sys
@@ -1375,17 +1376,37 @@ def cycle_step(middle: str, ri: int, phase: str) -> str:
     return CYCLE_SERVE_REC if zone == 1 and phase == "rec" else CYCLE_STEP[zone]
 
 
+def seeded_random_js(seed: int) -> str:
+    """An init script that replaces Math.random with mulberry32 from the seed, so the page's picks repeat."""
+    return (
+        f"(() => {{ let a = {seed} >>> 0; Math.random = () => {{"
+        " a = (a + 0x6d2b79f5) >>> 0; let t = a;"
+        " t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);"
+        " return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();"
+    )
+
+
 def check_drill_middles(browser: Browser, tag: str, quick: bool) -> None:
     """Middle: Mine / Both in Drill options for an Official middle: storage, both asked, stats and the cycle line."""
     from data import ROWS
 
     section("DRILL both middles")
+    # Off court is right only where a middle serves, so the weighted picks would drift away from
+    # those items; earlier misses keep them likely and a seeded Math.random makes the run repeat.
+    serving_items = {
+        f"{middle}|{ri}|rec": {"ok": 0, "miss": 3}
+        for middle in ("MB1", "MB2")
+        for ri in range(len(ROWS))
+        if cycle_step(middle, ri, "rec") == CYCLE_SERVE_REC
+    }
     ctx = browser.new_context(viewport={"width": 390, "height": 664}, is_mobile=True, has_touch=True)
+    ctx.add_init_script(seeded_random_js(random.randrange(2**32)))
     ctx.add_init_script(
         "if (!localStorage.getItem('ksv51:role')) {"
         " localStorage.setItem('ksv51:role', '\"MB1\"');"
         " localStorage.setItem('ksv51:rulesMode', '\"official\"');"
         " localStorage.setItem('ksv51:officialReset', '\"1\"');"
+        f" localStorage.setItem('ksv51:stats2', {json.dumps(json.dumps(serving_items))});"
         " localStorage.setItem('ksv51:drillSteps', '[\"rec\"]'); }"
     )
     pg = ctx.new_page()
