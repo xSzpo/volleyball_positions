@@ -151,8 +151,6 @@ def check_row(i: int, mode: RulesMode) -> None:
         expected = r.get("base", {}).get(p, BASE_ZONE[p])
         if expected != z:
             issues.append(f"{tag} serve: {p} at {z}, expected {expected}")
-    if i == 0 and sf != ["OP", "MB" if mode == "simple" else "MB1", "OH1"]:
-        issues.append(f"{tag} serve: OP and OH1 keep their reception sides in R1, front row {sf}")
     if "S" in sb and sb[2] != "S" or "OP" in sb and sb[2] != "OP":
         issues.append(f"{tag} serve: S/OP not in zone 1")
     base = dict(zip([4, 3, 2, 5, 6, 1], sf + sb, strict=True))

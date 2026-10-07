@@ -1143,10 +1143,7 @@ def check_rest_list(page: Page) -> None:
 
 
 def check_path_shapes(page: Page) -> None:
-    """No run turns back, and none is longer than 1.3 times the straight line.
-
-    A front-row side switch behind the middle may be longer.
-    """
+    """No run turns back, and none is longer than 1.3 times the straight line."""
     for mode, roles in MODES.items():
         open_app(page, "", {"role": roles[0], "rulesMode": mode})
         for ri in range(6):
@@ -1160,31 +1157,8 @@ def check_path_shapes(page: Page) -> None:
                         fail(f"{mode} R{ri + 1} {phase} stage {n + 1}: {p} turns back on {path}")
                     straight = math.dist(path[0], path[-1])
                     length = sum(math.hypot(*leg) for leg in legs)
-                    to_base = n == len(stages) - 1
-                    switch = (path[0][0] - 0.5) * (path[-1][0] - 0.5) < 0 and len(path) == 3 and to_base
-                    limit = 1.4 if switch else 1.3
-                    if straight and length > limit * straight + 1e-3:
+                    if straight and length > 1.3 * straight + 1e-3:
                         fail(f"{mode} R{ri + 1} {phase} stage {n + 1}: {p} runs {length:.2f} for {straight:.2f}")
-
-
-def check_switch_behind(page: Page) -> None:
-    """After the spike, a front-row player who switches sides crosses GAP behind the middle."""
-    for mode, roles in MODES.items():
-        open_app(page, "", {"role": roles[0], "rulesMode": mode})
-        for ri in range(6):
-            row = lineup(ri, mode)  # type: ignore[arg-type]
-            middle = next(p for p in row["front"] if p.startswith("MB"))
-            phase = "rec"
-            stage = page.evaluate(f"window.ksvLearn.stages({ri}, '{phase}')")[-1]
-            mid = stage["to"].get(middle) or stage["from"][middle]
-            for p, raw in stage["paths"].items():
-                path = [(q["x"] - mid["x"], q["y"]) for q in raw]
-                if p not in row["front"] or abs(path[0][0]) < 0.2 or path[0][0] * path[-1][0] >= 0:
-                    continue
-                a, b = next((a, b) for a, b in zip(path, path[1:], strict=False) if a[0] * b[0] <= 0)
-                y = a[1] - (b[1] - a[1]) * a[0] / ((b[0] - a[0]) or 1)
-                if y < mid["y"] + GAP:
-                    fail(f"{mode} R{ri + 1} {phase} after the spike: {p} crosses the middle at y {y:.2f}")
 
 
 def check_r1_sides(page: Page) -> None:
@@ -1870,7 +1844,6 @@ def main() -> None:
         check_caption_timing(page)
         check_rest_list(page)
         check_path_shapes(page)
-        check_switch_behind(page)
         check_r1_sides(page)
         check_cross_captions(page)
         check_no_overlap(page)
