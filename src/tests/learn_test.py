@@ -86,7 +86,7 @@ def fail(message: str) -> None:
     print("FAIL:", message, flush=True)
 
 
-def open_app(page: Page, stored: dict[str, str], url: str = URL) -> None:
+def open_app(page: Page, stored: dict[str, Any], url: str = URL) -> None:
     page.goto(url)
     page.evaluate(
         "(s) => { localStorage.clear(); localStorage.setItem('ksv51:officialReset', JSON.stringify('1'));"
@@ -339,6 +339,152 @@ def check_pass_tags(page: Page) -> None:
         fail(f"Reception play from the pass on: {shown} tags still shown")
     page.set_viewport_size({"width": 390, "height": 844})
     print(f"pass tags: three receivers clear of markers, zones, lines and each other on {checked} stills; play")
+
+
+# Zone digit boxes and the overlap lines (with halos and T-bars) of a court, in SVG units.
+ZONE_LINES = """(sel) => {
+  const court = document.querySelector(sel);
+  const zones = [...court.querySelectorAll('g.zones text')].map((t) => {
+    const b = t.getBBox(), base = +t.getAttribute('y'), size = +t.getAttribute('font-size');
+    return { z: +t.textContent, box: [b.x, base - 0.72 * size, b.x + b.width, base] };
+  });
+  const lines = [...court.querySelectorAll('.bnd line')].map((l) => ({
+    a: [+l.getAttribute('x1'), +l.getAttribute('y1')], b: [+l.getAttribute('x2'), +l.getAttribute('y2')],
+    w: +l.getAttribute('stroke-width') / 2 }));
+  return { zones, lines };
+}"""
+# Each zone number's usual spot (x, baseline y) in SVG units, in drawing order 4 3 2 5 6 1.
+HOME_ZONES = [(100 / 6, 39.2), (50, 39.2), (500 / 6, 39.2), (100 / 6, 97.2), (50, 97.2), (500 / 6, 97.2)]
+# Zone -> its area on the court picture (left, front, right, back) in SVG units.
+ZONE_AREA = {
+    4: (0, 0, 100 / 3, 42),
+    3: (100 / 3, 0, 200 / 3, 42),
+    2: (200 / 3, 0, 100, 42),
+    5: (0, 42, 100 / 3, 100),
+    6: (100 / 3, 42, 200 / 3, 100),
+    1: (200 / 3, 42, 100, 100),
+}
+
+
+def zones_clear(page: Page, sel: str, tag: str) -> int:
+    """Fails each zone number an overlap line crosses or that left its zone; returns the number of lines."""
+    got: dict[str, Any] = page.evaluate(ZONE_LINES, sel)
+    if sorted(z["z"] for z in got["zones"]) != [1, 2, 3, 4, 5, 6]:
+        fail(f"{tag}: zone numbers {[z['z'] for z in got['zones']]}")
+    for zone in got["zones"]:
+        box, area = zone["box"], ZONE_AREA[zone["z"]]
+        if box[0] < area[0] or box[1] < area[1] or box[2] > area[2] or box[3] > area[3]:
+            fail(f"{tag}: zone {zone['z']} number outside its zone: {[round(v, 1) for v in box]}")
+        if any(line_in_box(box, line) for line in got["lines"]):
+            fail(f"{tag}: an overlap line crosses the zone {zone['z']} number")
+    return len(got["lines"])
+
+
+def check_zones_clear(page: Page) -> None:
+    """No overlap line crosses a zone number on any Learn Rotation or Reception still, nor on Drill Receive answers."""
+    page.set_viewport_size({"width": 390, "height": 664})
+    stills = answers = 0
+    for mode, roles in MODES.items():
+        for role in roles:
+            open_app(page, {"role": role, "rulesMode": mode})
+            for rotation in range(6):
+                for phase in ("start", "rec"):
+                    learn(page, rotation, phase)
+                    zones_clear(page, "#courtL", f"{mode} {role} {ROTATION_NAMES[rotation]} {PHASE_NAMES[phase]}")
+                    stills += 1
+    page.click("#lZones")
+    if page.get_attribute("#courtL g.zones", "visibility") != "hidden":
+        fail("Zones off: the moved zone numbers still show")
+    page.click("#lZones")
+    page.set_viewport_size({"width": 390, "height": 844})
+    answers = check_zones_answers(page)
+    print(f"zones clear: no overlap line on a zone number on {stills} Learn stills and {answers} answer courts")
+
+
+def zones_moved(page: Page, sel: str) -> list[list[float]]:
+    """The zone numbers of a court as [x, baseline y], in drawing order 4 3 2 5 6 1."""
+    spots: list[list[float]] = page.evaluate(
+        "(sel) => [...document.querySelectorAll(sel + ' g.zones text')]"
+        ".map((t) => [+t.getAttribute('x'), +t.getAttribute('y')])",
+        sel,
+    )
+    return spots
+
+
+def moved_count(spots: list[list[float]]) -> int:
+    return sum(abs(x - hx) > 0.01 or abs(y - hy) > 0.01 for (x, y), (hx, hy) in zip(spots, HOME_ZONES, strict=True))
+
+
+def check_zones_answers(page: Page) -> int:
+    """Drill Receive and Rotate answers, Watch the move and solo Match Receive answers, with Math.random seeded."""
+    from qa import seeded_random_js
+
+    page = page.context.new_page()
+    page.add_init_script(seeded_random_js(170))
+    page.set_viewport_size({"width": 390, "height": 664})
+    url = URL.replace("?anim=0", "")
+    answers = watched = 0
+    for steps, label in ((["rec"], "Receive"), (["start"], "Rotate")):
+        moved = 0
+        open_app(page, {"role": "OP", "rulesMode": "official", "drillSteps": steps, "nbDrill": False}, url)
+        page.click("#tabDrill")
+        for n in range(8):
+            tag = f"Drill {label} answer {n}"
+            if label == "Receive":
+                page.click("#offBtn")
+            else:
+                spot = 0
+                while page.is_disabled("#nextBtn") and spot < 12:
+                    box = page.locator("#courtD").bounding_box()
+                    assert box is not None
+                    page.mouse.click(
+                        box["x"] + box["width"] * (0.15 + 0.14 * (spot % 6)),
+                        box["y"] + box["height"] * (0.3 + 0.25 * (spot // 6)),
+                    )
+                    spot += 1
+            page.click("#nextBtn")
+            zones_clear(page, "#courtD", tag)
+            still = zones_moved(page, "#courtD")
+            moved += moved_count(still)
+            if label == "Receive" and moved_count(still) and page.locator("#dWatch .wbtn").count():
+                page.click("#dWatch .wbtn")
+                page.wait_for_timeout(400)
+                watched += 1
+                if zones_moved(page, "#courtD") != still:
+                    fail(f"{tag}: Watch the move puts the zone numbers back: {zones_moved(page, '#courtD')}")
+            answers += 1
+            page.click("#nextBtn")
+        if not moved:
+            fail(f"Drill {label}: no zone number moved in 8 answers, so the check proves nothing")
+    if not watched:
+        fail("Drill Receive: Watch the move never played on a court with a moved zone number")
+    open_app(
+        page,
+        {
+            "role": "OP",
+            "rulesMode": "official",
+            "gameSteps": {"start": False, "serve": False, "rec": True, "ar": False},
+            "nbGame": False,
+            "setGame": False,
+        },
+        url,
+    )
+    page.click("#tabGame")
+    page.click("#gStart")
+    moved = 0
+    for n in range(6):
+        page.click("#gOff")
+        page.click("#gNext")
+        zones_clear(page, "#courtG", f"Match Receive answer {n}")
+        moved += moved_count(zones_moved(page, "#courtG"))
+        answers += 1
+        page.wait_for_timeout(450)
+        if n < 5:
+            page.click("#gNext")
+    if not moved:
+        fail("Match Receive: no zone number moved in 6 answers, so the check proves nothing")
+    page.close()
+    return answers
 
 
 def check_next_in_view(page: Page) -> None:
@@ -840,6 +986,7 @@ def main() -> None:
         check_area_from_data(page)
         check_reception_animated(page)
         check_pass_tags(page)
+        check_zones_clear(page)
         check_next_in_view(page)
         check_texts(page)
         check_rules_of_thumb(page)
