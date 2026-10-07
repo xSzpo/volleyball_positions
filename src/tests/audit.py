@@ -148,8 +148,9 @@ def check_row(i: int, mode: RulesMode) -> None:
     if set(sf) != set(rotation[:3]):
         issues.append(f"{tag}: serve front row differs from rotation front row")
     for p, z in zip(sf, [4, 3, 2], strict=False):
-        if BASE_ZONE[p] != z:
-            issues.append(f"{tag} serve: {p} at {z}, expected {BASE_ZONE[p]}")
+        expected = r.get("base", {}).get(p, BASE_ZONE[p])
+        if expected != z:
+            issues.append(f"{tag} serve: {p} at {z}, expected {expected}")
     if "S" in sb and sb[2] != "S" or "OP" in sb and sb[2] != "OP":
         issues.append(f"{tag} serve: S/OP not in zone 1")
     base = dict(zip([4, 3, 2, 5, 6, 1], sf + sb, strict=True))

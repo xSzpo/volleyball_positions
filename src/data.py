@@ -5,7 +5,7 @@ The 3 m line sits at y = 0.42 (as drawn in the KSV guide). Reception and
 after-reception positions are measured from KSV_M3.pdf pages 4-9.
 """
 
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 ATTACK_LINE = 0.42
 # The front middle opens for the quick here, in front of the 3 m line: the back-row hitter's lane stays clear.
@@ -26,7 +26,9 @@ class Row(TypedDict):
     """One rotation: lineup, reception, after-reception and serve positions.
 
     `move` holds one Learn caption per player for each phase (serve, rec,
-    ar), written to that player, 78 characters at most.
+    ar), written to that player, 78 characters at most. `base` maps a
+    front-row player whose base defence zone is not the one of their job
+    (OH 4, MB 3, S/OP 2) to the zone they defend instead.
     """
 
     name: str
@@ -39,6 +41,7 @@ class Row(TypedDict):
     serve: tuple[list[str], list[str]]
     note: str
     move: dict[str, dict[str, str]]
+    base: NotRequired[dict[str, int]]
 
 
 ROWS: list[Row] = [
@@ -64,13 +67,14 @@ ROWS: list[Row] = [
             ("OH2", 0.50, 0.86, None),
             ("S", 0.69, 0.10, "set"),
         ],
-        serve=(["OH1", "MB1", "OP"], ["L", "OH2", "S"]),
+        serve=(["OP", "MB1", "OH1"], ["L", "OH2", "S"]),
         note="Setter in 1: the opposite plays left, outside hitter 1 plays right.",
+        base={"OP": 4, "OH1": 2},
         move={
             "serve": {
-                "OH1": "Cross to zone 4: outside hitters block and attack on the left.",
+                "OP": "Stay in zone 4: here the opposite blocks and attacks on the left.",
                 "MB1": "Stay in zone 3, in the middle of the net, ready to block.",
-                "OP": "Cross to zone 2: the opposite blocks and attacks on the right.",
+                "OH1": "Stay in zone 2: here outside hitter 1 blocks and attacks on the right.",
                 "L": "Move to zone 5 and defend deep on the left.",
                 "OH2": "Move to zone 6 and defend deep in the middle.",
                 "S": "Serve from behind the end line, then defend zone 1 until we dig.",
@@ -436,6 +440,7 @@ def lineup(ri: int, mode: RulesMode) -> Row:
         ar=[(name(p), x, y, kind) for p, x, y, kind in row["ar"]],
         serve=([name(p, at_serve) for p in row["serve"][0]], [name(p, at_serve) for p in row["serve"][1]]),
         note=row["note"],
+        base={name(p): z for p, z in row.get("base", {}).items()},
         move={
             phase: {name(p, phase_names(phase)): text for p, text in notes.items()}
             for phase, notes in row["move"].items()

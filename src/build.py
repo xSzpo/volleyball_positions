@@ -38,6 +38,7 @@ def rows(mode: RulesMode) -> list[dict[str, object]]:
                 ar=[list(x) for x in r["ar"]],
                 serve=[r["serve"][0], r["serve"][1]],
                 note=r["note"],
+                base=r.get("base", {}),
                 move=r["move"],
             )
         )

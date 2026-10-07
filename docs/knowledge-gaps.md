@@ -391,7 +391,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** Moves were straight lines of 600 to 900 ms whatever the distance, so long runs went at 10 m/s and markers passed through each other (R1 OP and OH1 at the spike).
 - **Decision:** Each move takes 2.5 s per court width (at least 400 ms), eased in and out over a quarter each, so the top speed is about 4.8 m/s (1 unit = 9 m). A planner places the movers one by one, shortest move first, each with the cheapest start delay (0 to 1.3 s) and path that keeps a marker width plus its ring (`GAP`, 0.14) from everyone at every 15 ms. A path is straight or goes round one player met through one waypoint, 1.3 or 1.7 `GAP` to the side; it never turns back and is at most 1.3 times the straight line. Going round in front costs more than any wait (`NET_SIDE_COST`), so players pass behind each other. After the spike, front-row players who switch sides (R1 OP and OH1) pass behind the middle through fixed waypoints (`SWITCH_VIA`), the one going left deeper, so they cross once. Moves under 0.04 left by a `clearOf()` stop are dropped, except in the last stage, which ends exactly on base defence. A stage lasts as long as its longest move. Reception takes 7.5 to 11 s at 1× including the spike and base defence (since #65; in #55 it stopped at the spike, 6.5 to 8 s), and Base 2 to 4.5 s. The only waits: the setter at the contact in R2 (1 s, entry 43), L after the pass in R1 (0.3 s), OH1 at the spike in R1 (0.15 s), and the setter at the set (0.45 to 0.6 s), so it follows the ball.
 - **Alternatives:** faster runs (5 to 7 m/s, closer to a real sprint but hard to follow); straight lines with waits only; fixed choreographed routes per rotation.
-- **Reversible by:** `MS_PER_UNIT`, `EASE_PART`, `GAP`, `MIN_MOVE`, `DELAYS`, `NET_SIDE_COST`, `SWITCH_VIA`, `detours()` and `planStage()` in `src/template.html`.
+- **Reversible by:** `MS_PER_UNIT`, `EASE_PART`, `GAP`, `MIN_MOVE`, `DELAYS`, `NET_SIDE_COST`, `detours()` and `planStage()` in `src/template.html`.
 
 ### 48. The server runs in at the serve contact
 
@@ -435,7 +435,8 @@ them after deploy; each entry says what to change to reverse it.
 - **Problem:** The guide shows no base spots after our attack. Where the front row waits (at the net, ready to block, or off the net) and whether KSV defends perimeter or rotational is not known.
 - **Decision:** The same `BASE_DEF` spots as at Our serve: front row mid-zone at y 0.21, back row deep, by job (OH 4, MB 3, S/OP 2; S/OP 1, L 5, OH 6). The R1 OP/OH1 side switch at base stays (coach question 11). Coach question 12 on #16.
 - **Alternatives:** front row at the net (y 0.05 to 0.1) ready to block; a rotational defence with the setter's base elsewhere.
-- **Reversible by:** `BASE_DEF` in `src/data.py`, `baseSpots()` and `SWITCH_VIA` in `src/template.html`.
+- **Reversible by:** `BASE_DEF` in `src/data.py`, `baseSpots()` in `src/template.html`.
+- **Changed in #166:** in R1 OP and OH1 keep their sides at base (entry 169).
 
 ### 53. What the Reception rest cue says
 
@@ -745,6 +746,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Build to the current play. A front-row player who passes behind the middle (`SWITCH_VIA`) reads "Cross behind the middle to zone 4: block or defend the next ball." (the zone 4 hitter: "Spike over the net, then cross behind the middle to zone 2."). Any other run to base that changes side of the centre line by more than `CROSS_DX` (0.3) reads "Cross to zone 2: block or defend the next ball." in the front row (the front-row setter in R4 to R6) and "Cross the court to zone 1 and defend while they play the ball." in the back row (the back-row setter in R1 to R3). No L or back-row OH run changes side today, so none of them says "cross".
 - **Alternatives:** name the partner the player crosses with ("switch with OH1"); leave the setter's run uncaptioned as a cross because it starts near the centre.
 - **Reversible by:** `ATTACK_NOTES.base`, `ATTACK_NOTES.hit[1]` and the `cross` map in `buildReception()` in `src/template.html`.
+- **Changed in #166:** R1 OP and OH1 keep their sides (entry 169), so no front-row player switches sides; `SWITCH_VIA` and the "Cross behind the middle" captions are gone.
 
 ### 97. The Learn court at 390 × 664
 
@@ -1300,6 +1302,14 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** They are all at least 44 px high, the remove button 44 × 44. The Continue/Next rule needed no change: every primary button reads Continue before scoring and Next (or its end label) after, and every hint names the button as it reads then.
 - **Alternatives:** none.
 - **Reversible by:** the `.mprow`, `.onrow` and `.lroles` rules in `src/template.html`.
+
+### 169. In R1 the opposite and outside hitter 1 keep their sides at base
+
+- **Issue:** #166 (a user report: the opposite should not change sides in R1)
+- **Problem:** In R1 the guide has the opposite play left and outside hitter 1 play right, but base defence went by job (OH zone 4, S/OP zone 2), so at Our serve, at Base and at the end of the Reception play OP and OH1 crossed sides behind the middle. Entry 52 kept that switch until the coach answers question 11.
+- **Decision:** In R1 only, OP defends zone 4 and OH1 zone 2: the R1 Our serve lineup is OP MB1 OH1 / L OH2 S, and Base and the Reception play end there with no cross for them. It is data: the row's `base` in `src/data.py` overrides the job zone. Coach to confirm on #16 (question 11).
+- **Alternatives:** keep the switch by job (the old behaviour); switch only at the next dead ball.
+- **Reversible by:** removing `base` from R1 and restoring its `serve` lineup and captions in `src/data.py`.
 
 ### 170. The overlap limits shade the area you may stand in
 
