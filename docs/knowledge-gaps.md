@@ -436,6 +436,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The same `BASE_DEF` spots as at Our serve: front row mid-zone at y 0.21, back row deep, by job (OH 4, MB 3, S/OP 2; S/OP 1, L 5, OH 6). The R1 OP/OH1 side switch at base stays (coach question 11). Coach question 12 on #16.
 - **Alternatives:** front row at the net (y 0.05 to 0.1) ready to block; a rotational defence with the setter's base elsewhere.
 - **Reversible by:** `BASE_DEF` in `src/data.py`, `baseSpots()` and `SWITCH_VIA` in `src/template.html`.
+- **Changed in #166:** in R1 OP and OH1 keep their sides at base (entry 169).
 
 ### 53. What the Reception rest cue says
 
@@ -1300,6 +1301,14 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** They are all at least 44 px high, the remove button 44 × 44. The Continue/Next rule needed no change: every primary button reads Continue before scoring and Next (or its end label) after, and every hint names the button as it reads then.
 - **Alternatives:** none.
 - **Reversible by:** the `.mprow`, `.onrow` and `.lroles` rules in `src/template.html`.
+
+### 169. In R1 the opposite and outside hitter 1 keep their sides at base
+
+- **Issue:** #166 (a user report: the opposite should not change sides in R1)
+- **Problem:** In R1 the guide has the opposite play left and outside hitter 1 play right, but base defence went by job (OH zone 4, S/OP zone 2), so at Our serve, at Base and at the end of the Reception play OP and OH1 crossed sides behind the middle. Entry 52 kept that switch until the coach answers question 11.
+- **Decision:** In R1 only, OP defends zone 4 and OH1 zone 2: the R1 Our serve lineup is OP MB1 OH1 / L OH2 S, and Base and the Reception play end there with no cross for them. It is data: the row's `base` in `src/data.py` overrides the job zone. Coach to confirm on #16 (question 11).
+- **Alternatives:** keep the switch by job (the old behaviour); switch only at the next dead ball.
+- **Reversible by:** removing `base` from R1 and restoring its `serve` lineup and captions in `src/data.py`.
 
 ### 170. The overlap limits shade the area you may stand in
 

@@ -3241,7 +3241,8 @@
         deep: "Too deep: your spot is closer to the net.",
         shallow: "Too close to the net: your spot is deeper.",
         start: "Find the setter's zone from the name, then count on in serving order.",
-        serve: "At our serve, go to your base spot: front row by job, back row deep.",
+        serve:
+          "At our serve, go to your base spot: front row in your blocking zone, back row deep.",
         rec: "Find the setter first, then check your overlap partners.",
         ar: "As the pass lands, attackers get ready to approach and covers move in.",
       };
@@ -4059,9 +4060,10 @@
           return { x: o.x + ((pos.x - o.x) * gap) / d, y: o.y + ((pos.y - o.y) * gap) / d };
         }, end);
       }
-      // Base defence by job for the players on court: OH 4, MB 3, S/OP 2 in front; S/OP 1, L 5, OH 6 behind.
+      // Base defence by job for the players on court: OH 4, MB 3, S/OP 2 in front; S/OP 1, L 5, OH 6 behind; a row's `base` overrides.
       function baseSpots(ri, ps) {
         const zoneFor = (p) => {
+          if (ROWS[ri].base[p]) return ROWS[ri].base[p];
           const job = p.replace(/[0-9]/g, "");
           if (isFront(ri, p)) return job === "OH" ? 4 : job === "MB" ? 3 : 2;
           return job === "L" ? 5 : job === "OH" ? 6 : job === "S" || job === "OP" ? 1 : 6;

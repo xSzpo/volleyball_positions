@@ -498,8 +498,10 @@ WALK_LINE = "Against the rotation: Setter, Outside, Middle, Opposite, Outside, M
 HELD = (MARKER_R * 100 + 1 + 0.65 * MARKER_R * 100) / 100
 
 
-def base_zone(p: str, front: bool) -> int:
-    """Base defence by job: OH 4, MB 3, S/OP 2 in the front row; S/OP 1, L 5, OH 6 in the back row."""
+def base_zone(p: str, front: bool, row: Any = None) -> int:
+    """Base defence by job: OH 4, MB 3, S/OP 2 in the front row; S/OP 1, L 5, OH 6 behind; the row's `base` wins."""
+    if row is not None and p in row.get("base", {}):
+        return int(row["base"][p])
     job = p.rstrip("12")
     if front:
         return {"OH": 4, "MB": 3}.get(job, 2)
@@ -518,7 +520,7 @@ def reception_plan(ri: int, mode: str) -> tuple[list[str], dict[str, tuple[float
     # A back-row attacker who does not hit covers instead, and waits out of the passing lanes until the pass.
     release = [p for p in order if kind[p] == "set" or (kind[p] == "front" and p not in RECEIVERS)]
     release = [p for p in release if math.dist(rec[p], ar[p]) >= MIN_MOVE]
-    end = {p: BASE_DEF[base_zone(p, p in row["front"])][:2] for p in order}
+    end = {p: BASE_DEF[base_zone(p, p in row["front"], row)][:2] for p in order}
     return release, end, hitter
 
 
@@ -1185,6 +1187,26 @@ def check_switch_behind(page: Page) -> None:
                     fail(f"{mode} R{ri + 1} {phase} after the spike: {p} crosses the middle at y {y:.2f}")
 
 
+def check_r1_sides(page: Page) -> None:
+    """R1: OP plays left and OH1 right (the guide), with no side switch at Our serve, at Base or after the spike."""
+    for mode, roles in MODES.items():
+        open_app(page, "", {"role": roles[0], "rulesMode": mode})
+        stage = page.evaluate("window.ksvLearn.stages(0, 'rec')")[-1]
+        serve = {o["p"]: o["x"] for o in page.evaluate("window.ksvLearn.players(0, 'serve')")}
+        for p, zone in (("OP", 4), ("OH1", 2)):
+            path = stage["paths"].get(p) or [stage["from"][p], stage["to"][p]]
+            left = path[0]["x"] < 0.5
+            if left != (zone == 4) or any((q["x"] < 0.5) != left for q in path):
+                fail(f"{mode} R1 after the spike: {p} runs {path[0]['x']:.2f} to {path[-1]['x']:.2f}")
+            if "cross" in stage["notes"][p].lower() or f"zone {zone}" not in stage["notes"][p]:
+                fail(f"{mode} R1 after the spike: {p} caption {stage['notes'][p]!r}")
+            still = page.evaluate(f"window.ksvLearn.still(0, 'ar', '{p}')")
+            if f"zone {zone}" not in still or "cross" in still.lower():
+                fail(f"{mode} R1 Base: {p} caption {still!r}")
+            if (serve[p] < 0.5) != (zone == 4):
+                fail(f"{mode} R1 Our serve: {p} at x {serve[p]:.2f}, not in zone {zone}")
+
+
 def check_cross_captions(page: Page) -> None:
     """After the spike, a run to base across the centre line by more than 0.3 is captioned as a cross; no other is."""
     for mode, roles in MODES.items():
@@ -1849,6 +1871,7 @@ def main() -> None:
         check_rest_list(page)
         check_path_shapes(page)
         check_switch_behind(page)
+        check_r1_sides(page)
         check_cross_captions(page)
         check_no_overlap(page)
         check_passer(page)
