@@ -39,6 +39,7 @@
       --halo: rgba(255, 255, 255, 0.85);
       --tag: #ffeca1;
       --tag-ink: #1a1a1a;
+      --limit-area: rgba(255, 255, 255, 0.32);
       --accent: #1d4ed8;
       --accent-ink: #1d4ed8;
       --on-accent: #ffffff;
@@ -91,6 +92,7 @@
       --route-mb: #ff7a5c;
       --route-oh: #7cc24a;
       --route-l: #ffc600;
+      --limit-area: rgba(141, 184, 230, 0.16);
       --accent: #6c9cf5;
       --accent-ink: #6c9cf5;
       --on-accent: #0c1210;
@@ -3161,13 +3163,17 @@
       }
       // Each line runs from your marker to the line a partner sets, in that partner's colour.
       function boundLines(ri, pl, role, phase) {
-        const out = { lines: [], tight: [], segs: [] };
+        const out = { lines: [], tight: [], segs: [], area: "" };
         const me = pl.find((o) => o.p === role);
         if (!me) return out;
         const gap = MARKER_R + 0.5;
+        const box = { left: 0, right: W, behind: H, front: 0 };
+        let bounded = false;
         partners(ri, role, phase).forEach(({ p, side }) => {
           const q = pl.find((o) => o.p === p);
           if (!q) return;
+          bounded = true;
+          box[side] = side === "left" || side === "right" ? q.x * W : q.y * H;
           const vertical = side === "behind" || side === "front";
           const sign = side === "behind" || side === "right" ? 1 : -1;
           const [mx, my, qx, qy] = [me.x * W, me.y * H, q.x * W, q.y * H];
@@ -3184,7 +3190,14 @@
           out.segs.push(seg);
           out.lines.push(route(...seg, p, { cls: "bnd" }));
         });
+        if (bounded)
+          out.area = `<rect class="larea" x="${box.left}" y="${box.front}" width="${box.right - box.left}" height="${box.behind - box.front}" fill="var(--limit-area)" stroke="var(--court-line)" stroke-width="0.4" stroke-dasharray="1.5 1.5" stroke-opacity="0.5" pointer-events="none"/>`;
         return out;
+      }
+      // The area sits under the zone numbers, so it is slid in before them.
+      function withArea(s, { area }) {
+        const at = s.indexOf('<g class="zones"');
+        return at < 0 ? s + area : s.slice(0, at) + area + s.slice(at);
       }
       function limitsSentence(ri, role, phase, { lines, tight }) {
         return `${overlapText(ri, role, phase)}${
@@ -3196,8 +3209,9 @@
         }`;
       }
       // Receive feedback: your limits from your right spot. They answer the neighbour check, so they wait for it.
-      function limitsLayer(ri, role) {
-        return boundLines(ri, players(ri, "rec"), role, "rec").lines.join("");
+      function limitsLayer(s, ri, role) {
+        const b = boundLines(ri, players(ri, "rec"), role, "rec");
+        return withArea(s, b) + b.lines.join("");
       }
       function limitsHtml(ri, role, when) {
         if (!players(ri, "rec").some((o) => o.p === role)) return "";
@@ -3441,6 +3455,7 @@
           return Object.fromEntries(tr.players.map((p) => [p, posAt(tr, p, t)]));
         },
         bounds: (ri, phase) => boundLines(ri, players(ri, phase), role, phase).lines.length,
+        partners: (ri, phase) => partners(ri, role, phase),
         stages: (ri, phase) =>
           phaseStages(ri, phase).stages.map((st) => ({
             moves: Object.keys(st.moves),
@@ -3654,8 +3669,8 @@
         const bounds =
           phase === "start" || phase === "rec"
             ? boundLines(ri, pl, role, phase)
-            : { lines: [], tight: [] };
-        s += bounds.lines.join("");
+            : { lines: [], tight: [], area: "" };
+        s = withArea(s, bounds) + bounds.lines.join("");
         if (me) s += chip(me, { me: true });
         Object.entries(learnPassTags(ri, pl)).forEach(([p, [dx, dy]]) => {
           const o = pl.find((q) => q.p === p);
@@ -4651,7 +4666,7 @@
           restList = `${rulesMode}|${ri}|${phase}`;
           renderLearn();
           $("courtL")
-            .querySelectorAll(".bnd")
+            .querySelectorAll(".bnd, .larea")
             .forEach((el) => {
               el.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_BACK_MS });
             });
@@ -4685,7 +4700,7 @@
           restList = `${rulesMode}|${ri}|${phase}`;
           renderLearn();
           $("courtL")
-            .querySelectorAll(".mk, .bnd")
+            .querySelectorAll(".mk, .bnd, .larea")
             .forEach((el) => {
               el.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_BACK_MS });
             });
@@ -5715,7 +5730,8 @@
         pl.forEach((o) => {
           if (!r.order.includes(o.p)) s += chip(o, { dim: true });
         });
-        s += boundLines(r.ri, pl, me, "start").lines.join("");
+        const b = boundLines(r.ri, pl, me, "start");
+        s = withArea(s, b) + b.lines.join("");
         r.order.forEach((p) => {
           const tap = r.spots[p],
             right = pl.find((o) => o.p === p);
@@ -5877,7 +5893,7 @@
         });
         if (!answered && dTap) s += mySpot(dTap);
         if (answered && dNb?.done) s += nbLayer(pl, cur.role, dNb.a);
-        if (answered && dLimits) s += limitsLayer(cur.ri, cur.role);
+        if (answered && dLimits) s = limitsLayer(s, cur.ri, cur.role);
         if (answered)
           s += answerMe(
             pl.find((o) => o.p === cur.role),
@@ -6763,7 +6779,7 @@
           s += chip(o, { dim: shown || vis === "all", small: !shown && vis === "ref" });
         });
         if (shown && G.nb?.done) s += nbLayer(pl, G.role, G.nb.a);
-        if (shown && st.phase === "rec" && (!G.nb || G.nb.done)) s += limitsLayer(st.ri, G.role);
+        if (shown && st.phase === "rec" && (!G.nb || G.nb.done)) s = limitsLayer(s, st.ri, G.role);
         if (!G.answered && G.tap) s += mySpot(G.tap);
         if (G.answered && (G.mp || G.online) && G.tap)
           s += `<circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="2.3" fill="var(--net-label)" opacity=".8"/>`;
@@ -7463,7 +7479,7 @@
         // One role's limits read clearly; several roles' limits on one court do not.
         if (st.phase === "rec")
           (G.online ? [G.role] : roles.length === 1 ? roles : []).forEach((r) => {
-            s += limitsLayer(st.ri, r);
+            s = limitsLayer(s, st.ri, r);
           });
         roles.forEach((r) => {
           const me = pl.find((o) => o.p === r);

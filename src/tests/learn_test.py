@@ -68,7 +68,14 @@ STATE = """() => {
   const cue = document.querySelector('#cue');
   const title = cue.querySelector('b');
   const mine = court.querySelector('.me-ring circle');
-  return { me: mine ? { x: +mine.getAttribute('cx'), y: +mine.getAttribute('cy') } : null,
+  const rect = court.querySelector('rect.larea');
+  const kids = [...court.children];
+  const at = (el) => kids.indexOf(el.closest('#courtL > *'));
+  const area = rect ? { x: +rect.getAttribute('x'), y: +rect.getAttribute('y'),
+    w: +rect.getAttribute('width'), h: +rect.getAttribute('height'),
+    events: rect.getAttribute('pointer-events'), count: court.querySelectorAll('rect.larea').length,
+    under: [...court.querySelectorAll('g.zones, .mk, .bnd')].every((el) => at(el) > at(rect)) } : null;
+  return { area, me: mine ? { x: +mine.getAttribute('cx'), y: +mine.getAttribute('cy') } : null,
     tag: document.querySelector('#learnTag').textContent, title: title ? title.textContent : '',
     cue: cue.innerText, bounds };
 }"""
@@ -125,6 +132,8 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
     ):
         fail(f"{tag}: Our serve cue lacks the serving-team rule: {state['cue']!r}")
     if phase == "start" and (mode, role, rotation) in SERVING_MIDDLE:
+        if state["area"]:
+            fail(f"{tag}: the serving middle has an overlap area: {state['area']}")
         if not here or state["bounds"] or "Overlap:" in state["cue"] or "no overlap limits" not in state["cue"]:
             fail(f"{tag}: the serving middle should be on court with no limits: {state['cue']!r}, {state['bounds']}")
     elif phase in ("start", "rec") and here:
@@ -132,13 +141,40 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
             fail(f"{tag}: cue does not say when the overlap limits count: {state['cue']!r}")
         alias = OM_LIMIT if (mode, phase) == ("simple", "start") and rotation in (2, 5) else {}
         check_overlap(tag, state, EXPECTED.get((mode, role, rotation, phase)), alias)
+        check_area(page, tag, state, rotation, phase)
         for bound in state["bounds"]:
             if bound["stroke"] != f"var(--route-{ROUTE_KEY[bound['p']]})":
                 fail(f"{tag}: line for {bound['p']} coloured {bound['stroke']}")
             if bound["x1"] != bound["x2"] and bound["y1"] != bound["y2"]:
                 fail(f"{tag}: line for {bound['p']} is not straight along or across the court")
-    elif state["bounds"]:
-        fail(f"{tag}: boundary lines outside Rotation and Reception or off court: {state['bounds']}")
+    elif state["bounds"] or state["area"]:
+        fail(f"{tag}: overlap lines or area outside Rotation and Reception or off court: {state['bounds']}")
+
+
+def check_area(page: Page, tag: str, state: dict[str, Any], rotation: int, phase: str) -> None:
+    """The shaded area runs from each partner's x or y to the next, else to the sideline, net or end line."""
+    area = state["area"]
+    if not area:
+        fail(f"{tag}: no overlap area")
+        return
+    spots = {o["p"]: o for o in page.evaluate(f"window.ksvLearn.players({rotation}, '{phase}')")}
+    edges = {"left": 0.0, "right": 100.0, "front": 0.0, "behind": 100.0}
+    for partner in page.evaluate(f"window.ksvLearn.partners({rotation}, '{phase}')"):
+        spot = spots[partner["p"]]
+        edges[partner["side"]] = 100 * (spot["x"] if partner["side"] in ("left", "right") else spot["y"])
+    drawn = {
+        "left": area["x"],
+        "right": area["x"] + area["w"],
+        "front": area["y"],
+        "behind": area["y"] + area["h"],
+    }
+    if any(abs(drawn[k] - edges[k]) > 0.01 for k in edges):
+        fail(f"{tag}: overlap area {drawn}, expected {edges}")
+    me = state["me"]
+    if me and not (drawn["left"] <= me["x"] <= drawn["right"] and drawn["front"] <= me["y"] <= drawn["behind"]):
+        fail(f"{tag}: your marker is outside the overlap area: {drawn}, me {me}")
+    if area["count"] != 1 or area["events"] != "none" or not area["under"]:
+        fail(f"{tag}: overlap area not one rect under the zone numbers, lines and markers: {area}")
 
 
 def check_overlap(

@@ -1300,3 +1300,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** They are all at least 44 px high, the remove button 44 × 44. The Continue/Next rule needed no change: every primary button reads Continue before scoring and Next (or its end label) after, and every hint names the button as it reads then.
 - **Alternatives:** none.
 - **Reversible by:** the `.mprow`, `.onrow` and `.lroles` rules in `src/template.html`.
+
+### 170. The overlap limits shade the area you may stand in
+
+- **Issue:** [#167](https://github.com/xSzpo/volleyball_positions/issues/167) (user report)
+- **Problem:** The overlap limits were only lines from your marker to each partner, so the space you may stand in at the whistle had to be read from several lines.
+- **Decision:** Wherever the limit lines are drawn (Learn Rotation and Reception, Drill and Match Receive after the answer, the reveal), a shaded rectangle (`--limit-area`) under the zone numbers, lines and markers shows where your marker centre may be: across between your row neighbours (else the sidelines), along between your column partner and the net or end line. A limit inside your marker still bounds it. The lines stay, as they name each partner by colour and the caption refers to them.
+- **Alternatives:** a toggle between lines and the area; the area only, without lines.
+- **Reversible by:** `area` in `boundLines()` and `withArea()` in `src/template.html`.

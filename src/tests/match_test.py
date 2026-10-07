@@ -1477,6 +1477,10 @@ def limit_lines(page: Page, court: str) -> int:
     return int(page.locator(f"#{court} g.bnd").count())
 
 
+def limit_area(page: Page, court: str) -> int:
+    return int(page.locator(f"#{court} rect.larea").count())
+
+
 def check_receive_limits(browser: Browser, rules: RulesMode, role: str) -> None:
     """Receive feedback draws your overlap limits as Learn does, only after the answer and the neighbour check."""
     checked = 0
@@ -1487,13 +1491,15 @@ def check_receive_limits(browser: Browser, rules: RulesMode, role: str) -> None:
         tag = f"limits match {rules} {role} R{ri + 1}"
         page.wait_for_selector("#gOff:enabled")
         tap_spot(page, role, ri, "rec", check=False)
-        if limit_lines(page, "courtG"):
-            fail(f"{tag}: limit lines before the answer")
+        if limit_lines(page, "courtG") or limit_area(page, "courtG"):
+            fail(f"{tag}: limit lines or area before the answer")
         press_next(page)
         want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
         if limit_lines(page, "courtG") != want:
             fail(f"{tag}: {limit_lines(page, 'courtG')} limit lines, Learn draws {want}")
         on_court = any(p == role for p, _, _ in lineup(ri, rules)["rec"])
+        if limit_area(page, "courtG") != on_court:
+            fail(f"{tag}: {limit_area(page, 'courtG')} overlap areas, on court {on_court}")
         if on_court != ("Overlap: stay" in page.inner_text("#gFb")):
             fail(f"{tag}: feedback reads {page.inner_text('#gFb')!r}")
         checked += 1
@@ -1508,11 +1514,13 @@ def check_receive_limits_elsewhere(browser: Browser) -> None:
     setup_match(page, "OH1", ("rec",), neighbour=True)
     page.click("#gStart")
     tap_spot(page, "OH1", 0, "rec")
-    if limit_lines(page, "courtG") or "Overlap: stay" in page.inner_text("#gFb"):
+    if limit_lines(page, "courtG") or limit_area(page, "courtG") or "Overlap: stay" in page.inner_text("#gFb"):
         fail("limits shown while the neighbour check is open")
     page.locator("#gnb button").first.click()
     if limit_lines(page, "courtG") != page.evaluate("() => window.ksvLearn.bounds(0, 'rec')"):
         fail("limits missing after the neighbour check")
+    if limit_area(page, "courtG") != 1:
+        fail("overlap area missing after the neighbour check")
     page.close()
     for rules in RULES_MODES:
         page = new_page(browser, rules)
@@ -1532,14 +1540,16 @@ def check_receive_limits_elsewhere(browser: Browser) -> None:
             ri = drill_ri(question)
             seen.add(ri)
             tag = f"limits drill {rules} R{ri + 1}"
-            if limit_lines(page, "courtD"):
-                fail(f"{tag}: limit lines before the answer")
+            if limit_lines(page, "courtD") or limit_area(page, "courtD"):
+                fail(f"{tag}: limit lines or area before the answer")
             spot = next((x, y) for p, x, y in lineup(ri, rules)["rec"] if p == "OH1")
             tap_at(page, *spot, court="courtD")
             page.click("#nextBtn")
             want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
             if limit_lines(page, "courtD") != want or "Overlap: stay" not in page.inner_text("#fb"):
                 fail(f"{tag}: {limit_lines(page, 'courtD')} limit lines, Learn draws {want}")
+            if limit_area(page, "courtD") != 1:
+                fail(f"{tag}: {limit_area(page, 'courtD')} overlap areas after the answer")
             page.dblclick("#dReset")
         if len(seen) < 6:
             fail(f"limits drill {rules}: Receive came up only in {sorted(seen)}")
@@ -1561,7 +1571,7 @@ def check_receive_limits_elsewhere(browser: Browser) -> None:
     tap_at(page, *spot, court="courtD")
     page.click("#nextBtn")
     page.wait_for_selector("#dnb button")
-    if limit_lines(page, "courtD") or "Overlap: stay" in page.inner_text("#fb"):
+    if limit_lines(page, "courtD") or limit_area(page, "courtD") or "Overlap: stay" in page.inner_text("#fb"):
         fail("limits drill: shown while the neighbour check is open")
     page.locator("#dnb button").first.click()
     want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
