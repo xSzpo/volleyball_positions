@@ -112,6 +112,42 @@ def breakdown_total(line: str) -> tuple[int, int]:
     return subtotal + part(r"Set call: [^+]*\+(\d+)") + part(r"Neighbour: [^+]*\+(\d+)"), int(total.group(1))
 
 
+def one_role_reveal(rules: str) -> None:
+    """Two players with one role: the Receive reveal draws that role's overlap lines and area once."""
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        pg = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True).new_page()
+        pg.add_init_script(SEED_ROLE)
+        pg.add_init_script(SEED_RULES % rules)
+        pg.goto((ROOT / "index.html").as_uri() + "?anim=0")
+        pg.wait_for_timeout(300)
+        pg.click("#tabGame")
+        pg.check('input[name="gPlayers"][value="mp"]')
+        for k in ("0", "1"):
+            pg.select_option(f'#mpList select[data-k="{k}"]', "OH1")
+        if pg.get_attribute("#gOpts", "open") is None:
+            pg.click("#gOpts > summary")
+        for step in ("start", "serve", "rec", "ar"):
+            pg.set_checked(f"#gs-{step}", step == "rec")
+        pg.set_checked("#nbGame", False)
+        pg.click("#gStart")
+        for _ in range(20):
+            if pg.is_visible("#gReveal"):
+                break
+            if pg.is_visible("#gPass"):
+                pg.click("#pReady")
+            elif not pg.is_enabled("#gNext"):
+                pg.click("#gOff")
+            else:
+                press_next(pg)
+        assert pg.is_visible("#gReveal"), "the one-role match never reached the reveal"
+        areas = pg.locator("#courtR rect.larea").count()
+        lines = pg.locator("#courtR g.bnd").count()
+        assert areas == 1 and lines, f"one-role reveal draws {areas} overlap areas and {lines} lines"
+        b.close()
+    print(f"{rules}: one-role reveal draws the overlap area")
+
+
 def play(rules: str) -> None:
     """Plays a same-device match and its rematch under one rule set."""
     random.seed(3)
@@ -183,6 +219,8 @@ def play(rules: str) -> None:
                     assert parts == total == int(found.group(1)), f"reveal breakdown does not add up: {row!r}"
                 assert pg.locator("#rWhy li").count() >= 1, "reveal has no explanation"
                 assert zones_under(pg, "courtR"), "the reveal court has no zone numbers under the markers"
+                areas = pg.locator("#courtR rect.larea").count()
+                assert areas == 0, f"the reveal of three roles draws {areas} overlap areas"
                 if moment_seen and moment_seen.endswith("· Rotation"):
                     grades = pg.locator("#rList .rotgrades").all_inner_texts()
                     assert len(grades) == 3 and all(
@@ -358,3 +396,4 @@ def play(rules: str) -> None:
 
 for rules_mode in ("official", "simple"):
     play(rules_mode)
+    one_role_reveal(rules_mode)

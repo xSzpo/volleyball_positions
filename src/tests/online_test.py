@@ -479,6 +479,8 @@ def main_match(browser: Browser, url: str, emulator_db: str, errors: list[str]) 
                       && g.querySelectorAll('text').length === 6
                       && (!first || !!(g.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING)); }"""
                 ), "the online reveal court has no zone numbers under the markers"
+                areas = page.locator("#courtR rect.larea").count()
+                assert areas == 1, f"the online Receive reveal draws {areas} overlap areas for your role"
         if i == 2:
             rejoin(guest, code)
             check_reveal(guest, expected)
