@@ -86,7 +86,7 @@ def fail(message: str) -> None:
     print("FAIL:", message, flush=True)
 
 
-def open_app(page: Page, stored: dict[str, str], url: str = URL) -> None:
+def open_app(page: Page, stored: dict[str, Any], url: str = URL) -> None:
     page.goto(url)
     page.evaluate(
         "(s) => { localStorage.clear(); localStorage.setItem('ksv51:officialReset', JSON.stringify('1'));"
@@ -339,6 +339,75 @@ def check_pass_tags(page: Page) -> None:
         fail(f"Reception play from the pass on: {shown} tags still shown")
     page.set_viewport_size({"width": 390, "height": 844})
     print(f"pass tags: three receivers clear of markers, zones, lines and each other on {checked} stills; play")
+
+
+# Zone digit boxes and the overlap lines (with halos and T-bars) of a court, in SVG units.
+ZONE_LINES = """(sel) => {
+  const court = document.querySelector(sel);
+  const zones = [...court.querySelectorAll('g.zones text')].map((t) => {
+    const b = t.getBBox(), base = +t.getAttribute('y'), size = +t.getAttribute('font-size');
+    return { z: +t.textContent, box: [b.x, base - 0.72 * size, b.x + b.width, base] };
+  });
+  const lines = [...court.querySelectorAll('.bnd line')].map((l) => ({
+    a: [+l.getAttribute('x1'), +l.getAttribute('y1')], b: [+l.getAttribute('x2'), +l.getAttribute('y2')],
+    w: +l.getAttribute('stroke-width') / 2 }));
+  return { zones, lines };
+}"""
+# Zone -> its area on the court picture (left, front, right, back) in SVG units.
+ZONE_AREA = {
+    4: (0, 0, 100 / 3, 42),
+    3: (100 / 3, 0, 200 / 3, 42),
+    2: (200 / 3, 0, 100, 42),
+    5: (0, 42, 100 / 3, 100),
+    6: (100 / 3, 42, 200 / 3, 100),
+    1: (200 / 3, 42, 100, 100),
+}
+
+
+def zones_clear(page: Page, sel: str, tag: str) -> int:
+    """Fails each zone number an overlap line crosses or that left its zone; returns the number of lines."""
+    got: dict[str, Any] = page.evaluate(ZONE_LINES, sel)
+    if sorted(z["z"] for z in got["zones"]) != [1, 2, 3, 4, 5, 6]:
+        fail(f"{tag}: zone numbers {[z['z'] for z in got['zones']]}")
+    for zone in got["zones"]:
+        box, area = zone["box"], ZONE_AREA[zone["z"]]
+        if box[0] < area[0] or box[1] < area[1] or box[2] > area[2] or box[3] > area[3]:
+            fail(f"{tag}: zone {zone['z']} number outside its zone: {[round(v, 1) for v in box]}")
+        if any(line_in_box(box, line) for line in got["lines"]):
+            fail(f"{tag}: an overlap line crosses the zone {zone['z']} number")
+    return len(got["lines"])
+
+
+def check_zones_clear(page: Page) -> None:
+    """No overlap line crosses a zone number on any Learn Rotation or Reception still, nor on Drill Receive answers."""
+    page.set_viewport_size({"width": 390, "height": 664})
+    stills = answers = 0
+    for mode, roles in MODES.items():
+        for role in roles:
+            open_app(page, {"role": role, "rulesMode": mode})
+            for rotation in range(6):
+                for phase in ("start", "rec"):
+                    learn(page, rotation, phase)
+                    zones_clear(page, "#courtL", f"{mode} {role} {ROTATION_NAMES[rotation]} {PHASE_NAMES[phase]}")
+                    stills += 1
+    page.click("#lZones")
+    if page.get_attribute("#courtL g.zones", "visibility") != "hidden":
+        fail("Zones off: the moved zone numbers still show")
+    page.click("#lZones")
+    drawn = 0
+    for mode, role in (("official", "MB1"), ("simple", "OH2"), ("official", "S"), ("official", "L")):
+        open_app(page, {"role": role, "rulesMode": mode, "drillSteps": ["rec"], "nbDrill": False})
+        page.click("#tabDrill")
+        for n in range(6):
+            page.click("#offBtn")
+            page.click("#nextBtn")
+            drawn += zones_clear(page, "#courtD", f"Drill {mode} {role} answer {n}")
+            answers += 1
+            page.click("#nextBtn")
+    if not drawn:
+        fail("Drill Receive answers: no overlap lines drawn")
+    page.set_viewport_size({"width": 390, "height": 844})
+    print(f"zones clear: no overlap line on a zone number on {stills} Learn stills and {answers} Drill answers")
 
 
 def check_next_in_view(page: Page) -> None:
@@ -840,6 +909,7 @@ def main() -> None:
         check_area_from_data(page)
         check_reception_animated(page)
         check_pass_tags(page)
+        check_zones_clear(page)
         check_next_in_view(page)
         check_texts(page)
         check_rules_of_thumb(page)
