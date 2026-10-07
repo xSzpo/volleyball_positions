@@ -1323,6 +1323,6 @@ them after deploy; each entry says what to change to reverse it.
 
 - **Issue:** [#170](https://github.com/xSzpo/volleyball_positions/issues/170) (user report)
 - **Problem:** A limit line could run through a zone number (Learn R1 (H1) Reception as MB1: the line to L crossed the 3), which then could not be read. The same lines are drawn in Drill, Match and the reveal.
-- **Decision:** Where the limit lines are drawn, a zone number a line crosses moves to the nearest spot inside its zone clear of the lines (sideways first, then a little towards the net), preferring one not under a marker (`zoneSpots()`). With no line across it, a number stays in its usual place. The pass tags keep clear of the numbers where they end up.
+- **Decision:** Where the limit lines are drawn, a zone number a line crosses moves to the nearest spot inside its zone clear of the lines (sideways first, then a little towards the net), preferring one not under a marker (`zoneSpots()`). With no line across it, a number stays in its usual place. A play from that picture (Learn, Watch the move) keeps the numbers where the picture has them. The pass tags keep clear of the numbers where they end up.
 - **Alternatives:** stop the lines short of the numbers; draw the numbers over the lines with a halo; hide a crossed number.
 - **Reversible by:** `zoneSpots()` and `withArea()` in `src/template.html`.

@@ -1781,6 +1781,31 @@ def check_trails_in_play(page: Page) -> None:
         fail(f"trails showed only for stages {sorted(seen)}")
 
 
+ZONE_TEXTS = (
+    "() => [...document.querySelectorAll('#courtL g.zones text')]"
+    ".map((t) => [t.textContent, +t.getAttribute('x'), +t.getAttribute('y')])"
+)
+# Each zone number's usual spot (x, baseline y) in SVG units, in drawing order 4 3 2 5 6 1.
+HOME_ZONES = [(100 / 6, 39.2), (50, 39.2), (500 / 6, 39.2), (100 / 6, 97.2), (50, 97.2), (500 / 6, 97.2)]
+
+
+def check_zones_steady(page: Page) -> None:
+    """Zone numbers moved off the overlap lines on a still stay put through its play, a pause and the fade-back."""
+    for ri, phase in ((2, "rec"), (0, "start")):
+        tag = f"official OP R{ri + 1} {phase} zone numbers"
+        open_app(page, "", {"role": "OP", "rulesMode": "official"})
+        learn(page, ri, phase)
+        still = page.evaluate(ZONE_TEXTS)
+        if all(abs(x - X) < 0.01 and abs(y - Y) < 0.01 for (_, x, y), (X, Y) in zip(still, HOME_ZONES, strict=True)):
+            fail(f"{tag}: no number moved on the still, so the check proves nothing")
+        if pause_between(page, tag, 300, 2000) and page.evaluate(ZONE_TEXTS) != still:
+            fail(f"{tag}: the numbers move when the play starts: {page.evaluate(ZONE_TEXTS)} vs {still}")
+        page.click("#lPlay")
+        wait_done(page)
+        if page.evaluate(ZONE_TEXTS) != still:
+            fail(f"{tag}: the numbers are elsewhere after the play: {page.evaluate(ZONE_TEXTS)} vs {still}")
+
+
 def check_fade_back(page: Page) -> None:
     """A Reception play that runs to its end fades out in about 400 ms and fades back to the reception still.
 
@@ -1851,6 +1876,7 @@ def main() -> None:
         check_static_phases(page)
         check_trails_in_play(page)
         check_fade_back(page)
+        check_zones_steady(page)
         check_never_blocks(page)
         check_speed(page)
         check_step_back(page)

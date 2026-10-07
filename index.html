@@ -2820,14 +2820,14 @@
       const fillOf = (p) => `var(--role-${ROLE_KEY[p]})`;
       const routeOf = (p) => `var(--route-${ROLE_KEY[p]})`;
       const DEFS = `<defs>${["court-line"].map((c) => `<marker id="m-${c}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="var(--${c})"/></marker>`).join("")}</defs>`;
-      function courtBase(off = false) {
+      function courtBase(off = false, spots = zoneSpots()) {
         let s = `<rect x="0" y="0" width="${W}" height="${H}" fill="none" stroke="var(--court-line)" stroke-width="0.8"/>`;
         s += `<line x1="0" y1="${H * AL}" x2="${W}" y2="${H * AL}" stroke="var(--court-line)" stroke-width="0.6"/>`;
         s += `<rect x="-2" y="-1.2" width="${W + 4}" height="2.4" rx="1.2" fill="var(--net)" stroke="var(--marker-edge)" stroke-width="0.3"/>`;
         s += `<text x="${W / 2}" y="-5.5" text-anchor="middle" font-size="4.2" font-weight="600" letter-spacing="1.2" fill="var(--net-label)" font-family="Barlow,sans-serif">NET</text>`;
         s += `<rect class="offpill" x="2" y="103.5" width="${off ? 40 : 30}" height="7.5" rx="3.75" fill="none" stroke="var(--${off ? "ring" : "court-line"})" stroke-width="${off ? 1 : 0.5}"${off ? "" : ' stroke-dasharray="1.6 1.2"'}/>`;
         s += `<text x="${off ? 22 : 17}" y="108.6" text-anchor="middle" font-size="3.8" font-weight="${off ? 700 : 400}" fill="var(--net-label)" font-family="Barlow,sans-serif">${off ? "you: off court" : "off court"}</text>`;
-        return s + zonesSvg();
+        return s + zonesSvg(spots);
       }
       const ZONE_SPOTS = [
         [4, 1 / 6, 0.36],
@@ -3923,6 +3923,19 @@
         });
         return out;
       }
+      // A play keeps the zone numbers where its still has them.
+      function learnZones() {
+        const b =
+          phase === "start" || phase === "rec"
+            ? boundLines(ri, learnPlayers(ri, phase), role, phase)
+            : {};
+        return zoneSpots(b.segs, b.marks);
+      }
+      function shownZones(svg) {
+        const texts = [...svg.querySelectorAll("g.zones text")];
+        if (texts.length !== ZONE_SPOTS.length) return zoneSpots();
+        return texts.map((t) => [+t.textContent, +t.getAttribute("x"), +t.getAttribute("y") - 3.2]);
+      }
       function learnPassTags(ri, pl) {
         if (phase !== "rec") return {};
         return passTagSpots(pl, role, boundLines(ri, pl, role, "rec").segs);
@@ -4773,7 +4786,8 @@
         const tr = phaseStages(ri, phase);
         if (!tr.stages.length) return false;
         const { s, trails } = playMarkup(tr, role, learnPassTags(ri, learnPlayers(ri, phase)));
-        $("courtL").innerHTML = DEFS + courtBase(!(tr.build ? tr.end : tr.from)[role]) + s;
+        $("courtL").innerHTML =
+          DEFS + courtBase(!(tr.build ? tr.end : tr.from)[role], learnZones()) + s;
         anim = {
           tr,
           t: 0,
@@ -5061,7 +5075,7 @@
         const tr = phaseStages(w.ri, "rec"),
           r = tr.players.includes(w.role) ? w.role : null;
         const { s, trails } = playMarkup(tr, r);
-        w.svg.innerHTML = DEFS + courtBase(w.role != null && !r) + s;
+        w.svg.innerHTML = DEFS + courtBase(w.role != null && !r, shownZones(w.svg)) + s;
         w.a = {
           tr,
           t: 0,
