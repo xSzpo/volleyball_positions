@@ -1062,6 +1062,9 @@
       color: var(--set-back);
       border-style: dashed;
     }
+    .setchip.bk {
+      border-style: dashed;
+    }
     .setchip.unconf span::after {
       content: "?";
     }
@@ -6233,7 +6236,7 @@
           const p = setPath(st),
             on = !hi || hi === st[0],
             col = plain ? "var(--ink)" : FAMCOL[st[3]],
-            back = !plain && st[3] === "back";
+            back = st[3] === "back";
           s += `<path d="${p.d}" fill="none" stroke="${col}" stroke-width="${on && hi ? 10 : 5.5}"${back ? ' stroke-dasharray="18 10"' : ""} opacity="${on ? 1 : 0.18}"/>`;
           s += `<circle cx="${p.ex}" cy="${SY + 10}" r="${on && hi ? 12 : 8}" fill="${back ? "var(--panel)" : col}" stroke="${col}" stroke-width="${back ? 5 : 0}" opacity="${on ? 1 : 0.18}"/>`;
         });
@@ -6257,6 +6260,13 @@
         const sx = PX(SETTER_X);
         s += `<circle cx="${sx}" cy="${SY}" r="24" fill="var(--role-s)" stroke="#fff" stroke-width="4"/><text x="${sx}" y="${SY + 9}" text-anchor="middle" font-size="26" font-weight="800" fill="var(--role-ink)" font-family="Barlow,sans-serif">S</text>`;
         return s;
+      }
+      const BACK_HINT = "Back-row set: the hitter jumps from behind the 3 m line.";
+      function backHint(s) {
+        return s[3] === "back" ? `<p class="hint backhint">${BACK_HINT}</p>` : "";
+      }
+      function quizChip(s) {
+        return `<button type="button" class="setchip${s[3] === "back" ? " bk" : ""}${UNCONFIRMED.includes(s[0]) ? " unconf" : ""}" data-s="${s[0]}"><span>${s[0]}</span></button>`;
       }
       let selSet = null;
       function renderSets() {
@@ -6290,17 +6300,15 @@
         sq = opts[Math.floor(Math.random() * opts.length)];
         sAns = false;
         $("netQ").innerHTML = netSvg([sq[0]], null, { labels: false, plain: true });
-        $("setanswers").innerHTML = SETS.map(
-          (s) =>
-            `<button class="setchip${UNCONFIRMED.includes(s[0]) ? " unconf" : ""}" data-s="${s[0]}"><span>${s[0]}</span></button>`,
-        ).join("");
+        $("setanswers").innerHTML = SETS.map(quizChip).join("");
         $("setanswers")
           .querySelectorAll("button")
           .forEach((b) => {
             b.onclick = () => answerSet(b.dataset.s);
           });
         $("sfb").className = "fb";
-        $("sfb").innerHTML = '<p class="hint">Pick the name of the highlighted set.</p>';
+        $("sfb").innerHTML =
+          `${backHint(sq)}<p class="hint">Pick the name of the highlighted set.</p>`;
         $("snext").hidden = true;
         $("sscore").textContent = `${sScore.ok}/${sScore.n}`;
         $("sstreak").textContent = sStreak;
@@ -6368,7 +6376,7 @@
         return { ask, opts: shuffle([ask, near, ...rest]), who, done: false };
       }
       function setHtml(q, next) {
-        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press ${esc(next)}</span><p style="margin:2px 0 0">${{ setter: "You set this ball. What is the call?", hitter: "The setter sets this ball for you. What is the call?", other: "The setter sets this ball. What is the call?" }[q.who]}</p><svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false, plain: true })}</svg><div class="setchips">${q.opts.map((s) => `<button type="button" class="setchip" data-s="${s[0]}"><span>${s[0]}</span></button>`).join("")}</div></div>`;
+        return `<div class="nbq" id="gsc"><b>Set call check</b> <span class="hint">optional bonus: answer, or just press ${esc(next)}</span><p style="margin:2px 0 0">${{ setter: "You set this ball. What is the call?", hitter: "The setter sets this ball for you. What is the call?", other: "The setter sets this ball. What is the call?" }[q.who]}</p>${backHint(q.ask)}<svg class="netsvg setq" id="gscNet" viewBox="30 20 940 420" aria-label="Set path">${netSvg([q.ask[0]], null, { labels: false, plain: true })}</svg><div class="setchips">${q.opts.map(quizChip).join("")}</div></div>`;
       }
       function setMark(q, pick) {
         const ok = pick === q.ask[0];
