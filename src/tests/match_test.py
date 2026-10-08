@@ -799,76 +799,102 @@ def check_sets_tab(browser: Browser) -> None:
     print("Sets tab lists exactly the sets in SETS, Po and Til included", flush=True)
 
 
-QUIZ_LOOK = """([net, chips]) => {
+QUIZ_LOOK = """([net, chips, box]) => {
   const look = (el) => getComputedStyle(el);
-  const paths = [...document.querySelectorAll(`${net} path`)].map((path) => {
-    const style = look(path);
-    return [style.stroke, style.strokeDasharray];
-  });
+  const sets = [...document.querySelectorAll('#netS path')].map((path) => path.getAttribute('d'));
+  const path = document.querySelector(`${net} path`);
+  const style = look(path);
   const buttons = [...document.querySelectorAll(chips)].map((button) => {
-    const style = look(button);
-    return [style.borderTopColor, style.borderTopStyle, style.color];
+    const b = look(button);
+    return [button.dataset.s, b.borderTopColor, b.borderTopStyle, b.color];
   });
-  return { paths, buttons };
+  const hint = document.querySelector(`${box} .backhint`);
+  return {
+    asked: sets.indexOf(path.getAttribute('d')),
+    path: [style.stroke, style.strokeDasharray],
+    buttons,
+    hint: hint ? hint.textContent : '',
+  };
 }"""
+
+BACK_HINT = "Back-row set: the hitter jumps from behind the 3 m line."
+
+
+def check_quiz_look(tag: str, look: dict[str, Any], colours: set[str]) -> str:
+    """Fails unless the asked path and options follow the before-the-answer rule; returns the asked set's name.
+
+    The path and every option are in one colour with no family colour; a back-row set's path and
+    option are dashed, a front-row one solid; the hint shows only for a back-row set.
+    """
+    if look["asked"] < 0:
+        fail(f"{tag}: the asked path is not on the Sets diagram")
+        return ""
+    ask = SETS[look["asked"]]
+    back = ask[3] == "back"
+    stroke, dash = look["path"]
+    colours.add(stroke)
+    if back == (dash == "none"):
+        fail(f"{tag}: {ask[0]} path dash {dash!r} before the answer")
+    if look["hint"] != (BACK_HINT if back else ""):
+        fail(f"{tag}: {ask[0]} hint {look['hint']!r}")
+    for name, border, style, colour in look["buttons"]:
+        colours.update((border, colour))
+        family = next(s[3] for s in SETS if s[0] == name)
+        if (style == "dashed") != (family == "back"):
+            fail(f"{tag}: option {name} border {style} before the answer")
+    return str(ask[0])
 
 
 def check_set_quiz_neutral(browser: Browser) -> None:
-    """Before the answer, every Name the set path and button looks the same in both themes; after it, families show."""
+    """Before the answer, Name the set shows no family colour, back-row sets dashed and hinted; after it, families."""
     for theme in ("light", "dark"):
         page = new_page(browser)
         page.add_init_script(f"localStorage.setItem('ksv51:theme', JSON.stringify('{theme}'))")
         page.reload()
         page.click("#tabSets")
         asked: set[str] = set()
-        paths: set[tuple[str, ...]] = set()
-        buttons: set[tuple[str, ...]] = set()
+        colours: set[str] = set()
         for _ in range(200):
-            look = page.evaluate(QUIZ_LOOK, ["#netQ", "#setanswers .setchip"])
-            paths.update(tuple(p) for p in look["paths"])
-            buttons.update(tuple(b) for b in look["buttons"])
-            asked.add(page.evaluate("() => document.querySelector('#netQ path').getAttribute('d')"))
+            look = page.evaluate(QUIZ_LOOK, ["#netQ", "#setanswers .setchip", "#sfb"])
+            asked.add(check_quiz_look(f"{theme} quiz", look, colours))
             if len(asked) == len(SETS):
                 break
             page.locator("#setanswers .setchip").first.click()
+            if page.locator("#sfb .backhint").count():
+                fail(f"{theme} quiz: the back-row hint stays after the answer")
             page.click("#snext")
         if len(asked) != len(SETS):
             fail(f"{theme}: quiz asked {len(asked)} of {len(SETS)} sets")
-        check_one_look(f"{theme} quiz", paths, buttons)
+        if len(colours) != 1:
+            fail(f"{theme} quiz: colours {colours} before the answer")
         page.locator("#setanswers .setchip").first.click()
         for s in SETS:
             classes = (page.get_attribute(f'#setanswers .setchip[data-s="{s[0]}"]', "class") or "").split()
             if s[3] not in classes:
                 fail(f"{theme}: after the answer, button {s[0]} has no {s[3]} class")
         page.close()
-    print("Name the set quiz: one neutral path and button style before the answer, families after", flush=True)
-
-
-def check_one_look(tag: str, paths: set[tuple[str, ...]], buttons: set[tuple[str, ...]]) -> None:
-    """Fails unless every path has one solid stroke and every button one style, in the same colour."""
-    if len(paths) != 1 or len(buttons) != 1:
-        fail(f"{tag}: paths {paths}, buttons {buttons} before the answer")
-    elif next(iter(paths))[0] != next(iter(buttons))[0] or next(iter(paths))[1] != "none":
-        fail(f"{tag}: path {paths} and buttons {buttons} differ")
+    print(
+        "Name the set quiz: no family colour before the answer, back-row sets dashed and hinted, families after",
+        flush=True,
+    )
 
 
 def check_set_call_neutral(browser: Browser) -> None:
-    """Before the answer, the Match set call check shows one neutral path and option style; after it, families."""
+    """Before the answer, the Match set call check shows no family colour, back-row sets dashed and hinted."""
     for theme in ("light", "dark"):
         page = new_page(browser)
         page.add_init_script(f"localStorage.setItem('ksv51:theme', JSON.stringify('{theme}'))")
         page.reload()
+        page.click("#tabSets")
         setup_match(page, "S", ("ar",))
         page.click("#gStart")
-        paths: set[tuple[str, ...]] = set()
-        buttons: set[tuple[str, ...]] = set()
+        colours: set[str] = set()
         for ri in range(6):
             page.wait_for_selector("#gOff:enabled")
             tap_spot(page, "S", ri, "ar")
             page.wait_for_selector("#gsc .setchip")
-            look = page.evaluate(QUIZ_LOOK, ["#gscNet", "#gsc .setchip"])
-            paths.update(tuple(p) for p in look["paths"])
-            buttons.update(tuple(b) for b in look["buttons"])
+            look = page.evaluate(QUIZ_LOOK, ["#gscNet", "#gsc .setchip", "#gsc"])
+            check_quiz_look(f"{theme} set call check rotation {ri + 1}", look, colours)
             if ri == 5:
                 page.locator("#gsc .setchip").first.click()
                 for chip in page.locator("#gsc .setchip").all():
@@ -876,9 +902,13 @@ def check_set_call_neutral(browser: Browser) -> None:
                     if family not in (chip.get_attribute("class") or "").split():
                         fail(f"{theme}: after the set call, option {chip.inner_text()} has no {family} class")
             press_next(page)
-        check_one_look(f"{theme} set call check", paths, buttons)
+        if len(colours) != 1:
+            fail(f"{theme} set call check: colours {colours} before the answer")
         page.close()
-    print("set call check: one neutral path and option style before the answer, families after", flush=True)
+    print(
+        "set call check: no family colour before the answer, back-row sets dashed and hinted, families after",
+        flush=True,
+    )
 
 
 LABEL_GEOMETRY = """() => {

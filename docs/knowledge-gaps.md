@@ -1354,3 +1354,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Both are confirmed sets with the guide's shape, measured from its drawing against the antennas and the height of 1. Po lands just in front of the setter at the same spot as 4 (x 0.56), with a low arc (peak 0.32); `mid` family. Til lands just behind the setter (x 0.74) with the lowest arc behind the setter (peak 0.26); `right` family. The descriptions give the shape only. Both land inside the antennas, so the set call check asks them in the middle's lane with Shoot and 4 (entry 64). The guide draws 4 higher than Po; the app keeps the owner's low 4 (entry 62), so in the app Po's arc is above 4's. On the Sets diagram the 4 and Til labels sit beside their landing spots and Po's above its peak.
 - **Alternatives:** add them marked "(not confirmed)" and left out of match questions; draw Po lower than 4 as the guide's relative heights suggest.
 - **Reversible by:** the Po and Til rows in `SETS` in `src/data.py`, the label offsets in `netSvg()` and the Sets tab text in `src/template.html`. The coach can still say what the names mean (#16, question 11).
+
+### 175. Back-row sets look like back-row sets in the set quizzes
+
+- **Issue:** [#179](https://github.com/xSzpo/volleyball_positions/issues/179) (three user reports)
+- **Problem:** Name the set and the set call check draw the path plain before the answer, with no dash, so A, B and C looked like front-row sets. The diagram is a side view along the net, so depth does not show.
+- **Decision:** Before the answer a back-row set's path stays dashed (still in `--ink`, no family colour) and the question adds "Back-row set: the hitter jumps from behind the 3 m line." The back-row option buttons keep the dashed border they have in the Sets tab list, also in `--ink`, so the dashed path matches dashed options; the other options are solid. The Sets tab diagram gets no "back row" label: its cue already says back-row sets are dashed and behind the 3 m line, and a label would crowd the landing spots of 4, Po and Til.
+- **Alternatives:** dash the path only and keep every option solid; a "back row" label on the Sets diagram.
+- **Reversible by:** `back` in `netSvg()`, `backHint()` and `quizChip()` in `src/template.html`.
