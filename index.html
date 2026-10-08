@@ -3270,6 +3270,8 @@
         const b = boundLines(ri, players(ri, "rec"), role, "rec");
         return withArea(s, b) + b.lines.join("");
       }
+      // With the limits on, the partners who set them stand out from the faded team, as in Learn.
+      const limitMates = (ri, role) => partners(ri, role, "rec").map((o) => o.p);
       function limitsHtml(ri, role, when) {
         if (!players(ri, "rec").some((o) => o.p === role)) return "";
         const text = limitsSentence(
@@ -5924,6 +5926,7 @@
           const a = players(cur.ri, "rec").find((o) => o.p === cur.role);
           if (a) s += fromTap(a, tap);
         }
+        const mates = answered && dLimits ? limitMates(cur.ri, cur.role) : [];
         (answered
           ? pl.filter((o) => o.p !== cur.role)
           : cur.phase === "ar"
@@ -5931,7 +5934,7 @@
             : visible(visDrill, pl, cur.role)
         ).forEach((o) => {
           s += chip(o, {
-            dim: answered || visDrill === "all",
+            dim: answered ? !mates.includes(o.p) : visDrill === "all",
             small: !answered && visDrill === "ref",
           });
         });
@@ -6812,7 +6815,9 @@
         if (shown && st.phase === "ar") s += arLayer(st.ri, pl, G.role);
         if (shown && st.phase === "serve") s += serveLayer(st.ri, pl, G.role);
         if (!G.answered && G.help >= 2 && me) s += gHelpArea(me);
-        const vis = gVis();
+        const vis = gVis(),
+          limits = shown && st.phase === "rec" && (!G.nb || G.nb.done),
+          mates = limits ? limitMates(st.ri, G.role) : [];
         if (!shown && st.phase === "ar") s += fromLayer(st.ri, G.role, G.tap, "g");
         (shown
           ? pl.filter((o) => o.p !== G.role)
@@ -6820,10 +6825,13 @@
             ? []
             : visible(vis, pl, G.role)
         ).forEach((o) => {
-          s += chip(o, { dim: shown || vis === "all", small: !shown && vis === "ref" });
+          s += chip(o, {
+            dim: shown ? !mates.includes(o.p) : vis === "all",
+            small: !shown && vis === "ref",
+          });
         });
         if (shown && G.nb?.done) s += nbLayer(pl, G.role, G.nb.a);
-        if (shown && st.phase === "rec" && (!G.nb || G.nb.done)) s = limitsLayer(s, st.ri, G.role);
+        if (limits) s = limitsLayer(s, st.ri, G.role);
         if (!G.answered && G.tap) s += mySpot(G.tap);
         if (G.answered && (G.mp || G.online) && G.tap)
           s += `<circle cx="${G.tap.x * W}" cy="${G.tap.y * H}" r="2.3" fill="var(--net-label)" opacity=".8"/>`;

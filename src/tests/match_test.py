@@ -1483,6 +1483,21 @@ def limit_area(page: Page, court: str) -> int:
     return int(page.locator(f"#{court} rect.larea").count())
 
 
+def bright_mates(page: Page, court: str, role: str) -> list[str]:
+    """The teammates drawn in full colour, not faded, on a court."""
+    found = page.evaluate(
+        "([id, role]) => [...document.querySelectorAll(`#${id} g.mk:not(.faded)`)]"
+        ".map((g) => g.dataset.p).filter((p) => p && p !== role)",
+        [court, role],
+    )
+    return sorted(set(found))
+
+
+def limit_mates(page: Page, ri: int) -> list[str]:
+    """Your overlap partners at Receive, as Learn names them."""
+    return sorted(page.evaluate("(ri) => window.ksvLearn.partners(ri, 'rec').map((o) => o.p)", ri))
+
+
 def check_receive_limits(browser: Browser, rules: RulesMode, role: str) -> None:
     """Receive feedback draws your overlap limits as Learn does, only after the answer and the neighbour check."""
     checked = 0
@@ -1493,12 +1508,14 @@ def check_receive_limits(browser: Browser, rules: RulesMode, role: str) -> None:
         tag = f"limits match {rules} {role} R{ri + 1}"
         page.wait_for_selector("#gOff:enabled")
         tap_spot(page, role, ri, "rec", check=False)
-        if limit_lines(page, "courtG") or limit_area(page, "courtG"):
-            fail(f"{tag}: limit lines or area before the answer")
+        if limit_lines(page, "courtG") or limit_area(page, "courtG") or bright_mates(page, "courtG", role):
+            fail(f"{tag}: limit lines, area or partners before the answer")
         press_next(page)
         want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
         if limit_lines(page, "courtG") != want:
             fail(f"{tag}: {limit_lines(page, 'courtG')} limit lines, Learn draws {want}")
+        if bright_mates(page, "courtG", role) != limit_mates(page, ri):
+            fail(f"{tag}: {bright_mates(page, 'courtG', role)} in full colour, partners {limit_mates(page, ri)}")
         on_court = any(p == role for p, _, _ in lineup(ri, rules)["rec"])
         if limit_area(page, "courtG") != on_court:
             fail(f"{tag}: {limit_area(page, 'courtG')} overlap areas, on court {on_court}")
@@ -1518,9 +1535,13 @@ def check_receive_limits_elsewhere(browser: Browser) -> None:
     tap_spot(page, "OH1", 0, "rec")
     if limit_lines(page, "courtG") or limit_area(page, "courtG") or "Overlap: stay" in page.inner_text("#gFb"):
         fail("limits shown while the neighbour check is open")
+    if bright_mates(page, "courtG", "OH1"):
+        fail(f"partners {bright_mates(page, 'courtG', 'OH1')} stand out while the neighbour check is open")
     page.locator("#gnb button").first.click()
     if limit_lines(page, "courtG") != page.evaluate("() => window.ksvLearn.bounds(0, 'rec')"):
         fail("limits missing after the neighbour check")
+    if bright_mates(page, "courtG", "OH1") != limit_mates(page, 0):
+        fail(f"{bright_mates(page, 'courtG', 'OH1')} in full colour after the neighbour check, not the partners")
     if limit_area(page, "courtG") != 1:
         fail("overlap area missing after the neighbour check")
     page.close()
@@ -1542,8 +1563,8 @@ def check_receive_limits_elsewhere(browser: Browser) -> None:
             ri = drill_ri(question)
             seen.add(ri)
             tag = f"limits drill {rules} R{ri + 1}"
-            if limit_lines(page, "courtD") or limit_area(page, "courtD"):
-                fail(f"{tag}: limit lines or area before the answer")
+            if limit_lines(page, "courtD") or limit_area(page, "courtD") or bright_mates(page, "courtD", "OH1"):
+                fail(f"{tag}: limit lines, area or partners before the answer")
             spot = next((x, y) for p, x, y in lineup(ri, rules)["rec"] if p == "OH1")
             tap_at(page, *spot, court="courtD")
             page.click("#nextBtn")
@@ -1552,6 +1573,8 @@ def check_receive_limits_elsewhere(browser: Browser) -> None:
                 fail(f"{tag}: {limit_lines(page, 'courtD')} limit lines, Learn draws {want}")
             if limit_area(page, "courtD") != 1:
                 fail(f"{tag}: {limit_area(page, 'courtD')} overlap areas after the answer")
+            if bright_mates(page, "courtD", "OH1") != limit_mates(page, ri):
+                fail(f"{tag}: {bright_mates(page, 'courtD', 'OH1')} in full colour, partners {limit_mates(page, ri)}")
             page.dblclick("#dReset")
         if len(seen) < 6:
             fail(f"limits drill {rules}: Receive came up only in {sorted(seen)}")
@@ -1575,7 +1598,13 @@ def check_receive_limits_elsewhere(browser: Browser) -> None:
     page.wait_for_selector("#dnb button")
     if limit_lines(page, "courtD") or limit_area(page, "courtD") or "Overlap: stay" in page.inner_text("#fb"):
         fail("limits drill: shown while the neighbour check is open")
+    if bright_mates(page, "courtD", "OH1"):
+        fail(
+            f"limits drill: partners {bright_mates(page, 'courtD', 'OH1')} stand out while the neighbour check is open"
+        )
     page.locator("#dnb button").first.click()
+    if bright_mates(page, "courtD", "OH1") != limit_mates(page, ri):
+        fail(f"limits drill: {bright_mates(page, 'courtD', 'OH1')} in full colour after the neighbour check")
     want = page.evaluate("(ri) => window.ksvLearn.bounds(ri, 'rec')", ri)
     if limit_lines(page, "courtD") != want or "Overlap: stay" not in page.inner_text("#fb"):
         fail(f"limits drill: {limit_lines(page, 'courtD')} limit lines after the neighbour check, Learn draws {want}")

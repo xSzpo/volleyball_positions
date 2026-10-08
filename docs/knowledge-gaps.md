@@ -1335,3 +1335,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The owner: in R1 the opposite is in zone 4 only to receive. At Our serve it stands in zone 2, its base (it is in the front row in H1), and OH1 in zone 4: the serving team has no overlap rule, so everyone stands on their base spot by job before the serve. The R1 Our serve lineup is OH1 MB1 OP / L OH2 S again, with captions saying so. Base and the end of the Reception play keep entry 169 (OP left, OH1 right); `base` in `src/data.py` applies there only, and `audit.py` checks every `serve` lineup by job.
 - **Alternatives:** keep entry 169 at Our serve as well.
 - **Reversible by:** the R1 `serve` lineup and its `move['serve']` captions in `src/data.py`, and the serve check in `src/tests/audit.py`.
+
+### 173. Your overlap partners stand out after a Receive answer
+
+- **Issue:** [#174](https://github.com/xSzpo/volleyball_positions/issues/174) (owner request)
+- **Problem:** After a Receive answer, Drill drew your overlap lines, the area and the overlap sentence, but every teammate was faded, so the lines pointed at players you could hardly see.
+- **Decision:** Once the limits show (after the answer, and after the neighbour check when it is on), your overlap partners are drawn in full colour on their reception spots, as in Learn; the other teammates stay faded. Solo Match Receive feedback does the same, as it shares the drawing and shows nothing before the answer. The same-device and online reveal stay as they are, since they draw several roles at once.
+- **Alternatives:** full colour for everyone after the answer; Drill only.
+- **Reversible by:** `limitMates()` in `drawDrill()` and `gDraw()` in `src/template.html`.
