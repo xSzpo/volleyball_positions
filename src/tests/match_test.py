@@ -586,7 +586,7 @@ def check_match_order(browser: Browser) -> None:
 
 
 MATCH_SETS = [s for s in SETS if s[0] not in UNCONFIRMED_SETS]
-LANES = {"left": {"1", "0", "2"}, "mid": {"Shoot", "4"}, "right": {"7", "6"}}
+LANES = {"left": {"1", "0", "2"}, "mid": {"Shoot", "4", "Po", "Til"}, "right": {"7", "6"}}
 BACK_LANES = {"left": {"C"}, "mid": {"B"}, "right": {"A"}}
 
 
@@ -743,7 +743,7 @@ def check_set_calls(browser: Browser) -> None:
 
 
 SET_NAMES = [s[0] for s in SETS]
-REMOVED_SETS = ("Po", "Til")
+GUIDE_SETS = ("Po", "Til")
 
 
 def named_calls(text: str) -> list[str]:
@@ -753,10 +753,10 @@ def named_calls(text: str) -> list[str]:
 
 
 def check_sets_tab(browser: Browser) -> None:
-    """The Sets tab shows exactly the sets in SETS, back sets dashed; stored data naming a removed set is harmless."""
-    for name in REMOVED_SETS:
-        if name in SET_NAMES:
-            fail(f"removed set {name} is back in SETS")
+    """The Sets tab shows exactly the sets in SETS, the guide's Po and Til among them, back sets dashed."""
+    for name in GUIDE_SETS:
+        if name not in SET_NAMES or name in UNCONFIRMED_SETS:
+            fail(f"guide set {name} is missing from SETS or unconfirmed")
     page = new_page(browser)
     page.add_init_script(
         "localStorage.setItem('ksv51:stats2', JSON.stringify({'OH1|0|ar': {ok: 0, miss: 2}}));"
@@ -771,7 +771,7 @@ def check_sets_tab(browser: Browser) -> None:
     if sorted(named_calls(cue)) != sorted(SET_NAMES):
         fail(f"Sets tab text names {named_calls(cue)}, expected {SET_NAMES}: {cue!r}")
     labels = page.locator("#netS text").all_text_contents()
-    if any(name in labels for name in REMOVED_SETS) or not all(name in labels for name in SET_NAMES):
+    if not all(name in labels for name in SET_NAMES):
         fail(f"Sets diagram labels {labels}")
     for s in SETS:
         chip = page.locator(f'#setchips .setchip[data-s="{s[0]}"]')
@@ -779,8 +779,8 @@ def check_sets_tab(browser: Browser) -> None:
             fail(f"chip {s[0]} has no {s[3]} class")
         chip.click()
         text = page.inner_text("#setcue")
-        if any(name in named_calls(text) for name in REMOVED_SETS):
-            fail(f"{s[0]} text names a removed set: {text!r}")
+        if (s[0] not in UNCONFIRMED_SETS) == ("not confirmed" in text):
+            fail(f"{s[0]} text marks the wrong confirmation: {text!r}")
         if s[3] == "back" and "behind the 3 m line" not in text:
             fail(f"{s[0]} text does not say behind the 3 m line: {text!r}")
         chip.click()
@@ -796,7 +796,7 @@ def check_sets_tab(browser: Browser) -> None:
     page.click("#tabDrill")
     page.click("#reviewBtn")
     page.close()
-    print("Sets tab lists exactly the sets in SETS; stored data naming Po or Til is harmless", flush=True)
+    print("Sets tab lists exactly the sets in SETS, Po and Til included", flush=True)
 
 
 QUIZ_LOOK = """([net, chips]) => {

@@ -154,7 +154,7 @@ Each entry in `ROWS` (index 0..5 = R1..R6):
 
 Serving order (from R1 zones 1..6): `S, OH1, MB1, OP, OH2, MB2`. The JS helper `relation()` uses this ("count k zones on from the setter"); in Simplified, MB and L get slot text instead (front middle, back middle).
 
-`SETS`: set calls `(name, landing x between antennas seen from our side, relative peak, family, description)`: families `left` (1, 0, 2), `mid` (Shoot, 4: the middle's low quick in front of the setter), `right` (7, 6) from the guide's shapes, and `back` (A to zone 1, B to zone 6, the pipe, C to zone 5; owner, not in the guide), drawn dashed on the Sets tab (`--set-back`). The guide's "Po" and "Til" are removed (owner, `docs/knowledge-gaps.md` #62-#64); re-add them if the coach explains them (#16). `UNCONFIRMED_SETS` is empty; a set listed there is left out of match questions and marked "?" and "(not confirmed)" on the Sets tab.
+`SETS`: set calls `(name, landing x between antennas seen from our side, relative peak, family, description)`: families `left` (1, 0, 2), `mid` (Shoot, 4: the middle's low quick in front of the setter, Po: a short ball landing there too), `right` (Til: a short, low ball just behind the setter, 7, 6) from the guide's shapes, and `back` (A to zone 1, B to zone 6, the pipe, C to zone 5; owner, not in the guide), drawn dashed on the Sets tab (`--set-back`). The guide gives no meaning for "Po" and "Til"; they are drawn as the guide draws them (owner, `docs/knowledge-gaps.md` #174) and asked in the middle's lane of the set call check; the Sets diagram puts the 4 and Til labels beside their landing and Po's above its peak. `UNCONFIRMED_SETS` is empty; a set listed there is left out of match questions and marked "?" and "(not confirmed)" on the Sets tab.
 
 ## Rules logic (important)
 
@@ -248,6 +248,6 @@ Events: `tab_viewed {tab}`, `role_picked {role}`, `rules_changed {mode: simple|o
 
 ## Other open items
 
-- Confirm with the coach: what the guide's "Po" and "Til" mean (removed until then), which calls each front-row player is asked in the set call check, and the serve column (not in the guide).
+- Confirm with the coach: what the guide's "Po" and "Til" mean (drawn by shape only), which calls each front-row player is asked in the set call check, and the serve column (not in the guide).
 - Only tested in Chromium (desktop and mobile emulation). Safari/iOS is untested.
 - Online play is tested only against the emulators over http; try it on real phones against the live project (and from `file://`).

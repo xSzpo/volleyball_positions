@@ -884,7 +884,7 @@ def set_calls(browser: Browser, url: str, emulator_db: str, errors: list[str]) -
     fake = {"q": "miss", "pts": 0, "done": True, "set": {"ask": "<img>", "pick": "Shoot", "ok": True}}
     admin(emulator_db, "PUT", f"rooms/{code}/answers/1/{EVIL_UID}", fake)
     admin(emulator_db, "PUT", f"rooms/{code}/players/{OLD_UID}", {**evil, "name": "Old"})
-    removed = {"q": "miss", "pts": 0, "done": True, "set": {"ask": "Shoot", "pick": "Til", "ok": False}}
+    removed = {"q": "miss", "pts": 0, "done": True, "set": {"ask": "Shoot", "pick": "Z", "ok": False}}
     admin(emulator_db, "PUT", f"rooms/{code}/answers/1/{OLD_UID}", removed)
     for page, role in ((host, "OP"), (guest, "S")):
         page.wait_for_selector("#gOff:enabled", timeout=20000)
