@@ -364,6 +364,8 @@ SETS: list[tuple[str, float, float, str, str]] = [
     ("2", 0.18, 0.46, "left", "Medium-fast ball landing about 1.5 m inside the left antenna."),
     ("Shoot", 0.36, 0.30, "mid", "Flat, fast ball between zone 4 and the middle."),
     ("4", 0.56, 0.16, "mid", "The middle's quick: short, low ball just in front of the setter, close to the net."),
+    ("Po", 0.56, 0.32, "mid", "Short ball landing just in front of the setter."),
+    ("Til", 0.74, 0.26, "right", "Short, low ball landing just behind the setter."),
     ("7", 0.97, 0.50, "right", "Lower, faster back set to the right antenna."),
     ("6", 0.97, 0.92, "right", "High back set to the right antenna (zone 2)."),
     ("A", 0.83, 0.62, "back", "Back-row attack from zone 1 (right back), behind the 3 m line."),

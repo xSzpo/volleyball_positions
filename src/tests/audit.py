@@ -268,8 +268,8 @@ for name in UNCONFIRMED_SETS:
 if len(set(SET_NAMES)) != len(SET_NAMES) or len({s[1:3] for s in SETS}) != len(SETS):
     issues.append("two sets share a name or a path")
 for name in ("Po", "Til"):
-    if name in SET_NAMES:
-        issues.append(f"removed set {name} is in SETS")
+    if name not in SET_NAMES or name in UNCONFIRMED_SETS:
+        issues.append(f"guide set {name} is missing from SETS or unconfirmed")
 
 
 def third(x: float) -> str:

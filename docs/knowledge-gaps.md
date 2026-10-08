@@ -515,6 +515,8 @@ them after deploy; each entry says what to change to reverse it.
 
 ### 62. "4" is the middle's low quick; "Po" and "Til" removed
 
+- **Update:** "Po" and "Til" are back since entry 174; "4" stays as below.
+
 - **Issue:** #82
 - **Problem:** The guide's Front row sets page draws "4" landing just in front of the setter with a steep, high arc, and also draws "Po" and "Til". The app inferred "4" as a high set and marked "4" and "Po" "(not confirmed)". A web search (Danish and English) found no source for "Po" or "Til".
 - **Decision:** Owner input, 2026-09-30: "4" is the middle's short, low quick in front of the setter, close to the net (x 0.56, peak 0.16). The owner does not know "Po" or "Til", and no Danish source names them, so both are removed from `SETS`, the Sets tab, the quiz and the set call check. Re-add them from the guide if the coach explains them (#16, question 7). `UNCONFIRMED_SETS` is empty; the mechanism stays for a future unconfirmed set. Stored data holds no set names; an online answer naming a removed set is dropped by `onClean()`.
@@ -536,6 +538,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** `setQ()` keeps asking from each set's family and landing: zone 4 is asked 1, 0 or 2; the middle Shoot or 4; zone 2 7 or 6. A back-row attacker (`ar` kind `back`) is asked the back set of the third it attacks from (zone 1 → A, zone 6 → B, zone 5 → C), with the prompt "The setter sets this ball for you." In the current data only OP attacks from the back row (zone 1, R4-R6), so only A is asked there; B and C are in the setter's and the other players' questions and the quiz. There are always four options: the asked set, one from its family, and two others from the ten sets.
 - **Alternatives:** ask back-row attackers all three back sets; ask the middle 4 only.
 - **Reversible by:** `setLane()`, `third()` and `setQ()` in `src/template.html`.
+- **Update:** since entry 174 the middle lane also has Po and Til, and there are twelve sets.
 
 ### 65. Light mode by default
 
@@ -1343,3 +1346,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Once the limits show (after the answer, and after the neighbour check when it is on), your overlap partners are drawn in full colour on their reception spots, as in Learn; the other teammates stay faded. Solo Match Receive feedback does the same, as it shares the drawing and shows nothing before the answer. The same-device and online reveal stay as they are, since they draw several roles at once.
 - **Alternatives:** full colour for everyone after the answer; Drill only.
 - **Reversible by:** `limitMates()` in `drawDrill()` and `gDraw()` in `src/template.html`.
+
+### 174. "Po" and "Til" are back, drawn as the guide draws them
+
+- **Issue:** [#180](https://github.com/xSzpo/volleyball_positions/issues/180) (owner request, 2026-10-08)
+- **Problem:** The owner asked to add Po and Til to the set calls again (removed in entry 62). The guide's Front row sets page draws them but gives no text, so their meaning is still unknown.
+- **Decision:** Both are confirmed sets with the guide's shape, measured from its drawing against the antennas and the height of 1. Po lands just in front of the setter at the same spot as 4 (x 0.56), with a low arc (peak 0.32); `mid` family. Til lands just behind the setter (x 0.74) with the lowest arc behind the setter (peak 0.26); `right` family. The descriptions give the shape only. Both land inside the antennas, so the set call check asks them in the middle's lane with Shoot and 4 (entry 64). The guide draws 4 higher than Po; the app keeps the owner's low 4 (entry 62), so in the app Po's arc is above 4's. On the Sets diagram the 4 and Til labels sit beside their landing spots and Po's above its peak.
+- **Alternatives:** add them marked "(not confirmed)" and left out of match questions; draw Po lower than 4 as the guide's relative heights suggest.
+- **Reversible by:** the Po and Til rows in `SETS` in `src/data.py`, the label offsets in `netSvg()` and the Sets tab text in `src/template.html`. The coach can still say what the names mean (#16, question 11).
