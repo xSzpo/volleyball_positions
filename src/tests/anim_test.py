@@ -1162,11 +1162,12 @@ def check_path_shapes(page: Page) -> None:
 
 
 def check_r1_sides(page: Page) -> None:
-    """R1: OP plays left and OH1 right (the guide), with no side switch at Our serve, at Base or after the spike."""
+    """R1: OP left and OH1 right at Reception, Base and after the spike; OP in zone 2 and OH1 in zone 4 at Our serve."""
     for mode, roles in MODES.items():
         open_app(page, "", {"role": roles[0], "rulesMode": mode})
         stage = page.evaluate("window.ksvLearn.stages(0, 'rec')")[-1]
         serve = {o["p"]: o["x"] for o in page.evaluate("window.ksvLearn.players(0, 'serve')")}
+        rec = {o["p"]: o["x"] for o in page.evaluate("window.ksvLearn.players(0, 'rec')")}
         for p, zone in (("OP", 4), ("OH1", 2)):
             path = stage["paths"].get(p) or [stage["from"][p], stage["to"][p]]
             left = path[0]["x"] < 0.5
@@ -1177,8 +1178,14 @@ def check_r1_sides(page: Page) -> None:
             still = page.evaluate(f"window.ksvLearn.still(0, 'ar', '{p}')")
             if f"zone {zone}" not in still or "cross" in still.lower():
                 fail(f"{mode} R1 Base: {p} caption {still!r}")
-            if (serve[p] < 0.5) != (zone == 4):
-                fail(f"{mode} R1 Our serve: {p} at x {serve[p]:.2f}, not in zone {zone}")
+            if (rec[p] < 0.5) != (zone == 4):
+                fail(f"{mode} R1 Reception: {p} at x {rec[p]:.2f}, not on the zone {zone} side")
+            at_serve = 6 - zone
+            if (serve[p] < 0.5) != (at_serve == 4):
+                fail(f"{mode} R1 Our serve: {p} at x {serve[p]:.2f}, not in zone {at_serve}")
+            caption = page.evaluate(f"window.ksvLearn.still(0, 'serve', '{p}')")
+            if f"zone {at_serve}" not in caption:
+                fail(f"{mode} R1 Our serve: {p} caption {caption!r}")
 
 
 def check_cross_captions(page: Page) -> None:

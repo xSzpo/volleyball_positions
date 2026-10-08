@@ -28,7 +28,8 @@ class Row(TypedDict):
     `move` holds one Learn caption per player for each phase (serve, rec,
     ar), written to that player, 78 characters at most. `base` maps a
     front-row player whose base defence zone is not the one of their job
-    (OH 4, MB 3, S/OP 2) to the zone they defend instead.
+    (OH 4, MB 3, S/OP 2) to the zone they defend after our attack; `serve`
+    keeps the job zones.
     """
 
     name: str
@@ -67,14 +68,14 @@ ROWS: list[Row] = [
             ("OH2", 0.50, 0.86, None),
             ("S", 0.69, 0.10, "set"),
         ],
-        serve=(["OP", "MB1", "OH1"], ["L", "OH2", "S"]),
+        serve=(["OH1", "MB1", "OP"], ["L", "OH2", "S"]),
         note="Setter in 1: the opposite plays left, outside hitter 1 plays right.",
         base={"OP": 4, "OH1": 2},
         move={
             "serve": {
-                "OP": "Stay in zone 4: here the opposite blocks and attacks on the left.",
+                "OH1": "Cross to zone 4, your base: outside hitters block on the left.",
                 "MB1": "Stay in zone 3, in the middle of the net, ready to block.",
-                "OH1": "Stay in zone 2: here outside hitter 1 blocks and attacks on the right.",
+                "OP": "Cross to zone 2, your base: block their outside hitter. Zone 4 is to receive.",
                 "L": "Move to zone 5 and defend deep on the left.",
                 "OH2": "Move to zone 6 and defend deep in the middle.",
                 "S": "Serve from behind the end line, then defend zone 1 until we dig.",

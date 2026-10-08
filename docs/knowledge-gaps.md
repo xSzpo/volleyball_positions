@@ -1310,6 +1310,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** In R1 only, OP defends zone 4 and OH1 zone 2: the R1 Our serve lineup is OP MB1 OH1 / L OH2 S, and Base and the Reception play end there with no cross for them. It is data: the row's `base` in `src/data.py` overrides the job zone. Coach to confirm on #16 (question 11).
 - **Alternatives:** keep the switch by job (the old behaviour); switch only at the next dead ball.
 - **Reversible by:** removing `base` from R1 and restoring its `serve` lineup and captions in `src/data.py`.
+- **Changed in #173:** at Our serve R1 is by job again, OP in zone 2 and OH1 in zone 4 (entry 172); Base and the Reception play keep this entry.
 
 ### 170. The overlap limits shade the area you may stand in
 
@@ -1326,3 +1327,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Where the limit lines are drawn, a zone number a line crosses moves to the nearest spot inside its zone clear of the lines (sideways first, then a little towards the net), preferring one not under a marker (`zoneSpots()`). With no line across it, a number stays in its usual place. A play from that picture (Learn, Watch the move) keeps the numbers where the picture has them. The pass tags keep clear of the numbers where they end up.
 - **Alternatives:** stop the lines short of the numbers; draw the numbers over the lines with a halo; hide a crossed number.
 - **Reversible by:** `zoneSpots()` and `withArea()` in `src/template.html`.
+
+### 172. In R1 the opposite stands in zone 2 at Our serve
+
+- **Issue:** [#173](https://github.com/xSzpo/volleyball_positions/issues/173) (user report; owner decision, 2026-10-08)
+- **Problem:** Since entry 169, R1 (H1) had OP in zone 4 and OH1 in zone 2 at Our serve too, and a player asked why the opposite is not on its base in zone 2.
+- **Decision:** The owner: in R1 the opposite is in zone 4 only to receive. At Our serve it stands in zone 2, its base (it is in the front row in H1), and OH1 in zone 4: the serving team has no overlap rule, so everyone stands on their base spot by job before the serve. The R1 Our serve lineup is OH1 MB1 OP / L OH2 S again, with captions saying so. Base and the end of the Reception play keep entry 169 (OP left, OH1 right); `base` in `src/data.py` applies there only, and `audit.py` checks every `serve` lineup by job.
+- **Alternatives:** keep entry 169 at Our serve as well.
+- **Reversible by:** the R1 `serve` lineup and its `move['serve']` captions in `src/data.py`, and the serve check in `src/tests/audit.py`.
