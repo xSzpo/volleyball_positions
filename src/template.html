@@ -3248,7 +3248,8 @@
           out.segs.push(seg);
           out.lines.push(route(...seg, p, { cls: "bnd" }));
         });
-        if (bounded)
+        // Only Reception shades the area; at Rotation it reads as where to stand.
+        if (bounded && phase === "rec")
           out.area = `<rect class="larea" x="${box.left}" y="${box.front}" width="${box.right - box.left}" height="${box.behind - box.front}" fill="var(--limit-area)" stroke="var(--court-line)" stroke-width="0.4" stroke-dasharray="1.5 1.5" stroke-opacity="0.5" pointer-events="none"/>`;
         return out;
       }
@@ -6861,7 +6862,7 @@
           z = zoneOf(st.ri, G.role);
         if (level === 2) {
           if (!me) return "You are not on court at this moment.";
-          return `Look inside the highlighted area. ${describe(st.ri, st.phase, G.role).t}.`;
+          return `Look inside the shaded circle. ${describe(st.ri, st.phase, G.role).t}.`;
         }
         if (!me && G.role === "L")
           return rulesMode === "official"
