@@ -517,8 +517,7 @@ def reception_plan(ri: int, mode: str) -> tuple[list[str], dict[str, tuple[float
     order = list(rec)
     attackers = [p for p in order if kind[p] in ("front", "back")]
     hitter = min((p for p in attackers if kind[p] == "front"), key=lambda p: ar[p][0])
-    # A back-row attacker who does not hit covers instead, and waits out of the passing lanes until the pass.
-    release = [p for p in order if kind[p] == "set" or (kind[p] == "front" and p not in RECEIVERS)]
+    release = [p for p in order if kind[p] == "set" or (kind[p] in ("front", "back") and p not in RECEIVERS)]
     release = [p for p in release if math.dist(rec[p], ar[p]) >= MIN_MOVE]
     end = {p: BASE_DEF[base_zone(p, p in row["front"], row)][:2] for p in order}
     return release, end, hitter
@@ -988,10 +987,11 @@ def check_quick_in_front(page: Page) -> None:
 
 
 def check_cover_runs(page: Page) -> None:
-    """Every rotation, both rule sets: no detour leaves the court, and the back-row opposite runs straight to cover.
+    """Every rotation, both rule sets: no detour leaves the court, and the back-row opposite waits on its attack spot.
 
     A detour waypoint stays between the sidelines and no deeper than the end line or its run's own ends. A back-row
-    opposite who neither receives nor attacks waits for the pass, then runs to its deep cover, not via its `ar` spot.
+    opposite leaves at the serve contact for its `ar` spot in zone 1, is there as the pass lands, and only after the
+    set to zone 4 comes in to its deep cover.
     The front middle's quick caption says where it takes off: left of the setter. The zone 4 hitter approaches
     outside-in, ending at least 0.05 inside where it starts.
     """
@@ -1009,13 +1009,14 @@ def check_cover_runs(page: Page) -> None:
                     if out:
                         fail(f"{tag} stage {n + 1}: {p} detours off the court through {out}")
             kind = {p: k for p, _, _, k in row["ar"]}
+            ar = {p: (x, y) for p, x, y, _ in row["ar"]}
             for p in (p for p in row["back"] if kind.get(p) == "back"):
-                run = stages[1]["paths"].get(p)
-                end = (run[-1]["x"], run[-1]["y"]) if run else None
-                if p in stages[0]["moves"] or end is None or math.dist(end, DEEP_COVER["side"]) > 0.05:
-                    fail(
-                        f"{tag}: {p} runs {stages[0]['paths'].get(p)} then {run}, not straight to {DEEP_COVER['side']}"
-                    )
+                runs = [stages[n]["paths"].get(p) for n in range(3)]
+                ends = [(run[-1]["x"], run[-1]["y"]) if run else None for run in runs]
+                if ends[0] is None or math.dist(ends[0], ar[p]) > 0.05 or runs[1]:
+                    fail(f"{tag}: {p} runs {runs[0]} then {runs[1]}, not to its back-row attack spot {ar[p]}")
+                if ends[2] is None or math.dist(ends[2], DEEP_COVER["side"]) > 0.05:
+                    fail(f"{tag}: {p} covers with {runs[2]}, not on {DEEP_COVER['side']} after the set")
             middle = next(p for p in row["front"] if p.startswith("MB"))
             captions = " ".join(page.evaluate("(a) => window.ksvLearn.captions(...a)", [ri, "rec", middle]))
             if "in front of the setter" in captions or "left of the setter" not in captions:
@@ -1025,7 +1026,7 @@ def check_cover_runs(page: Page) -> None:
             if not approach or approach[-1]["x"] - approach[0]["x"] < 0.05:
                 fail(f"{tag}: the zone 4 hitter {hitter} approaches {approach}, not outside-in")
     print(
-        "covers: detours inside the court, the back-row opposite straight to cover, the quick left of the setter, "
+        "covers: detours inside the court, the back-row opposite on its attack spot, the quick left of the setter, "
         "the zone 4 hitter outside-in"
     )
 

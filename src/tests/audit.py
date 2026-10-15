@@ -169,8 +169,7 @@ def check_row(i: int, mode: RulesMode) -> None:
 
 
 MOVE_MAX = 78
-# The set goes to zone 4, so a back-row attacker covers deep.
-AR_WORDS = {"set": ["setting spot"], "front": ["3 m line"], "back": ["cover"], None: ["cover"]}
+AR_WORDS = {"set": ["setting spot"], "front": ["3 m line"], "back": ["zone 1", "back-row attack"], None: ["cover"]}
 QUICK_WORDS = ["middle of the front zone", "quick"]
 
 

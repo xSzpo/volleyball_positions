@@ -572,6 +572,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** L goes to the guide's zone 5 spot first and turns to the cover (an L-shaped run, and the set waits up to 1.6 s for it); the right-side attacker keeps its approach, a 3-1 cover; the deep outside hitter in the close cover instead of L where L passes from the right.
 - **Reversible by:** `COVER`, `DEEP_COVER`, `SET_MAX_MS`, the pass stage's `onCover` and the set ball's `cover` list in `buildReception()` in `src/template.html`.
 - **Amended in #119:** the back-row opposite waits for the pass before its run, see [#111](#111-the-back-row-opposite-waits-for-the-pass-then-runs-straight-to-cover); the close cover sits round the outside-in hit point, see [#114](#114-the-zone-4-hitter-approaches-outside-in).
+- **Amended in #183:** the back-row opposite stands on its back-row attack spot as the pass lands and comes in to its deep cover only after the set; the set waits for it too, see [#177](#177-the-back-row-opposite-is-graded-on-its-back-row-attack-spot).
 
 ### 69. Attack is graded where Learn has everyone as the pass lands
 
@@ -581,6 +582,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Alternatives:** grade the `ar` spots and move only the middle (disagrees with Learn for L); move the spots in the data (it would no longer match the guide's drawing); ask about the moment the setter sets.
 - **Reversible by:** `answerSpots()` in `src/template.html`.
 - **Amended in #119:** L, the deep outside hitter and the back-row opposite are graded on their cover spot, see [#112](#112-the-covers-are-graded-on-their-cover-spot).
+- **Amended in #183:** the back-row opposite is graded as the pass lands on its back-row attack spot again, see [#177](#177-the-back-row-opposite-is-graded-on-its-back-row-attack-spot).
 
 ### 70. The ball after an Attack answer is at the setter
 
@@ -661,6 +663,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The hint, the feedback and the `move.ar` caption use the cover jobs of the Learn play (`ATTACK_NOTES`): L covers the hitter close behind, the deep OH covers deep behind the close cover, the back-row opposite comes in to cover deep, right of the middle. The Rules of thumb entry "The opposite moves directly to position 1" becomes "The back-row opposite covers deep". `audit.py` now wants "cover" in a back-row attacker's caption. The zone the player defends after the attack stays in the caption.
 - **Alternatives:** keep the back-row attack to zone 1 and send the set there in R4 to R6; grade the covers on their `ar` spots again.
 - **Reversible by:** `covers` in `buildReception()`, the `cover` branches of `describe()` and `gHint()`, and the `ar` captions in `src/data.py`.
+- **Superseded for the opposite by #177:** the back-row opposite's texts name zone 1 and the back-row attack again, the rule of thumb is "The back-row opposite attacks from zone 1", and `audit.py` wants "zone 1" and "back-row attack" in its caption.
 
 ### 82. A Drill steps change replaces the open question
 
@@ -846,6 +849,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** A back-row attacker who covers is not released at the serve contact. It waits out of the passing lanes until the pass, then runs in one line to the side deep cover (`DEEP_COVER.side`, 0.62, 0.44), placed just after L so the two runs stay `GAP` apart.
 - **Alternatives:** leave at the contact straight for the cover (in R6 it then waits up to 0.8 s for the passer's lane to clear); keep the corner via the `ar` spot.
 - **Reversible by:** `released` and the pass stage's `first` in `buildReception()` in `src/template.html`.
+- **Superseded by #177:** the back-row opposite leaves at the serve contact for its `ar` spot and covers only after the set.
 
 ### 112. The covers are graded on their cover spot
 
@@ -854,6 +858,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** These three are graded on the cover spot they stand on at the spike (the start of Reception's base stage, `tr.spike`). Everyone else is still graded as the pass lands (#69). This amends #69 for the covers. A cover's question asks for its cover spot as the zone 4 hitter spikes, and its feedback and hint say "cover spot as … spikes". The picture after its answer shows one moment, the spike: everyone where they are then and the ball at the hitter. On a same-device reveal where every player covers, the reveal shows the spike too; with mixed roles it shows the pass landing, with each player's own role ringed on the spot it is graded on.
 - **Alternatives:** keep grading mid-run and change the texts to "on the way to …"; ask about the moment of the spike for everyone.
 - **Reversible by:** `tr.spike` in `buildReception()`, `coversAttack()`, `answerSpots()`, `momentBall()`, `arQuestion()` and `mpReveal()` in `src/template.html`.
+- **Amended in #177:** only L and the deep outside hitter are covers. The back-row opposite is graded on its back-row attack spot as the pass lands.
 
 ### 113. Detours stay inside the court
 
@@ -878,6 +883,7 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** A player who covers at the Attack step is asked the set call as a watcher: "The setter sets this ball. What is the call?", from every match set, like the libero and the other back row. A back-row opposite who attacks is still asked its own back set.
 - **Alternatives:** keep asking the zone 1 set (A) for a later back-row attack; skip the set call check for covers.
 - **Reversible by:** `setQ()` in `src/template.html`.
+- **Superseded by #177:** the back-row opposite no longer covers at the Attack step, so it is asked the back set of its third (A from zone 1).
 
 ### 116. Drill, Match and Sets switched on in PostHog
 
@@ -1370,3 +1376,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** The area is drawn only at Reception in Learn and after a Receive answer in Drill and Match (and the reveal); Rotation and Rotate keep the overlap lines and the overlap sentence. With no area at Rotate, the open-ended area of a missing limit and the dashed edge along the net are gone too. The Match help text "Look inside the highlighted area" now reads "Look inside the shaded circle", as it points at the help circle, not the overlap area.
 - **Alternatives:** keep the area at Rotate cut to your row; explain the missing limit in the caption.
 - **Reversible by:** the `phase === "rec"` test on `out.area` in `boundLines()` in `src/template.html`.
+
+### 177. The back-row opposite is graded on its back-row attack spot
+
+- **Issue:** [#183](https://github.com/xSzpo/volleyball_positions/issues/183) (user report)
+- **Problem:** In R4 to R6 the back-row opposite was graded at Attack on a deep cover spot at the spike (#112). A player said the opposite does not go there, and the guide's R4 note says "Opposite goes straight to zone 1 for the back-row attack"; its `ar` spot is a back-row attack spot.
+- **Decision:** The back-row opposite is an attacker at the Attack step: asked "… passes to the setter. Where are you as it arrives?", graded as the pass lands on its `ar` spot in zone 1, behind the 3 m line, and asked the set call A for itself. In Learn's Reception play it leaves at the serve contact for that spot, stands there as the pass lands, ready for the back set, and only when the set goes to zone 4 comes in to the deep cover (0.62, 0.44) of the 3-2 cover (the set waits for it, at most 1.1 s, as for the close cover), as the front-row attacker who is not set does in R1 to R3. Its `move.ar` caption, the "opposite" rule of thumb and the hint name zone 1 and the back-row attack. L and the deep outside hitter stay graded on their cover spots. In R6 it runs from its reception spot (0.40, 0.92) along the back of the court to zone 1 while the serve is in the air, behind the receivers. The guide does not say whether the opposite covers after a set to zone 4; that is asked in #16.
+- **Alternatives:** keep the opposite on its back-row attack spot through the spike (the 3-2 cover then has one deep cover); grade it at the spike on its cover.
+- **Reversible by:** `onCover`, `covers`, the set stage notes and the set's `cover` list in `buildReception()`, `ATTACK_NOTES.deepBack` in `src/template.html`, and the R4 to R6 `move.ar` OP captions in `src/data.py`.
