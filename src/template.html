@@ -3014,7 +3014,7 @@
         };
         return { set, hitter: hitter.p, hit, quick };
       }
-      // A cover (L, the deep OH, a back-row opposite) is asked about the spike, everyone else about the pass landing.
+      // A cover (L, the deep OH) is asked about the spike, everyone else about the pass landing.
       function coversAttack(ri, phase, role) {
         return phase === "ar" && !!role && !!phaseStages(ri, "rec").covers?.[role];
       }
@@ -3965,7 +3965,7 @@
           (z) => `Spike over the net, then back off to zone ${z} and defend.`,
         ],
         deepFront: "Come in to the middle and cover deep: a ball off the block can fly far.",
-        deepBack: "Cover deep in the middle: a ball off the block can fly far.",
+        deepBack: "No set for you: come in to cover deep, right of the middle.",
         quick: "Run in from mid front zone for the quick, left of the setter.",
         cupFront: (hitter) =>
           `Fake the quick, then cover ${hitter} close, between the setter and L.`,
@@ -4369,14 +4369,13 @@
         const deep = order.filter((p) => !kind[p] && p !== "L" && !isFront(ri, p));
         const side = attackers.filter((p) => p !== hitter && p !== cupFront);
         const backSide = side.filter((p) => kind[p] === "back");
-        // L, the deep OH and a back-row side cover run straight to their cover during the pass, so they get there with
-        // the set; the back-row side cover does not attack, so it waits out of the passing lanes until the pass.
+        // L and the deep OH run straight to their cover during the pass, so they get there with the set. A back-row
+        // attacker waits on its `ar` spot for a back set and covers only once the set goes to zone 4.
         const onCover =
           setSpot && hit
             ? {
                 L: cover(COVER.L),
                 ...pick(deep, () => DEEP_COVER.back),
-                ...pick(backSide, () => DEEP_COVER.side),
               }
             : {};
         const covers =
@@ -4384,7 +4383,6 @@
             ? {
                 ...(from.L ? { L: ATTACK_NOTES.cupBack(hitter) } : {}),
                 ...pick(deep, () => ATTACK_NOTES.deep),
-                ...pick(backSide, () => ATTACK_NOTES.deepBack),
               }
             : {};
         // Movement is free from the server's first movement: the setter and the attackers who do not receive leave at once.
@@ -4409,7 +4407,7 @@
         const second = passer ? [passer, ...order.filter((p) => p !== passer)] : order;
         stages.push({
           moves: pick(second, (p) => (p === cupFront ? takeOff : { ...(onCover[p] || to[p]) })),
-          first: ["L", ...backSide],
+          first: ["L"],
           notes: {
             ...pick(
               receivers.filter((p) => p !== passer),
@@ -4418,7 +4416,6 @@
             ...(passer ? { [passer]: kind[passer] === "front" ? PASS_ATTACK : PASS_TEXT } : {}),
             ...pick(setter, () => SET_TEXT(passer)),
             ...(cupFront ? { [cupFront]: ATTACK_NOTES.quick } : {}),
-            ...(setSpot && hit ? pick(backSide, () => ATTACK_NOTES.deepBack) : {}),
           },
           team: passer ? `${passer} passes to the setter.` : "",
           ball: passer &&
@@ -4453,6 +4450,7 @@
                 side.filter((p) => !backSide.includes(p)),
                 () => ATTACK_NOTES.deepFront,
               ),
+              ...pick(backSide, () => ATTACK_NOTES.deepBack),
               ...pick(deep, () => ATTACK_NOTES.deep),
               ...pick(setter, () => ATTACK_NOTES.cupSet(hitter)),
               ...(cupFront ? { [cupFront]: ATTACK_NOTES.cupFront(hitter) } : {}),
@@ -4462,7 +4460,7 @@
               from: touch(setSpot, hit),
               to: spike,
               sync: hitter,
-              cover: [cupFront, ...setter, from.L ? "L" : null].filter(Boolean),
+              cover: [cupFront, ...setter, from.L ? "L" : null, ...backSide].filter(Boolean),
             },
           });
           const base = baseSpots(ri, order);
@@ -5294,9 +5292,9 @@
         },
         {
           k: "opposite",
-          t: "The back-row opposite covers deep",
+          t: "The back-row opposite attacks from zone 1",
           roles: ["OP"],
-          d: "In R4 to R6 the opposite is back row. Cover deep, right of the middle, behind the 3 m line.",
+          d: "In R4 to R6 the opposite is back row. Go to zone 1 behind the 3 m line, ready for the back set. If the set goes to zone 4, come in to cover deep.",
         },
         {
           k: "names",
@@ -6906,7 +6904,7 @@
       }
       function gHintAttack(me) {
         if (me.kind === "back")
-          return `You are the back-row opposite. ${thumbRef("opposite", "come in to cover deep, right of the middle: the setter sets zone 4")}`;
+          return `You are the back-row opposite. ${thumbRef("opposite", "go to zone 1 behind the 3 m line, ready for the back set")}`;
         if (me.turn) return "You are the front-row middle: you run the quick as the pass comes.";
         if (me.kind === "front")
           return G.role.startsWith("MB")

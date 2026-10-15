@@ -114,7 +114,7 @@ def tap_spot(page: Page, role: str, ri: int, phase: str, check: bool = True) -> 
 def pass_lands(page: Page, ri: int) -> dict[str, tuple[float, float]]:
     """The Attack spots: everyone as the pass reaches the setter in Learn's play, the covers on their cover spot.
 
-    L, the deep OH and the back OP are graded on the spot they stand on at the spike.
+    L and the deep OH are graded on the spot they stand on at the spike; a back-row OP as the pass lands.
     """
     found = page.evaluate(
         """(ri) => {
@@ -359,7 +359,11 @@ def check_libero_hint(browser: Browser) -> None:
 
 def check_hint_rule_numbers(browser: Browser) -> None:
     """A Match hint that cites a rule of thumb by number points to that rule in the Learn list."""
-    cases = (("OH1", 0, "outside starts left"), ("L", 0, "cover first, then base"), ("OP", 3, "opposite covers deep"))
+    cases = (
+        ("OH1", 0, "outside starts left"),
+        ("L", 0, "cover first, then base"),
+        ("OP", 3, "opposite attacks from zone 1"),
+    )
     for rules in ("simple", "official"):
         for role, rotation, title in cases:
             page = new_page(browser, rules=rules)
@@ -705,7 +709,7 @@ def check_set_calls(browser: Browser) -> None:
             fail(f"{role}: Practise in Sets does not open the Sets tab")
         page.close()
     print(
-        "set call check: front row and setter asked their own sets, a covering OP any set, +30 for a right call",
+        "set call check: front row, back-row OP and setter asked their own sets, +30 for a right call",
         flush=True,
     )
     page = play_set_calls(browser, "L", ("ar",))
@@ -1313,14 +1317,12 @@ MODE_ROLES = {"simple": ("MB", "OH1", "OH2", "OP", "S", "L"), "official": ("MB1"
 
 
 def cover_job(row: Row, role: str) -> str | None:
-    """The 3-2 cover job Learn gives `role` at Attack: close (L), deep (back-row OH) or side (back-row OP)."""
+    """The 3-2 cover job graded at Attack: close (L) or deep (back-row OH); a back-row OP attacks."""
     kind = {p: k for p, _, _, k in row["ar"]}
     if role not in kind:
         return None
     if role == "L":
         return "close"
-    if kind[role] == "back":
-        return "side"
     return "deep" if kind[role] is None and role in row["back"] else None
 
 
@@ -1328,12 +1330,13 @@ def cover_job(row: Row, role: str) -> str | None:
 COVER_WORDS = {
     "close": ("cover the hitter close behind", "close behind: dig a ball the block sends back"),
     "deep": ("cover deep in the middle", "Cover deep behind the close cover"),
-    "side": ("come in to cover deep", "Cover deep in the middle"),
 }
+# What a back-row opposite's hint, feedback and caption say at Attack: its back-row attack spot in zone 1.
+BACK_ATTACK_WORDS = ("zone 1 behind the 3 m line", "Zone 1, back-row attack", "back-row attack")
 
 
 def check_attack_texts(browser: Browser, rules: RulesMode, role: str) -> None:
-    """At Attack, the hint, the feedback and the caption of L, the deep OH and the back OP name the cover graded."""
+    """At Attack, the hint, feedback and caption of L and the deep OH name the cover graded, a back OP zone 1."""
     checked = 0
     page = new_page(browser, rules)
     setup_match(page, role, ("ar",), sets=False)
@@ -1342,7 +1345,24 @@ def check_attack_texts(browser: Browser, rules: RulesMode, role: str) -> None:
         tag = f"attack text {rules} {role} R{ri + 1}"
         row = lineup(ri, rules)
         job = cover_job(row, role)
+        back = any(p == role and k == "back" for p, _, _, k in row["ar"])
         page.wait_for_selector("#gOff:enabled")
+        if back:
+            lands = pass_lands(page, ri)
+            page.click("#gHelp")
+            hint = page.inner_text("#gFb")
+            tap_at(page, *lands[role])
+            press_next(page)
+            feedback = page.inner_text("#gFb")
+            caption = row["move"]["ar"][role]
+            for text, words in zip((hint, feedback, caption), BACK_ATTACK_WORDS, strict=True):
+                if words not in text or "cover spot" in text:
+                    fail(f"{tag}: graded on the back-row attack spot, the text reads {text!r}")
+            if "Spot on" not in feedback:
+                fail(f"{tag}: a tap on the back-row attack spot as the pass lands is not exact: {feedback!r}")
+            checked += 1
+            press_next(page)
+            continue
         if not job:
             page.click("#gOff")
             press_next(page)
@@ -1406,8 +1426,8 @@ def check_cover_moment(browser: Browser, rules: RulesMode, role: str) -> None:
     print(f"Attack covers: asked and shown at the spike on {checked} courts", flush=True)
 
 
-def check_cover_set_call(browser: Browser) -> None:
-    """A back-row opposite who covers is asked the set call as a watcher, not a back-row set for itself."""
+def check_back_set_call(browser: Browser) -> None:
+    """A back-row opposite is asked the back set of its third for itself, as other back-row attackers."""
     checked = 0
     for rules in RULES_MODES:
         page = new_page(browser, rules)
@@ -1419,15 +1439,15 @@ def check_cover_set_call(browser: Browser) -> None:
             tap_at(page, *pass_lands(page, ri)["OP"])
             press_next(page)
             ask = page.inner_text("#gsc p") if page.locator("#gsc").count() else ""
-            if cover_job(row, "OP"):
-                if ask != "The setter sets this ball. What is the call?":
-                    fail(f"set call {rules} OP R{ri + 1}: a covering opposite is asked {ask!r}")
+            if "OP" in row["back"]:
+                if ask != "The setter sets this ball for you. What is the call?":
+                    fail(f"set call {rules} OP R{ri + 1}: a back-row opposite is asked {ask!r}")
                 checked += 1
             press_next(page)
         page.close()
     if not checked:
-        fail("set call: no rotation with a covering opposite")
-    print(f"set call: a covering opposite asked as a watcher on {checked} courts", flush=True)
+        fail("set call: no rotation with a back-row opposite")
+    print(f"set call: a back-row opposite asked its own back set on {checked} courts", flush=True)
 
 
 # How far inside its start the zone 4 hitter takes off, as Learn's HIT_IN.
@@ -2411,7 +2431,7 @@ COST = {
     "attack_drill": 8,
     "breakdown": 14,
     "common_mistakes": 40,
-    "cover_set_call": 12,
+    "back_set_call": 12,
     "hint_rule_numbers": 11,
     "match_h_names": 24,
     "set_call_neutral": 13,
@@ -2473,7 +2493,7 @@ def units() -> list[tuple[str, Callable[[Browser], None]]]:
         for rules in RULES_MODES:
             for role in roles[rules]:
                 add(check, rules, role)
-    add(check_cover_set_call)
+    add(check_back_set_call)
     for check, roles in (
         (check_hitter_approach, MODE_ROLES),
         (check_middle_route, MIDDLE_ROLES),
