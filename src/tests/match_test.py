@@ -2150,7 +2150,12 @@ def check_common_mistakes(browser: Browser) -> None:
             "simple",
             ("ar",),
             "?anim=0",
-            [(0.5, 0.5, None), (0.5, 0.5, None), (0.5, 0.5, None), (0.8, 0.3, "!A back-row attacker")],
+            [
+                (0.5, 0.5, None),
+                (0.5, 0.5, None),
+                (0.5, 0.5, None),
+                (0.8, 0.3, "A back-row attacker takes off behind the 3 m line."),
+            ],
         ),
     ]
     for role, rules, steps, query, taps in cases:
