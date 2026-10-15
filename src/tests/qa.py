@@ -1175,10 +1175,11 @@ def answer_rotate(pg: Page, ctx: str, role: str, move: bool = False, wrong: bool
     shown = sorted(markers(pg))
     if shown != sorted(spots):
         fail(f"{ctx}: feedback shows {shown}, not the lineup {sorted(spots)}")
-    limits = pg.evaluate("(ri) => window.ksvLearn.partners(ri, 'start').length", ri)
-    want_area = int(role in spots and limits > 0)
-    if pg.locator("#courtD rect.larea").count() != want_area:
-        fail(f"{ctx}: {pg.locator('#courtD rect.larea').count()} overlap areas after Continue, expected {want_area}")
+    if pg.locator("#courtD rect.larea").count():
+        fail(f"{ctx}: {pg.locator('#courtD rect.larea').count()} overlap areas after Continue, expected none at Rotate")
+    lines = pg.evaluate("(ri) => window.ksvLearn.bounds(ri, 'start')", ri) if role in spots else 0
+    if pg.locator("#courtD g.bnd").count() != lines:
+        fail(f"{ctx}: {pg.locator('#courtD g.bnd').count()} overlap lines after Continue, expected {lines}")
     return ri, how
 
 

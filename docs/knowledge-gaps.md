@@ -1362,3 +1362,11 @@ them after deploy; each entry says what to change to reverse it.
 - **Decision:** Before the answer a back-row set's path stays dashed (still in `--ink`, no family colour) and the question adds "Back-row set: the hitter jumps from behind the 3 m line." The back-row option buttons keep the dashed border they have in the Sets tab list, also in `--ink`, so the dashed path matches dashed options; the other options are solid. The Sets tab diagram gets no "back row" label: its cue already says back-row sets are dashed and behind the 3 m line, and a label would crowd the landing spots of 4, Po and Til.
 - **Alternatives:** dash the path only and keep every option solid; a "back row" label on the Sets diagram.
 - **Reversible by:** `back` in `netSvg()`, `backHint()` and `quizChip()` in `src/template.html`.
+
+### 176. No overlap area at Rotate and Rotation
+
+- **Issue:** [#175](https://github.com/xSzpo/volleyball_positions/issues/175) (user reports `-P3RCKoz1EG9vFaon-5S`, `-P3vbKrP1SlMRFvlYBR5`, `-P3vbz1LQLHuNStKS9So`)
+- **Problem:** The shaded area of entry 170 was also drawn at Learn's Rotation step and after a Drill or Match Rotate answer. There it read as where to stand, and with a missing limit (the serving middle in Official R3/R6) it ran from the net to the end line for a front-row player, with its dashed edge along the net.
+- **Decision:** The area is drawn only at Reception in Learn and after a Receive answer in Drill and Match (and the reveal); Rotation and Rotate keep the overlap lines and the overlap sentence. With no area at Rotate, the open-ended area of a missing limit and the dashed edge along the net are gone too. The Match help text "Look inside the highlighted area" now reads "Look inside the shaded circle", as it points at the help circle, not the overlap area.
+- **Alternatives:** keep the area at Rotate cut to your row; explain the missing limit in the caption.
+- **Reversible by:** the `phase === "rec"` test on `out.area` in `boundLines()` in `src/template.html`.

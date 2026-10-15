@@ -141,7 +141,10 @@ def check_step(page: Page, mode: str, role: str, rotation: int, phase: str) -> N
             fail(f"{tag}: cue does not say when the overlap limits count: {state['cue']!r}")
         alias = OM_LIMIT if (mode, phase) == ("simple", "start") and rotation in (2, 5) else {}
         check_overlap(tag, state, EXPECTED.get((mode, role, rotation, phase)), alias)
-        check_area(page, tag, state, rotation, phase)
+        if phase == "rec":
+            check_area(page, tag, state, rotation, phase)
+        elif state["area"]:
+            fail(f"{tag}: an overlap area at Rotation: {state['area']}")
         for bound in state["bounds"]:
             if bound["stroke"] != f"var(--route-{ROUTE_KEY[bound['p']]})":
                 fail(f"{tag}: line for {bound['p']} coloured {bound['stroke']}")
